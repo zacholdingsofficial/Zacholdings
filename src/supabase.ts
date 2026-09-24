@@ -1,8 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 
-// Export the keys so the secondary auth client can use them in the Employees page
-export const supabaseUrl = 'https://blaxocbogkkkxjqluypg.supabase.co';
-export const supabaseKey = 'sb_publishable_wxvI4Wzb3--8lPo8qU7mqw_8ublO81X';
+// Export the keys so the secondary auth client can use them
+export const supabaseUrl = 'https://raokdggkibijfnjlxpsi.supabase.co';
+export const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJhb2tkZ2draWJpamZuamx4cHNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAyNDk2NzgsImV4cCI6MjEwNTgyNTY3OH0.2kccgSjzlnXy9T6q6pIXyBFXknmoJan0OjVvjapQEw4';
 
 // The primary client for the application
 export const supabase = createClient(supabaseUrl, supabaseKey);
