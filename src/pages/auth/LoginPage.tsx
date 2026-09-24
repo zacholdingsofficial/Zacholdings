@@ -309,7 +309,7 @@ export default function LoginPage() {
   // WhatsApp "forgot password" hand-off — pre-filled with whatever context we already know
   const forgotContext = selectedRole === 'admin' ? 'the admin panel' : (activeCompanyObj?.name || 'my company');
   const forgotIdentity = email || '[your registered email]';
-  const forgotMessage = `Hi, I've forgotten my password for Zayd Industries. I work under ${forgotContext} and my username is ${forgotIdentity}. Could you please reset my password?`;
+  const forgotMessage = `Hi, I've forgotten my password for Zac Holdings. I work under ${forgotContext} and my username is ${forgotIdentity}. Could you please reset my password?`;
   const forgotHref = `https://wa.me/917558957246?text=${encodeURIComponent(forgotMessage)}`;
 
   const headNeedsSelection = selectedRole === 'head' && headUsers.length > 1 && !email;
@@ -473,7 +473,7 @@ export default function LoginPage() {
               </div>
 
               <h1 className="font-display text-[3rem] md:text-[3.7rem] leading-[1.06] text-white font-normal tracking-tight mb-7">
-                Welcome to<br />Zayd Industries
+                Welcome to<br />Zac Holdings
               </h1>
 
               <div className="w-14 h-px bg-[#6366F1]/70 mb-7" />
@@ -717,7 +717,7 @@ export default function LoginPage() {
             </AnimatePresence>
           </motion.div>
 
-          <p className="text-[11.5px] text-slate-400 font-medium">© 2026 Zayd Industries Pvt Ltd</p>
+          <p className="text-[11.5px] text-slate-400 font-medium">© 2026 Zac Holdings Pvt Ltd</p>
         </div>
       </div>
     </>

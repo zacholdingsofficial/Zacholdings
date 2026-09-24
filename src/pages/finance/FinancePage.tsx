@@ -795,7 +795,7 @@ export default function FinancePage() {
                               {parentCompany?.name ? parentCompany.name.charAt(0) : 'Z'}
                             </div>
                          )}
-                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{parentCompany?.name || 'Zayd Industries'}</p>
+                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{parentCompany?.name || 'Zac Holdings'}</p>
                          <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest mt-0.5">Parent Entity</p>
                       </div>
 

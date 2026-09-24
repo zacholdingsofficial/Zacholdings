@@ -30,7 +30,7 @@ export default function LandingPage() {
         </div>
 
         <h1 className="text-4xl sm:text-6xl font-semibold tracking-tight text-slate-900 mb-6">
-          Zayd Industries
+          Zac Holdings
         </h1>
         
         <p className="text-lg sm:text-xl text-slate-500 tracking-wide mb-10 max-w-2xl font-light">
@@ -48,7 +48,7 @@ export default function LandingPage() {
 
       {/* Subtle footer */}
       <div className="absolute bottom-8 text-center w-full text-xs text-slate-400 font-medium">
-        © {new Date().getFullYear()} Zayd Industries. Internal Use Only.
+        © {new Date().getFullYear()} Zac Holdings. Internal Use Only.
       </div>
     </div>
   );

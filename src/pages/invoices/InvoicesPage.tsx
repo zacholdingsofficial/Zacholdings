@@ -477,7 +477,7 @@ export default function InvoicesPage() {
                           {issuingCompany?.name ? issuingCompany.name.charAt(0) : 'Z'}
                         </div>
                       )}
-                      <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight print:text-lg">{issuingCompany?.name || 'Zayd Industries'}</h2>
+                      <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight print:text-lg">{issuingCompany?.name || 'Zac Holdings'}</h2>
                     </div>
                     <div className="text-left sm:text-right">
                       <h1 className="text-2xl sm:text-4xl font-light tracking-tight text-slate-300 uppercase print:text-2xl">

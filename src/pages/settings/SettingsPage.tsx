@@ -199,7 +199,7 @@ export default function SettingsPage() {
     // 2. Metadata Row
     sheet.mergeCells(2, 1, 2, headers.length);
     const metaCell = sheet.getCell(2, 1);
-    metaCell.value = `Data Backup Exported: ${new Date().toLocaleString()} | Zayd Industries ERP`;
+    metaCell.value = `Data Backup Exported: ${new Date().toLocaleString()} | Zac Holdings ERP`;
     metaCell.font = { name: 'Segoe UI', size: 9, italic: true, color: { argb: 'FF475569' } }; // slate-600
     metaCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } }; // slate-50
     metaCell.alignment = { vertical: 'middle', horizontal: 'right' };
@@ -322,7 +322,7 @@ export default function SettingsPage() {
       }));
 
       const workbook = new ExcelJS.Workbook();
-      workbook.creator = 'Zayd Industries ERP';
+      workbook.creator = 'Zac Holdings ERP';
       workbook.created = new Date();
 
       applyPremiumStyle(workbook.addWorksheet('Projects'), humanProjects, 'Projects Master');
