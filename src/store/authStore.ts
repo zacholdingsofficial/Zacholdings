@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware"; // <-- Import persist
+import { persist } from "zustand/middleware";
 import { supabase } from "../supabase";
 
 interface AuthState {
@@ -11,20 +11,21 @@ interface AuthState {
   isLoading: boolean;
   
   checkSession: () => Promise<void>;
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  // MODIFIED: signIn now accepts the explicitly selected role and company context
+  signIn: (email: string, password: string, selectedRole?: 'admin' | 'head' | 'user' | null, selectedCompanyId?: number | null) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   setActiveWorkspace: (id: number | null) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null, 
       role: null, 
       companyId: null, 
       employeeId: null, 
       activeWorkspace: null, 
-      isLoading: false, // Default to false
+      isLoading: false,
 
       checkSession: async () => {
         set({ isLoading: true });
@@ -33,12 +34,16 @@ export const useAuthStore = create<AuthState>()(
         if (session?.user) {
           const { data: emp } = await supabase.from('employees').select('access_level, company_id, id').eq('email', session.user.email).single();
           
+          // MODIFIED: Fetch the currently persisted session context first
+          const currentRole = get().role;
+          const currentCompanyId = get().companyId;
+          
           set({ 
             user: session.user, 
-            role: emp?.access_level || 'user', 
-            companyId: emp?.company_id || null, 
             employeeId: emp?.id || null, 
-            // NOTE: activeWorkspace is omitted here so it doesn't overwrite the persisted value on refresh
+            // Fallback to primary DB profile ONLY if the persisted state is somehow missing
+            role: currentRole || emp?.access_level || 'user', 
+            companyId: currentCompanyId || emp?.company_id || null, 
             isLoading: false 
           }); 
         } else {
@@ -46,7 +51,7 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      signIn: async (email, password) => {
+      signIn: async (email, password, selectedRole, selectedCompanyId) => {
         set({ isLoading: true });
         const { data: auth, error } = await supabase.auth.signInWithPassword({ email, password });
         
@@ -59,10 +64,11 @@ export const useAuthStore = create<AuthState>()(
         
         set({ 
           user: auth.user, 
-          role: emp?.access_level || 'user', 
-          companyId: emp?.company_id || null, 
           employeeId: emp?.id || null, 
-          activeWorkspace: null, // Reset workspace on fresh login
+          // MODIFIED: Inject the explicitly selected UI context, otherwise default to DB primary
+          role: selectedRole || emp?.access_level || 'user', 
+          companyId: selectedCompanyId || emp?.company_id || null, 
+          activeWorkspace: selectedCompanyId || null,
           isLoading: false 
         });
         
@@ -77,8 +83,7 @@ export const useAuthStore = create<AuthState>()(
       setActiveWorkspace: (id) => set({ activeWorkspace: id })
     }),
     {
-      name: 'auth-storage', // The name of the key in localStorage
-      // partialize ensures we don't accidentally freeze the UI by saving `isLoading: true` to localStorage
+      name: 'auth-storage',
       partialize: (state) => ({
         user: state.user,
         role: state.role,
