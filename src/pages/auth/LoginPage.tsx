@@ -301,10 +301,31 @@ export default function LoginPage() {
   };
 
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault(); setError(""); setIsLoggingIn(true);
+    e.preventDefault(); 
+    setError(""); 
+    setIsLoggingIn(true);
+    
     const result = await signIn(email, password);
-    if (result.error) { setError("Authentication failed. Please verify your credentials."); setIsLoggingIn(false); }
-    else navigate("/dashboard");
+    
+    if (result.error) { 
+      setError("Authentication failed. Please verify your credentials."); 
+      setIsLoggingIn(false); 
+    } else {
+      // --- MODIFIED: Force the selected context into the Auth Store ---
+      // This explicitly overwrites the default primary role that the store grabs
+      // so the user opens the dashboard in the exact role and company they selected.
+      if (selectedRole === 'admin') {
+        useAuthStore.setState({ role: 'admin', companyId: null });
+      } else if (selectedRole && activeCompanyObj) {
+        useAuthStore.setState({ 
+          role: selectedRole, 
+          companyId: activeCompanyObj.id,
+          activeWorkspace: activeCompanyObj.id // Syncs workspace if your app uses it for heads/users
+        });
+      }
+      
+      navigate("/dashboard");
+    }
   };
 
   const goBack = () => {
