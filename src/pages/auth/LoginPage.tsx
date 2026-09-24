@@ -46,9 +46,6 @@ const fieldInputClass =
 const NOISE_SVG = `<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(#n)'/></svg>`;
 const NOISE_BG = `data:image/svg+xml,${encodeURIComponent(NOISE_SVG)}`;
 
-// --- SUBSIDIARY NODES FOR THE HERO: fixed positions around the parent hub, each floating
-// independently. No rotation is used anywhere in this diagram — only translate and scale,
-// which (unlike rotate) never depend on a browser's guess about an element's pivot point. ---
 const NODE_ANGLES = [15, 80, 140, 205, 265, 330];
 const NODE_RADII = [150, 195, 120, 178, 145, 200];
 const NODE_SIZES = [5, 4, 6, 4.5, 5, 4];
@@ -68,7 +65,6 @@ const NODES = NODE_ANGLES.map((angle, i) => {
   };
 });
 
-// --- A QUIET, RECURRING FILLER: A MEASURED LINE, ECHOING THE INSTRUMENT ON THE LEFT ---
 const MeasureDivider = () => (
   <div className="flex-1 min-h-[28px] flex items-center">
     <div className="relative w-full h-px bg-black/[0.06]">
@@ -79,7 +75,6 @@ const MeasureDivider = () => (
   </div>
 );
 
-// --- CUSTOM DROPDOWN, STYLED TO MATCH THE REST OF THE FORM RATHER THAN THE OS CHROME ---
 function CustomSelect({
   icon,
   label,
@@ -163,7 +158,6 @@ function CustomSelect({
   );
 }
 
-// --- MAIN LOGIN PAGE ---
 export default function LoginPage() {
   const navigate = useNavigate();
 
@@ -171,9 +165,10 @@ export default function LoginPage() {
   const [direction, setDirection] = useState(1);
   const [selectedRole, setSelectedRole] = useState<"admin" | "head" | "user" | null>(null);
   const [selectedCompany, setSelectedCompany] = useState("");
-  const [companiesDb, setCompaniesDb] = useState<{ id: number, name: string, logo_url: string | null }[]>([]);
+  const [companiesDb, setCompaniesDb] = useState<{ id: number, name: string, logo_url: string | null, business_type: string }[]>([]);
   const [headUsers, setHeadUsers] = useState<{ name: string, email: string }[]>([]);
   const [adminLogo, setAdminLogo] = useState<string | null>(null);
+  const [adminEmail, setAdminEmail] = useState("admin@zacholdings.com"); // fallback master admin email
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -184,7 +179,6 @@ export default function LoginPage() {
 
   const signIn = useAuthStore((state) => state.signIn);
 
-  // cursor-reactive spotlight for the brand panel
   const glowX = useMotionValue(72);
   const glowY = useMotionValue(18);
   const springGlowX = useSpring(glowX, { stiffness: 60, damping: 22 });
@@ -197,7 +191,6 @@ export default function LoginPage() {
     glowY.set(((e.clientY - rect.top) / rect.height) * 100);
   };
 
-  // subtle 3D tilt for the credential card
   const cardX = useMotionValue(0);
   const cardY = useMotionValue(0);
   const springRotateX = useSpring(cardY, { stiffness: 200, damping: 24 });
@@ -228,26 +221,14 @@ export default function LoginPage() {
 
     const fetchInitialData = async () => {
       try {
-        const { data: compData } = await supabase.from('companies').select('id, name, logo_url');
+        const { data: compData } = await supabase.from('companies').select('id, name, logo_url, business_type');
         if (compData) setCompaniesDb(compData);
 
-        const { data: adminData } = await supabase.from('employees').select('profile_image_url').eq('access_level', 'admin').limit(1).single();
-
-        const fallbackFavicon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2310192B'/%3E%3Ctext x='50' y='67' font-family='Georgia,serif' font-size='52' fill='%23C6A15B' text-anchor='middle'%3EZ%3C/text%3E%3C/svg%3E";
-        let currentFavicon = fallbackFavicon;
-
-        if (adminData && adminData.profile_image_url) {
-          setAdminLogo(adminData.profile_image_url);
-          currentFavicon = adminData.profile_image_url;
+        const { data: adminData } = await supabase.from('employees').select('email, profile_image_url').eq('access_level', 'admin').limit(1).single();
+        if (adminData) {
+          if (adminData.profile_image_url) setAdminLogo(adminData.profile_image_url);
+          if (adminData.email) setAdminEmail(adminData.email);
         }
-
-        let linkFav = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
-        if (!linkFav) {
-          linkFav = document.createElement('link');
-          linkFav.rel = 'icon';
-          document.head.appendChild(linkFav);
-        }
-        linkFav.href = currentFavicon;
       } catch (e) {
         console.error("Failed to load initial data", e);
       }
@@ -274,7 +255,11 @@ export default function LoginPage() {
     e.preventDefault();
     if (!selectedCompany) return;
 
-    if (selectedRole === 'head') {
+    // Check if selected company is a Parent Company
+    if (activeCompanyObj?.business_type === 'parent') {
+      setEmail(adminEmail);
+      setHeadUsers([{ name: "System Admin", email: adminEmail }]);
+    } else if (selectedRole === 'head') {
       if (activeCompanyObj) {
         const { data } = await supabase.from('employees').select('name, email').eq('company_id', activeCompanyObj.id).eq('access_level', 'head');
         if (data && data.length > 0) {
@@ -306,13 +291,12 @@ export default function LoginPage() {
 
   const markerLeft = step === 1 ? "0%" : step === 2 ? "50%" : "100%";
 
-  // WhatsApp "forgot password" hand-off — pre-filled with whatever context we already know
   const forgotContext = selectedRole === 'admin' ? 'the admin panel' : (activeCompanyObj?.name || 'my company');
   const forgotIdentity = email || '[your registered email]';
   const forgotMessage = `Hi, I've forgotten my password for Zac Holdings. I work under ${forgotContext} and my username is ${forgotIdentity}. Could you please reset my password?`;
   const forgotHref = `https://wa.me/917558957246?text=${encodeURIComponent(forgotMessage)}`;
 
-  const headNeedsSelection = selectedRole === 'head' && headUsers.length > 1 && !email;
+  const headNeedsSelection = selectedRole === 'head' && activeCompanyObj?.business_type !== 'parent' && headUsers.length > 1 && !email;
 
   return (
     <>
@@ -330,7 +314,6 @@ export default function LoginPage() {
           className="w-full md:w-1/2 relative flex flex-col overflow-hidden px-8 md:pl-24 md:pr-14 lg:pl-32 py-12 md:py-14"
           style={{ background: "linear-gradient(160deg, #0A0B1F 0%, #14153D 55%, #241C5E 100%)" }}
         >
-          {/* drifting aurora glow — translate and opacity only, so it renders identically everywhere */}
           <motion.div
             className="absolute w-[440px] h-[440px] rounded-full pointer-events-none"
             style={{
@@ -354,10 +337,8 @@ export default function LoginPage() {
             transition={{ duration: 32, repeat: Infinity, ease: "easeInOut", delay: 3 }}
           />
 
-          {/* cursor-reactive spotlight */}
           <motion.div className="absolute inset-0 pointer-events-none" style={{ background: spotlightBackground }} />
 
-          {/* fine blueprint grid, replacing the flat dot field */}
           <div
             className="absolute inset-0 pointer-events-none opacity-[0.05]"
             style={{
@@ -367,23 +348,17 @@ export default function LoginPage() {
             }}
           />
 
-          {/* paper-grain texture */}
           <div
             className="absolute inset-0 pointer-events-none opacity-[0.045] mix-blend-overlay"
             style={{ backgroundImage: `url("${NOISE_BG}")` }}
           />
 
-          {/* vertical measuring edge, filling the long left margin */}
           <div className="absolute left-5 md:left-7 top-0 bottom-0 w-px bg-white/[0.06] pointer-events-none hidden sm:block">
             {Array.from({ length: 40 }).map((_, i) => (
               <span key={i} className="absolute left-0 w-2 h-px bg-white/10" style={{ top: `${i * 40}px` }} />
             ))}
           </div>
 
-          {/* hero — the parent company at the centre, subsidiaries connected around it, each
-              breathing gently on its own. Every motion here is a translate or a scale on an
-              element centred on itself — never a rotation around a computed pivot — so there
-              is nothing for a browser's transform-origin guess to get wrong. */}
           <motion.svg
             className="absolute -right-24 -bottom-32 md:-right-4 md:-bottom-36 w-[560px] h-[560px] pointer-events-none"
             viewBox="0 0 520 520"
@@ -392,11 +367,9 @@ export default function LoginPage() {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}
           >
-            {/* faint orbit guides */}
             <circle cx="260" cy="260" r="120" stroke="#818CF8" strokeOpacity="0.12" strokeWidth="1" strokeDasharray="2 7" />
             <circle cx="260" cy="260" r="160" stroke="#818CF8" strokeOpacity="0.1" strokeWidth="1" strokeDasharray="2 7" />
 
-            {/* outer boundary, traced in once as the diagram assembles */}
             <motion.circle
               cx="260" cy="260" r="204"
               stroke="#6366F1" strokeWidth="1" strokeOpacity="0.32"
@@ -405,8 +378,6 @@ export default function LoginPage() {
               transition={{ duration: 1.4, ease: [0.65, 0, 0.35, 1], delay: 0.35 }}
             />
 
-            {/* subsidiaries — fixed positions, connecting lines drawn in once, each node
-                then floats up and down independently of the others */}
             {NODES.map((n, i) => {
               const cx = 260 + n.x;
               const cy = 260 + n.y;
@@ -441,8 +412,6 @@ export default function LoginPage() {
               );
             })}
 
-            {/* parent hub, with a slow, living pulse — a circle scaling around its own centre,
-                which is always safe regardless of a browser's default transform box */}
             {!reduceMotion && [0, 1].map((i) => (
               <motion.circle
                 key={i}
@@ -484,7 +453,6 @@ export default function LoginPage() {
             </motion.div>
           </div>
 
-          {/* quiet signature, panel corner */}
           <div className="relative z-10 flex items-center justify-end pt-10">
             <a
               href="https://wa.me/917558957246"
@@ -507,11 +475,9 @@ export default function LoginPage() {
             style={{ rotateX: springRotateX, rotateY: springRotateY, transformPerspective: 1400 }}
             className="relative bg-white rounded-[2rem] shadow-[0_30px_80px_-24px_rgba(30,27,75,0.16)] border border-black/[0.06] w-full max-w-[520px] h-[640px] overflow-hidden"
           >
-            {/* registration marks, like a printed plate */}
             <span className="absolute top-4 left-4 w-3 h-3 border-t border-l border-[#4F46E5]/40 pointer-events-none z-20" />
             <span className="absolute bottom-4 right-4 w-3 h-3 border-b border-r border-[#4F46E5]/40 pointer-events-none z-20" />
 
-            {/* ruler-style step indicator */}
             <div className="absolute top-0 left-9 right-9 h-6 z-20 pointer-events-none">
               <div className="absolute top-[11px] left-0 right-0 h-px bg-black/[0.07]" />
               {[0, 1, 2].map((i) => (
@@ -559,7 +525,7 @@ export default function LoginPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <span className="block text-[16.5px] font-semibold text-[#171C26]">Organizational Head</span>
-                        <span className="block text-[12.5px] text-slate-400 mt-0.5">Manage your division</span>
+                        <span className="block text-[12.5px] text-slate-400 mt-0.5">Manage your division or parent company</span>
                       </div>
                       <ChevronRight className="h-[18px] w-[18px] text-slate-300 group-hover:text-[#4F46E5] group-hover:translate-x-0.5 transition-all duration-300 shrink-0" />
                     </button>
@@ -650,7 +616,7 @@ export default function LoginPage() {
 
                   <form onSubmit={handleLogin} className="space-y-4 w-full shrink-0">
 
-                    {selectedRole === 'head' ? (
+                    {selectedRole === 'head' && activeCompanyObj?.business_type !== 'parent' ? (
                       (headUsers || []).length > 1 ? (
                         <CustomSelect
                           icon={<UserCircle className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none z-10" strokeWidth={1.75} />}
@@ -666,6 +632,12 @@ export default function LoginPage() {
                           <label className={fieldLabelClass(true, false)}>Your profile</label>
                         </div>
                       )
+                    ) : selectedRole === 'head' && activeCompanyObj?.business_type === 'parent' ? (
+                      <div className="relative">
+                        <UserCircle className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" strokeWidth={1.75} />
+                        <input type="text" readOnly value="System Admin" className="w-full h-[64px] rounded-2xl bg-[#F5F6FB] border border-black/10 px-5 pl-14 pt-[22px] pb-[6px] text-[15px] font-medium outline-none text-slate-500 cursor-not-allowed" />
+                        <label className={fieldLabelClass(true, false)}>Your profile</label>
+                      </div>
                     ) : (
                       <div className="relative">
                         <Mail className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none z-10" strokeWidth={1.75} />
