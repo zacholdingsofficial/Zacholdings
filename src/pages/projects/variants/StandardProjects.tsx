@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Search, FolderKanban, CheckCircle2, AlertCircle, X, Check, User, Trash2, Clock, Download, Loader2, ChevronDown, ExternalLink, UploadCloud, Calendar, Info, Layers, FileText, Edit2, ThumbsUp, ThumbsDown, Eye, MessageCircle, CornerDownRight } from "lucide-react";
+import { Plus, Search, FolderKanban, CheckCircle2, AlertCircle, X, Check, User, Trash2, Clock, Download, Loader2, ChevronDown, ExternalLink, UploadCloud, Calendar, Info, Layers, FileText, Edit2, ThumbsUp, ThumbsDown, Eye, MessageCircle, CornerDownRight, Library, Users, GraduationCap } from "lucide-react";
 import { useAuthStore } from "../../../store/authStore";
 import { useDataStore } from "../../../store/dataStore";
 import { supabase } from "../../../supabase";
@@ -15,9 +15,10 @@ const DEFAULT_MILESTONES = {
 };
 
 export default function StandardProjects() {
-  const { role, employeeId, activeWorkspace, companyId } = useAuthStore();
+  const authStore = useAuthStore();
+  const { role, employeeId, activeWorkspace, companyId } = authStore;
   const store = useDataStore();
-  const { projects, tasks, reports, employees, companies, customers, salaryPayments, projectAllocations, fetchAllData } = store;
+  const { projects, tasks, reports, employees, companies, customers, salaryPayments, projectAllocations, invoices, fetchAllData } = store;
 
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
@@ -30,6 +31,9 @@ export default function StandardProjects() {
 
   const [viewMode, setViewMode] = useState<'admin' | 'user'>('admin');
   const [roleSelectProject, setRoleSelectProject] = useState<any>(null);
+  
+  // NEW: Interceptor for routing to Academy Workspace
+  const [academyIntercept, setAcademyIntercept] = useState<any>(null);
 
   const isUserView = role === 'user' || viewMode === 'user';
   const isAdminView = (role === 'admin' || role === 'head') && viewMode === 'admin';
@@ -37,7 +41,7 @@ export default function StandardProjects() {
   const [expandedFinanceEmpId, setExpandedFinanceEmpId] = useState<number | null>(null);
   const [showPayoutForm, setShowPayoutForm] = useState(false);
   const [showDriveHelp, setShowDriveHelp] = useState(false);
-  const [showDescription, setShowDescription] = useState(false); // NEW: Toggle state for description box
+  const [showDescription, setShowDescription] = useState(false); 
 
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [taskToUpload, setTaskToUpload] = useState<any>(null);
@@ -81,11 +85,6 @@ export default function StandardProjects() {
   const visibleProjects = projects.filter(p => {
     if (!p.name) return false;
 
-    const pType = p.metadata?.type;
-    if (pType === 'Course' || pType === 'Workshop' || pType === 'Internship') {
-      return false;
-    }
-
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = filterStatus === "All" || p.status === filterStatus;
     const isAssigned = (role === 'admin' || role === 'head') || (Array.isArray(p.assignee_ids) ? p.assignee_ids : []).includes(employeeId);
@@ -100,6 +99,7 @@ export default function StandardProjects() {
 
   const availableCustomers = customers.filter(c => c.company_id === parseInt(formData.company_id || '0'));
   
+  // FIX: System Admins are now strictly excluded from task assignments
   const availableEmployees = employees.filter(emp => 
     emp.role !== 'admin' && emp.access_level !== 'admin' && emp.company_id === parseInt(formData.company_id || '0')
   );
@@ -610,6 +610,64 @@ export default function StandardProjects() {
           ) : (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-5">
               {visibleProjects.map(project => {
+                const pType = project.metadata?.type;
+                const isAcademy = pType === 'Course' || pType === 'Workshop' || pType === 'Internship';
+
+                // ==========================================
+                // ACADEMY CARD RENDER
+                // ==========================================
+                if (isAcademy) {
+                  const courseModules = tasks.filter(t => t.project_id === project.id);
+                  const completedModules = courseModules.filter(t => t.is_completed).length;
+                  const totalModules = courseModules.length;
+                  const progressPct = totalModules === 0 ? 0 : Math.round((completedModules / totalModules) * 100);
+                  const enrolledCount = invoices ? invoices.filter((i: any) => i.project_id === project.id).length : 0;
+                  const actualType = pType || 'Course';
+
+                  return (
+                    <div key={project.id} onClick={() => setAcademyIntercept(project)} className="bg-white rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm hover:shadow-md hover:border-purple-200 transition-all flex flex-col overflow-hidden cursor-pointer group">
+                      <div className="p-5 sm:p-7 flex flex-col gap-5">
+                        <div className="flex justify-between items-start gap-4">
+                          <div className="flex-1 min-w-0 flex items-start gap-4">
+                            <div className="h-12 w-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0 border border-purple-100 group-hover:scale-105 transition-transform"><Library className="h-5 w-5" /></div>
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest bg-slate-100 px-2 py-0.5 rounded-md">{actualType}</span>
+                              </div>
+                              <h3 className="text-[15px] sm:text-lg font-bold text-slate-900 tracking-tight group-hover:text-purple-900 transition-colors truncate">{project.name}</h3>
+                              <p className="text-[10px] sm:text-[11px] text-slate-500 font-bold uppercase tracking-wider mt-1 truncate flex items-center gap-2">
+                                <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {enrolledCount} Students</span>
+                                {role === 'head' && <><span>•</span><span>Fee: ₹{(project.expected_amount || 0).toLocaleString()}</span></>}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="shrink-0">
+                            <div className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider border 
+                              ${project.status === 'Graduated' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
+                                project.status === 'On Hold' || project.status === 'Postponed' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                'bg-purple-50 text-purple-700 border-purple-200'}`}>
+                               {project.status || 'Enrollment'}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-4 border-t border-slate-50">
+                          <div className="flex items-center gap-4">
+                             <div className="w-32 sm:w-48 bg-slate-100 h-2 rounded-full overflow-hidden">
+                               <div className="h-full bg-gradient-to-r from-purple-600 to-indigo-500 transition-all duration-1000" style={{ width: `${progressPct}%` }} />
+                             </div>
+                             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{progressPct}% Syllabus</span>
+                          </div>
+                          <span className="text-[11px] font-bold text-purple-700 bg-purple-50 px-3 py-1 rounded-lg border border-purple-100">View Details →</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // ==========================================
+                // STANDARD CARD RENDER
+                // ==========================================
                 const projectTasks = tasks.filter(t => t.project_id === project.id);
                 const completedTasks = projectTasks.filter(t => t.is_completed).length;
                 const totalTasks = projectTasks.length;
@@ -771,6 +829,40 @@ export default function StandardProjects() {
                   </div>
 
                   <button onClick={() => setRoleSelectProject(null)} className="mt-5 w-full text-slate-400 hover:text-slate-600 font-bold text-xs uppercase tracking-wider transition-colors">Cancel</button>
+               </motion.div>
+             </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {/* NEW: ACADEMY ROUTING INTERCEPTOR MODAL */}
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {academyIntercept && (
+             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[10000] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+               <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-sm shadow-2xl flex flex-col text-center">
+                  <div className="h-16 w-16 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center mb-5 mx-auto"><GraduationCap className="h-8 w-8" /></div>
+                  <h3 className="text-xl font-black text-slate-900 tracking-tight mb-2">Switch Workspace</h3>
+                  <p className="text-xs font-medium text-slate-500 mb-6 leading-relaxed">
+                    <strong className="text-slate-800">{academyIntercept.name}</strong> uses the dedicated educational layout. To manage its syllabus, faculty, and student roster, please switch your workspace to its managing subsidiary.
+                  </p>
+
+                  <div className="space-y-3">
+                    <button onClick={() => {
+                       // @ts-ignore
+                       if (authStore.setActiveWorkspace) {
+                          // @ts-ignore
+                          authStore.setActiveWorkspace(academyIntercept.company_id.toString());
+                          setAcademyIntercept(null);
+                       } else {
+                          alert(`Please use the top-left dropdown to switch to the "${companies.find(c => c.id === academyIntercept.company_id)?.name}" workspace.`);
+                       }
+                    }} className="w-full bg-purple-900 hover:bg-purple-800 text-white rounded-xl py-3.5 text-sm font-bold shadow-md transition-all">
+                       Open Academy Workspace
+                    </button>
+                    <button onClick={() => setAcademyIntercept(null)} className="w-full text-slate-400 hover:text-slate-600 font-bold text-xs uppercase tracking-wider transition-colors py-2">Cancel</button>
+                  </div>
                </motion.div>
              </motion.div>
           )}
@@ -1656,6 +1748,7 @@ export default function StandardProjects() {
                   </div>
                 )}
 
+                {/* FIX: Wizard dynamic footer for next/back/submit */}
                 <div className="p-4 sm:p-6 border-t border-slate-100 bg-[#FAFCFF] flex justify-end items-center gap-2 sm:gap-4 shrink-0 mt-auto">
                   {selectedProject && isAdminView && modalTab === 'details' && (
                     <button onClick={handleDeleteProject} disabled={isSaving} className="border border-rose-200 text-rose-600 bg-white hover:bg-rose-50 rounded-xl h-10 sm:h-12 px-3 sm:px-5 flex items-center justify-center shadow-sm mr-auto transition-colors shrink-0"><Trash2 className="h-4 w-4" /></button>
