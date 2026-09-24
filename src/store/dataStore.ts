@@ -20,7 +20,10 @@ export const useDataStore = create<DataState>((set) => ({
       let projectsQuery = supabase.from('projects').select('*');
       let tasksQuery = supabase.from('project_tasks').select('*');
       let reportsQuery = supabase.from('project_reports').select('*');
-      let employeesQuery = supabase.from('employees').select('*');
+      
+      // --- MODIFIED: Fetching nested junction table data for multiple roles ---
+      let employeesQuery = supabase.from('employees').select('*, company_roles:employee_company_roles(*)');
+      
       let customersQuery = supabase.from('customers').select('*');
       let invoicesQuery = supabase.from('invoices').select('*').order('created_at', { ascending: false });
       let invoiceItemsQuery = supabase.from('invoice_items').select('*');
@@ -38,6 +41,10 @@ export const useDataStore = create<DataState>((set) => ({
         invoicesQuery = invoicesQuery.eq('company_id', targetCompanyId);
         invoicePaymentsQuery = invoicePaymentsQuery.eq('company_id', targetCompanyId);
         expensesQuery = expensesQuery.eq('company_id', targetCompanyId);
+        
+        // NOTE: This filter uses the legacy columns to maintain backward compatibility during migration. 
+        // If you eventually drop the old company_id column from the employees table, you will need to 
+        // remove this specific line and rely on the frontend filtering logic we added to EmployeesPage.
         employeesQuery = employeesQuery.or(`company_id.eq.${targetCompanyId},access_level.eq.admin`);
       }
 

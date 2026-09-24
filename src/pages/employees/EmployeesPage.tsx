@@ -1,11 +1,10 @@
 import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Search, Mail, Phone, Building2, Edit3, Trash2, X, Camera, Wallet, LayoutGrid, List, ShieldAlert, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { Plus, Search, Mail, Phone, Building2, Edit3, Trash2, X, Camera, Wallet, LayoutGrid, List, ShieldAlert, AlertCircle, CheckCircle2, Loader2, Briefcase } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import { useDataStore } from "../../store/dataStore";
 import { supabase } from "../../supabase";
 
-// --- NATIVE IMAGE COMPRESSION ENGINE ---
 const compressImage = async (file: File, maxWidth = 300, quality = 0.8): Promise<File> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -74,23 +73,40 @@ export default function EmployeesPage() {
   const currentCompanyId = role === 'admin' ? (activeWorkspace || "") : companyId;
 
   const [formData, setFormData] = useState({
-    name: "", email: "", phone: "", role: "", access_level: "user", company_id: currentCompanyId?.toString() || "", password: ""
+    name: "", 
+    email: "", 
+    phone: "", 
+    password: "",
+    company_roles: [{ company_id: currentCompanyId?.toString() || "", role: "", access_level: "user" }]
   });
+
+  const getPrimaryRoleAssignment = (emp: any) => {
+    if (!emp.company_roles || emp.company_roles.length === 0) {
+      return { company_id: emp.company_id, role: emp.role, access_level: emp.access_level };
+    }
+    if (activeWorkspace) {
+      return emp.company_roles.find((cr: any) => cr.company_id.toString() === activeWorkspace.toString()) || emp.company_roles[0];
+    }
+    return emp.company_roles[0];
+  };
 
   const visibleEmployees = employees.filter(emp => {
     const matchesSearch = emp.name?.toLowerCase().includes(searchQuery.toLowerCase()) || (emp.email && emp.email.toLowerCase().includes(searchQuery.toLowerCase()));
     
+    const assignments = emp.company_roles && emp.company_roles.length > 0 
+      ? emp.company_roles 
+      : [{ company_id: emp.company_id, access_level: emp.access_level }];
+      
+    const hasGlobalAdmin = assignments.some((cr: any) => cr.access_level === 'admin');
+
     if (role === 'admin' && !activeWorkspace) {
-      const matchesCompany = filterCompanyId === "all" || emp.company_id?.toString() === filterCompanyId;
+      const matchesCompany = filterCompanyId === "all" || assignments.some((cr: any) => cr.company_id?.toString() === filterCompanyId);
       return matchesSearch && matchesCompany;
     }
     
-    return matchesSearch && (emp.company_id === currentCompanyId || emp.access_level === 'admin');
+    const matchesCurrentCompany = assignments.some((cr: any) => cr.company_id?.toString() === currentCompanyId?.toString());
+    return matchesSearch && (matchesCurrentCompany || hasGlobalAdmin);
   }).sort((a, b) => {
-    const getRank = (lvl: string) => lvl === 'admin' ? 1 : lvl === 'head' ? 2 : 3;
-    const rankDiff = getRank(a.access_level || 'user') - getRank(b.access_level || 'user');
-    if (rankDiff !== 0) return rankDiff;
-    
     const timeA = a.created_at ? new Date(a.created_at).getTime() : a.id;
     const timeB = b.created_at ? new Date(b.created_at).getTime() : b.id;
     return timeA - timeB;
@@ -109,26 +125,46 @@ export default function EmployeesPage() {
   const getFinancials = (empId: number) => {
     const allocs = projectAllocations.filter(a => a.employee_id === empId);
     const payments = salaryPayments.filter(p => p.employee_id === empId);
-    
     const totalAllocated = allocs.reduce((sum, a) => sum + (parseFloat(a.allocated_amount || 0) + parseFloat(a.incentive_amount || 0)), 0);
     const totalPaid = payments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0);
     const balanceDue = Math.max(0, totalAllocated - totalPaid);
-    
     return { totalAllocated, totalPaid, balanceDue, allocs, payments };
   };
 
   const openNewEmployee = () => {
     setSelectedEmployee(null);
-    setFormData({ name: "", email: "", phone: "", role: "", access_level: "user", company_id: currentCompanyId?.toString() || "", password: "" });
+    setFormData({ 
+      name: "", email: "", phone: "", password: "", 
+      company_roles: [{ company_id: currentCompanyId?.toString() || "", role: "", access_level: "user" }] 
+    });
     setImageFile(null); setImagePreview(null); setRemoveImage(false);
     setIsModalOpen(true);
   };
 
   const openEditEmployee = (emp: any) => {
     setSelectedEmployee(emp);
+    
+    let initialRoles = [];
+    if (emp.company_roles && emp.company_roles.length > 0) {
+      initialRoles = emp.company_roles.map((cr: any) => ({
+        company_id: cr.company_id?.toString() || "",
+        role: cr.role || "",
+        access_level: cr.access_level || "user"
+      }));
+    } else {
+      initialRoles = [{
+        company_id: emp.company_id?.toString() || "",
+        role: emp.role || "",
+        access_level: emp.access_level || "user"
+      }];
+    }
+
     setFormData({
-      name: emp.name || "", email: emp.email || "", phone: emp.phone || "", role: emp.role || "", 
-      access_level: emp.access_level || "user", company_id: emp.company_id?.toString() || "", password: ""
+      name: emp.name || "", 
+      email: emp.email || "", 
+      phone: emp.phone || "", 
+      password: "",
+      company_roles: initialRoles
     });
     setImageFile(null); setImagePreview(null); setRemoveImage(false);
     setIsModalOpen(true);
@@ -153,61 +189,82 @@ export default function EmployeesPage() {
       const fileName = urlParts[urlParts.length - 1];
       if (fileName) await supabase.storage.from('avatars').remove([fileName]);
     } catch (e) {
-      console.warn("Could not delete old avatar, might already be removed.");
+      console.warn("Could not delete old avatar.");
     }
+  };
+
+  const addCompanyRoleForm = () => {
+    setFormData({
+      ...formData,
+      company_roles: [...formData.company_roles, { company_id: "", role: "", access_level: "user" }]
+    });
+  };
+
+  const removeCompanyRoleForm = (index: number) => {
+    const newRoles = [...formData.company_roles];
+    newRoles.splice(index, 1);
+    setFormData({ ...formData, company_roles: newRoles });
+  };
+
+  const handleRoleChange = (index: number, field: string, value: string) => {
+    const newRoles = [...formData.company_roles];
+    newRoles[index] = { ...newRoles[index], [field]: value };
+    setFormData({ ...formData, company_roles: newRoles });
   };
 
   const handleSaveEmployee = async () => {
     if (!formData.name.trim() || !formData.email.trim()) return alert("Name and Email are required.");
     if (!selectedEmployee && !formData.password.trim()) return alert("Initial password is required for new employees.");
-    if (role === 'admin' && !activeWorkspace && !formData.company_id && formData.access_level !== 'admin') return alert("Please select a company.");
+    
+    for (const cr of formData.company_roles) {
+      if (!cr.company_id && cr.access_level !== 'admin' && (role === 'admin' && !activeWorkspace)) {
+        return alert("Please select a company for all assigned roles.");
+      }
+    }
 
     setSaveStatus("saving");
     let finalImageUrl = selectedEmployee?.profile_image_url || null;
 
     try {
       if (removeImage || imageFile) {
-        if (selectedEmployee?.profile_image_url) {
-          await deleteOldAvatar(selectedEmployee.profile_image_url);
-        }
+        if (selectedEmployee?.profile_image_url) await deleteOldAvatar(selectedEmployee.profile_image_url);
         if (removeImage) finalImageUrl = null;
       }
 
       if (imageFile) {
         setSaveStatus("compressing");
         const compressedFile = await compressImage(imageFile, 300, 0.8);
-        
         setSaveStatus("uploading");
         const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.jpg`;
         const { error: uploadError } = await supabase.storage.from('avatars').upload(fileName, compressedFile);
         if (uploadError) throw new Error(`Image upload failed! ${uploadError.message}`);
-        
         const { data } = supabase.storage.from('avatars').getPublicUrl(fileName);
         finalImageUrl = data.publicUrl;
       }
 
       setSaveStatus("saving");
-      const payload: any = {
-        name: formData.name, email: formData.email, phone: formData.phone, role: formData.role,
-        access_level: formData.access_level, company_id: formData.company_id ? parseInt(formData.company_id) : null,
+      
+      const corePayload: any = {
+        name: formData.name, 
+        email: formData.email, 
+        phone: formData.phone, 
         profile_image_url: finalImageUrl
       };
 
+      let finalEmployeeId = selectedEmployee?.id;
+
       if (!selectedEmployee) {
-        // --- 1. CREATE BRAND NEW USER ---
         const { error: authError } = await supabase.auth.signUp({
           email: formData.email,
           password: formData.password,
         });
-        
         if (authError) throw new Error(`Authentication Engine Error: ${authError.message}`);
 
-        payload.password = formData.password; 
-        const { error } = await supabase.from('employees').insert([payload]);
+        corePayload.password = formData.password; 
+        const { data: newEmp, error } = await supabase.from('employees').insert([corePayload]).select().single();
         if (error) throw error;
-
+        finalEmployeeId = newEmp.id;
       } else {
-        // --- 2. SECURE GOD-MODE UPDATE (EMAIL & PASSWORD) ---
         const emailChanged = formData.email.trim().toLowerCase() !== selectedEmployee.email.trim().toLowerCase();
         const passwordChanged = formData.password.trim().length > 0;
 
@@ -217,17 +274,30 @@ export default function EmployeesPage() {
               new_email: formData.email.trim(),
               new_password: formData.password.trim() || null
            });
-           
            if (rpcError) throw new Error(`Failed to contact Auth Vault: ${rpcError.message}`);
            if (rpcResult !== 'SUCCESS') throw new Error(`Auth Vault Error: ${rpcResult}`);
-           
-           if (passwordChanged) {
-              payload.password = formData.password; // Keep plain text reference updated if needed
-           }
+           if (passwordChanged) corePayload.password = formData.password; 
         }
 
-        const { error } = await supabase.from('employees').update(payload).eq('id', selectedEmployee.id);
+        const { error } = await supabase.from('employees').update(corePayload).eq('id', finalEmployeeId);
         if (error) throw error;
+      }
+
+      const { error: deleteError } = await supabase.from('employee_company_roles').delete().eq('employee_id', finalEmployeeId);
+      if (deleteError) throw deleteError;
+
+      const validRolesToInsert = formData.company_roles
+        .filter(cr => cr.company_id || cr.access_level === 'admin')
+        .map(cr => ({
+          employee_id: finalEmployeeId,
+          company_id: cr.company_id ? parseInt(cr.company_id) : null,
+          role: cr.role,
+          access_level: cr.access_level
+      }));
+
+      if (validRolesToInsert.length > 0) {
+        const { error: rolesError } = await supabase.from('employee_company_roles').insert(validRolesToInsert);
+        if (rolesError) throw rolesError;
       }
       
       await fetchAllData();
@@ -245,9 +315,7 @@ export default function EmployeesPage() {
     
     setSaveStatus("saving");
     try {
-      if (selectedEmployee.profile_image_url) {
-        await deleteOldAvatar(selectedEmployee.profile_image_url);
-      }
+      if (selectedEmployee.profile_image_url) await deleteOldAvatar(selectedEmployee.profile_image_url);
       const { error } = await supabase.from('employees').delete().eq('id', selectedEmployee.id);
       if (error) throw error;
       await fetchAllData(); setIsModalOpen(false);
@@ -360,14 +428,21 @@ export default function EmployeesPage() {
             {visibleEmployees.map(emp => {
               const { balanceDue } = getFinancials(emp.id);
               const isOwed = balanceDue > 0;
+              const primaryAssignment = getPrimaryRoleAssignment(emp);
               
               return (
                 <motion.div key={emp.id} layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className={`bg-white rounded-2xl sm:rounded-3xl border shadow-sm hover:shadow-md transition-all flex flex-col relative overflow-hidden group ${isOwed ? 'border-amber-300 shadow-amber-100/50' : 'border-slate-100 hover:border-blue-200'}`}>
                   
-                  <div className="absolute top-4 right-4 sm:top-5 sm:right-5 z-10">
-                    {emp.access_level === 'admin' ? <span className="bg-slate-900 text-white text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-2 sm:px-2.5 py-1 rounded-lg flex items-center gap-1"><ShieldAlert className="h-2.5 w-2.5 sm:h-3 sm:w-3"/> Admin</span>
-                    : emp.access_level === 'head' ? <span className="bg-blue-50 text-blue-700 border border-blue-100 text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-2 sm:px-2.5 py-1 rounded-lg">Director</span>
+                  <div className="absolute top-4 right-4 sm:top-5 sm:right-5 z-10 flex flex-col gap-1 items-end">
+                    {primaryAssignment?.access_level === 'admin' ? <span className="bg-slate-900 text-white text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-2 sm:px-2.5 py-1 rounded-lg flex items-center gap-1"><ShieldAlert className="h-2.5 w-2.5 sm:h-3 sm:w-3"/> Admin</span>
+                    : primaryAssignment?.access_level === 'head' ? <span className="bg-blue-50 text-blue-700 border border-blue-100 text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-2 sm:px-2.5 py-1 rounded-lg">Director</span>
                     : <span className="bg-slate-50 text-slate-500 border border-slate-100 text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-2 sm:px-2.5 py-1 rounded-lg">Operator</span>}
+                    
+                    {emp.company_roles && emp.company_roles.length > 1 && (
+                      <span className="bg-indigo-50 text-indigo-600 border border-indigo-100 text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-lg flex items-center gap-1">
+                         <Briefcase className="h-2.5 w-2.5" /> +{emp.company_roles.length - 1} Roles
+                      </span>
+                    )}
                   </div>
 
                   <div className={`p-5 sm:p-7 flex flex-row sm:flex-col items-center sm:text-center mt-2 sm:mt-4 border-b relative ${isOwed ? 'border-amber-50 bg-amber-50/10' : 'border-slate-50'}`}>
@@ -376,9 +451,9 @@ export default function EmployeesPage() {
                     </div>
                     <div className="flex-1 min-w-0 flex flex-col items-start sm:items-center">
                       <h3 className="text-[14px] sm:text-[16px] font-bold text-slate-900 tracking-tight leading-tight px-0 sm:px-2 truncate w-full sm:text-center">{emp.name}</h3>
-                      <p className="text-[11px] sm:text-[12px] font-medium text-slate-500 mt-1 truncate w-full sm:text-center">{emp.role || 'Unassigned Role'}</p>
+                      <p className="text-[11px] sm:text-[12px] font-medium text-slate-500 mt-1 truncate w-full sm:text-center">{primaryAssignment?.role || 'Unassigned Role'}</p>
                       {role === 'admin' && !activeWorkspace && (
-                         <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2 sm:mt-3 flex items-center justify-start sm:justify-center gap-1 sm:gap-1.5 w-full truncate"><Building2 className="h-3 w-3 shrink-0" /> <span className="truncate">{companies.find(c => c.id === emp.company_id)?.name || 'Global'}</span></p>
+                         <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2 sm:mt-3 flex items-center justify-start sm:justify-center gap-1 sm:gap-1.5 w-full truncate"><Building2 className="h-3 w-3 shrink-0" /> <span className="truncate">{companies.find(c => c.id.toString() === primaryAssignment?.company_id?.toString())?.name || 'Global'}</span></p>
                       )}
                     </div>
                   </div>
@@ -424,6 +499,7 @@ export default function EmployeesPage() {
                   ) : visibleEmployees.map((emp) => {
                     const { balanceDue } = getFinancials(emp.id);
                     const isOwed = balanceDue > 0;
+                    const primaryAssignment = getPrimaryRoleAssignment(emp);
                     
                     return (
                       <tr key={emp.id} className={`hover:bg-blue-50/30 transition-colors group ${isOwed ? 'bg-amber-50/10' : ''}`}>
@@ -434,7 +510,7 @@ export default function EmployeesPage() {
                             </div>
                             <div className="min-w-0">
                               <p className="font-bold text-[12px] sm:text-[14px] text-slate-900 tracking-tight truncate">{emp.name}</p>
-                              <p className="text-[10px] sm:text-[11px] text-slate-500 font-medium truncate">{emp.role || 'Unassigned Role'}</p>
+                              <p className="text-[10px] sm:text-[11px] text-slate-500 font-medium truncate">{primaryAssignment?.role || 'Unassigned Role'}</p>
                             </div>
                           </div>
                         </td>
@@ -443,9 +519,14 @@ export default function EmployeesPage() {
                           {emp.phone && <p className="text-[11px] sm:text-[12px] text-slate-600 font-medium flex items-center gap-1.5 sm:gap-2 mt-1 truncate"><Phone className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-slate-400 shrink-0"/> <span className="truncate">{emp.phone}</span></p>}
                         </td>
                         <td className="px-4 sm:px-6 py-3 sm:py-4">
-                          <span className={`px-2 sm:px-2.5 py-1 rounded-lg text-[8px] sm:text-[9px] font-bold uppercase tracking-widest whitespace-nowrap ${emp.access_level === 'admin' ? 'bg-slate-900 text-white' : emp.access_level === 'head' ? 'bg-blue-50 text-blue-700' : 'bg-slate-50 text-slate-500 border border-slate-100'}`}>
-                            {emp.access_level === 'head' ? 'Director' : emp.access_level === 'admin' ? 'Admin' : 'Operator'}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 sm:px-2.5 py-1 rounded-lg text-[8px] sm:text-[9px] font-bold uppercase tracking-widest whitespace-nowrap ${primaryAssignment?.access_level === 'admin' ? 'bg-slate-900 text-white' : primaryAssignment?.access_level === 'head' ? 'bg-blue-50 text-blue-700' : 'bg-slate-50 text-slate-500 border border-slate-100'}`}>
+                              {primaryAssignment?.access_level === 'head' ? 'Director' : primaryAssignment?.access_level === 'admin' ? 'Admin' : 'Operator'}
+                            </span>
+                            {emp.company_roles && emp.company_roles.length > 1 && (
+                              <span className="text-[9px] font-bold text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">+{emp.company_roles.length - 1}</span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 sm:px-6 py-3 sm:py-4">
                           <div className="flex flex-col">
@@ -484,7 +565,7 @@ export default function EmployeesPage() {
                 animate={{ opacity: 1, y: 0, scale: 1 }} 
                 exit={{ opacity: 0, y: 40, scale: 0.95 }} 
                 onClick={(e) => e.stopPropagation()}
-                className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-3xl max-h-full flex flex-col overflow-hidden border border-slate-100"
+                className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-4xl max-h-[95vh] flex flex-col overflow-hidden border border-slate-100"
               >
                 
                 <div className="px-5 sm:px-8 pt-5 sm:pt-7 border-b border-slate-100 bg-[#FAFCFF] shrink-0">
@@ -497,7 +578,7 @@ export default function EmployeesPage() {
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto overscroll-contain p-5 sm:p-8 flex flex-col md:flex-row gap-6 sm:gap-10 max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none] max-sm:[scrollbar-width:none] sm:[&::-webkit-scrollbar]:w-1.5 sm:[&::-webkit-scrollbar-thumb]:bg-slate-200 sm:[&::-webkit-scrollbar-thumb]:rounded-full">
+                <div className="flex-1 overflow-y-auto overscroll-contain p-5 sm:p-8 flex flex-col lg:flex-row gap-6 sm:gap-10 max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none] max-sm:[scrollbar-width:none] sm:[&::-webkit-scrollbar]:w-1.5 sm:[&::-webkit-scrollbar-thumb]:bg-slate-200 sm:[&::-webkit-scrollbar-thumb]:rounded-full">
                   
                   <div className="flex flex-row items-center sm:items-start gap-4 sm:gap-0 sm:flex-col shrink-0 border-b sm:border-b-0 border-slate-100 pb-5 sm:pb-0 sm:w-64">
                     <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageSelect} className="hidden" />
@@ -518,15 +599,13 @@ export default function EmployeesPage() {
                          <input type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className="w-full h-8 rounded-lg border border-slate-200 px-3 text-[11px] font-medium outline-none focus:border-blue-500 shadow-sm" />
                       </div>
                     </div>
-
                     <div className="hidden sm:block text-center mt-5 px-4">
                        <p className="text-[11px] text-slate-400 font-medium leading-relaxed">Upload a clear, professional photo for the directory.</p>
                     </div>
                   </div>
 
-                  <div className="flex-1 space-y-4 sm:space-y-5">
+                  <div className="flex-1 space-y-4 sm:space-y-6">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
-                      
                       <div className="hidden sm:block">
                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2 px-1">Full Name *</label>
                          <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full h-12 rounded-xl border border-slate-200 px-4 text-sm font-bold outline-none focus:border-blue-500 shadow-sm" />
@@ -535,41 +614,55 @@ export default function EmployeesPage() {
                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2 px-1">Email Address *</label>
                          <input type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className="w-full h-12 rounded-xl border border-slate-200 px-4 text-sm font-medium outline-none focus:border-blue-500 shadow-sm" />
                       </div>
+                      <div>
+                        <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1">Contact Number</label>
+                        <input type="text" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 px-3 sm:px-4 text-[12px] sm:text-sm font-medium outline-none focus:border-blue-500 shadow-sm" />
+                      </div>
+                      <div>
+                        <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1 truncate" title={selectedEmployee ? 'System Access' : 'Sys Password *'}>Sys Password {selectedEmployee ? '(Opt)' : '*'}</label>
+                        <input type="text" placeholder={selectedEmployee ? "Leave blank..." : "Set initial pwd"} value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 px-3 sm:px-4 text-[12px] sm:text-sm font-medium outline-none focus:border-blue-500 shadow-sm placeholder:truncate" />
+                      </div>
+                    </div>
 
-                      <div><label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1">Job Title</label><input type="text" value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 px-3 sm:px-4 text-[12px] sm:text-sm font-medium outline-none focus:border-blue-500 shadow-sm" /></div>
-                      <div><label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1">Contact Number</label><input type="text" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 px-3 sm:px-4 text-[12px] sm:text-sm font-medium outline-none focus:border-blue-500 shadow-sm" /></div>
+                    <div className="mt-6 border-t border-slate-100 pt-6">
+                      <div className="flex items-center justify-between mb-4">
+                         <h4 className="text-[11px] sm:text-[12px] font-bold text-slate-800 tracking-tight flex items-center gap-2"><Briefcase className="h-4 w-4 text-blue-600"/> Company Assignments</h4>
+                         <button onClick={addCompanyRoleForm} className="text-[10px] font-bold bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-1"><Plus className="h-3 w-3" /> Add Role</button>
+                      </div>
                       
-                      {role === 'admin' && !activeWorkspace && (
-                        <div className="sm:col-span-2 p-4 sm:p-5 rounded-xl sm:rounded-2xl bg-slate-50 border border-slate-100">
-                          <label className="text-[9px] sm:text-[10px] font-bold text-slate-600 uppercase tracking-widest block mb-2 sm:mb-3 px-1">Company / Subsidiary</label>
-                          <select value={formData.company_id} onChange={(e) => setFormData({...formData, company_id: e.target.value})} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 text-[12px] sm:text-sm font-bold outline-none cursor-pointer">
-                            <option value="">Global Administrator (No specific company)</option>
-                            {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                          </select>
-                        </div>
-                      )}
-                      
-                      <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5 pb-4">
-                        <div>
-                            <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1">Access Level</label>
-                            <select value={formData.access_level} onChange={(e) => setFormData({...formData, access_level: e.target.value})} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 px-3 sm:px-4 text-[12px] sm:text-sm font-bold outline-none cursor-pointer">
-                                <option value="user">Operator (User)</option>
-                                <option value="head">Director (Head)</option>
-                                {role === 'admin' && <option value="admin">Global Admin</option>}
-                            </select>
-                        </div>
-                        <div>
-                          <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1 truncate" title={selectedEmployee ? 'System Access' : 'Sys Password *'}>
-                            Sys Password {selectedEmployee ? '(Opt)' : '*'}
-                          </label>
-                          <input 
-                            type="text" 
-                            placeholder={selectedEmployee ? "Leave blank..." : "Set initial pwd"} 
-                            value={formData.password} 
-                            onChange={(e) => setFormData({...formData, password: e.target.value})} 
-                            className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 px-3 sm:px-4 text-[12px] sm:text-sm font-medium outline-none focus:border-blue-500 shadow-sm placeholder:truncate" 
-                          />
-                        </div>
+                      <div className="space-y-4">
+                        {formData.company_roles.map((cr, idx) => (
+                           <div key={idx} className="p-4 sm:p-5 rounded-xl sm:rounded-2xl bg-slate-50 border border-slate-200 relative group">
+                             {formData.company_roles.length > 1 && (
+                               <button onClick={() => removeCompanyRoleForm(idx)} className="absolute -top-2 -right-2 h-6 w-6 bg-white border border-rose-100 rounded-full flex items-center justify-center text-rose-500 hover:bg-rose-50 shadow-sm z-10"><X className="h-3 w-3" /></button>
+                             )}
+                             
+                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                               {(role === 'admin' && !activeWorkspace) && (
+                                 <div className="sm:col-span-2">
+                                   <label className="text-[9px] sm:text-[10px] font-bold text-slate-600 uppercase tracking-widest block mb-2 px-1">Company / Subsidiary</label>
+                                   <select value={cr.company_id} onChange={(e) => handleRoleChange(idx, 'company_id', e.target.value)} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 text-[12px] sm:text-sm font-bold outline-none cursor-pointer focus:border-blue-500">
+                                     <option value="">Global Administrator (No specific company)</option>
+                                     {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                   </select>
+                                 </div>
+                               )}
+                               
+                               <div>
+                                 <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 px-1">Job Title</label>
+                                 <input type="text" placeholder="e.g., Faculty, Manager" value={cr.role} onChange={(e) => handleRoleChange(idx, 'role', e.target.value)} className="w-full h-10 rounded-xl border border-slate-200 px-3 text-[12px] sm:text-sm font-medium outline-none bg-white focus:border-blue-500 shadow-sm" />
+                               </div>
+                               <div>
+                                  <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 px-1">Access Level</label>
+                                  <select value={cr.access_level} onChange={(e) => handleRoleChange(idx, 'access_level', e.target.value)} className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-[12px] sm:text-sm font-bold outline-none cursor-pointer focus:border-blue-500">
+                                      <option value="user">Operator (User)</option>
+                                      <option value="head">Director (Head)</option>
+                                      {role === 'admin' && <option value="admin">Global Admin</option>}
+                                  </select>
+                               </div>
+                             </div>
+                           </div>
+                        ))}
                       </div>
                     </div>
                   </div>
