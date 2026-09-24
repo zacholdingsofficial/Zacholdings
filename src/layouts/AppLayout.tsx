@@ -27,7 +27,7 @@ export default function AppLayout() {
 
   const activeCompany = activeWorkspace ? companies.find(c => c.id === activeWorkspace) : null;
   const currentDisplayCompany = (role !== 'admin' || activeWorkspace) ? companies.find(c => c.id === (activeWorkspace || companyId)) : null;
-  const brandName = currentDisplayCompany?.name || "Zayd Industries";
+  const brandName = currentDisplayCompany?.name || "Zac Holdings";
   
   // Raw logo handling
   const brandLogo = currentDisplayCompany?.logo_url || masterAdmin?.profile_image_url || null;
