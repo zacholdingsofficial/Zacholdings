@@ -198,17 +198,17 @@ export default function DashboardPage() {
         finalLogoUrl = null;
       }
       
-      // 3. Save Company
+      // 3. Save Company with Parent Architecture Logic
       setSaveStatus("saving");
       const payload = { 
         name: companyFormData.name, 
-        area: companyFormData.area, 
-        head_name: companyFormData.head_name, 
-        phone: companyFormData.phone, 
-        website_url: companyFormData.website_url, 
+        area: finalBusinessType === 'parent' ? 'Holding Company' : companyFormData.area, 
+        head_name: finalBusinessType === 'parent' ? 'System Admin' : companyFormData.head_name, 
+        phone: finalBusinessType === 'parent' ? null : companyFormData.phone, 
+        website_url: finalBusinessType === 'parent' ? null : companyFormData.website_url, 
         logo_url: finalLogoUrl,
         business_type: finalBusinessType,
-        allow_head_finance: companyFormData.allow_head_finance
+        allow_head_finance: finalBusinessType === 'parent' ? true : companyFormData.allow_head_finance
       };
       
       if (companyModalMode === 'add') { 
@@ -693,26 +693,29 @@ export default function DashboardPage() {
                          </AnimatePresence>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4 sm:gap-5">
-                        <div><label className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 px-1">Industry</label><input type="text" value={companyFormData.area} onChange={(e) => setCompanyFormData({...companyFormData, area: e.target.value})} className="w-full h-12 sm:h-12 rounded-xl border border-slate-200 bg-white px-4 sm:px-4 text-[13px] sm:text-[13px] font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm" /></div>
-                        <div><label className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 px-1">Director</label><input type="text" value={companyFormData.head_name} onChange={(e) => setCompanyFormData({...companyFormData, head_name: e.target.value})} className="w-full h-12 sm:h-12 rounded-xl border border-slate-200 bg-white px-4 sm:px-4 text-[13px] sm:text-[13px] font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm" /></div>
-                        <div><label className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 px-1">Phone</label><input type="text" value={companyFormData.phone} onChange={(e) => setCompanyFormData({...companyFormData, phone: e.target.value})} className="w-full h-12 sm:h-12 rounded-xl border border-slate-200 bg-white px-4 sm:px-4 text-[13px] sm:text-[13px] font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm" /></div>
-                        <div><label className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 px-1">Website URL</label><input type="url" value={companyFormData.website_url} onChange={(e) => setCompanyFormData({...companyFormData, website_url: e.target.value})} className="w-full h-12 sm:h-12 rounded-xl border border-slate-200 bg-white px-4 sm:px-4 text-[13px] sm:text-[13px] font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm" /></div>
-                      </div>
+                      {companyFormData.business_type !== 'parent' && (
+                        <div className="grid grid-cols-2 gap-4 sm:gap-5">
+                          <div><label className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 px-1">Industry</label><input type="text" value={companyFormData.area} onChange={(e) => setCompanyFormData({...companyFormData, area: e.target.value})} className="w-full h-12 sm:h-12 rounded-xl border border-slate-200 bg-white px-4 sm:px-4 text-[13px] sm:text-[13px] font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm" /></div>
+                          <div><label className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 px-1">Director</label><input type="text" value={companyFormData.head_name} onChange={(e) => setCompanyFormData({...companyFormData, head_name: e.target.value})} className="w-full h-12 sm:h-12 rounded-xl border border-slate-200 bg-white px-4 sm:px-4 text-[13px] sm:text-[13px] font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm" /></div>
+                          <div><label className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 px-1">Phone</label><input type="text" value={companyFormData.phone} onChange={(e) => setCompanyFormData({...companyFormData, phone: e.target.value})} className="w-full h-12 sm:h-12 rounded-xl border border-slate-200 bg-white px-4 sm:px-4 text-[13px] sm:text-[13px] font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm" /></div>
+                          <div><label className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 px-1">Website URL</label><input type="url" value={companyFormData.website_url} onChange={(e) => setCompanyFormData({...companyFormData, website_url: e.target.value})} className="w-full h-12 sm:h-12 rounded-xl border border-slate-200 bg-white px-4 sm:px-4 text-[13px] sm:text-[13px] font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm" /></div>
+                        </div>
+                      )}
 
-                      {/* --- NEW: FINANCIAL ACCESS TOGGLE --- */}
-                      <div className="mt-5 border-t border-slate-100 pt-5">
-                         <label className="flex items-center justify-between p-4 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors bg-white shadow-sm">
-                           <div>
-                             <p className="text-[12px] sm:text-[13px] font-bold text-slate-800">Financial Access for Head</p>
-                             <p className="text-[10px] sm:text-[11px] font-medium text-slate-500 mt-0.5 max-w-[250px] sm:max-w-none">If ON, the head can view invoices, customer finances, and ledgers.</p>
-                           </div>
-                           <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${companyFormData.allow_head_finance ? 'bg-blue-600' : 'bg-slate-300'}`}>
-                             <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${companyFormData.allow_head_finance ? 'translate-x-6' : 'translate-x-1'}`} />
-                           </div>
-                           <input type="checkbox" className="hidden" checked={companyFormData.allow_head_finance} onChange={(e) => setCompanyFormData({...companyFormData, allow_head_finance: e.target.checked})} />
-                         </label>
-                      </div>
+                      {companyFormData.business_type !== 'parent' && (
+                        <div className="mt-5 border-t border-slate-100 pt-5">
+                           <label className="flex items-center justify-between p-4 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors bg-white shadow-sm">
+                             <div>
+                               <p className="text-[12px] sm:text-[13px] font-bold text-slate-800">Financial Access for Head</p>
+                               <p className="text-[10px] sm:text-[11px] font-medium text-slate-500 mt-0.5 max-w-[250px] sm:max-w-none">If ON, the head can view invoices, customer finances, and ledgers.</p>
+                             </div>
+                             <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${companyFormData.allow_head_finance ? 'bg-blue-600' : 'bg-slate-300'}`}>
+                               <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${companyFormData.allow_head_finance ? 'translate-x-6' : 'translate-x-1'}`} />
+                             </div>
+                             <input type="checkbox" className="hidden" checked={companyFormData.allow_head_finance} onChange={(e) => setCompanyFormData({...companyFormData, allow_head_finance: e.target.checked})} />
+                           </label>
+                        </div>
+                      )}
 
                     </div>
                   )}
