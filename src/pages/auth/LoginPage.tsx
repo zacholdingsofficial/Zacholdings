@@ -31,7 +31,7 @@ const pageVariants = {
   }),
 };
 
-// --- FLOATING LABEL (shared visual language for every field) ---
+// --- FLOATING LABEL ---
 const fieldLabelClass = (floated: boolean, focused: boolean) =>
   [
     "absolute left-14 pointer-events-none font-medium transition-all duration-200 origin-left",
@@ -42,7 +42,7 @@ const fieldLabelClass = (floated: boolean, focused: boolean) =>
 const fieldInputClass =
   "peer w-full h-[64px] rounded-2xl bg-[#F5F6FB] border border-black/10 px-5 pl-14 pt-[22px] pb-[6px] text-[15px] font-medium outline-none focus:bg-white focus:border-[#4F46E5] focus:ring-4 focus:ring-[#4F46E5]/[0.09] transition-all text-[#171C26] placeholder-transparent";
 
-// --- FINE GRAIN OVERLAY, USED AT ~4% OPACITY ON THE BRAND PANEL ---
+// --- FINE GRAIN OVERLAY ---
 const NOISE_SVG = `<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(#n)'/></svg>`;
 const NOISE_BG = `data:image/svg+xml,${encodeURIComponent(NOISE_SVG)}`;
 
@@ -168,7 +168,7 @@ export default function LoginPage() {
   const [companiesDb, setCompaniesDb] = useState<{ id: number, name: string, logo_url: string | null, business_type: string }[]>([]);
   const [headUsers, setHeadUsers] = useState<{ name: string, email: string }[]>([]);
   const [adminLogo, setAdminLogo] = useState<string | null>(null);
-  const [adminEmail, setAdminEmail] = useState("admin@zacholdings.com"); // fallback master admin email
+  const [adminEmail, setAdminEmail] = useState("admin@zacholdings.com");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -255,20 +255,47 @@ export default function LoginPage() {
     e.preventDefault();
     if (!selectedCompany) return;
 
-    // Check if selected company is a Parent Company
     if (activeCompanyObj?.business_type === 'parent') {
       setEmail(adminEmail);
       setHeadUsers([{ name: "System Admin", email: adminEmail }]);
     } else if (selectedRole === 'head') {
       if (activeCompanyObj) {
-        const { data } = await supabase.from('employees').select('name, email').eq('company_id', activeCompanyObj.id).eq('access_level', 'head');
-        if (data && data.length > 0) {
-          setHeadUsers(data);
-          if (data.length === 1) setEmail(data[0].email);
+        
+        // 1. Fetch from legacy columns (for any employees not yet migrated)
+        const { data: legacyData } = await supabase
+          .from('employees')
+          .select('name, email')
+          .eq('company_id', activeCompanyObj.id)
+          .eq('access_level', 'head');
+          
+        // 2. Fetch from the new junction table (for migrated employees & newly assigned roles)
+        const { data: junctionData } = await supabase
+          .from('employee_company_roles')
+          .select('employees(name, email)')
+          .eq('company_id', activeCompanyObj.id)
+          .eq('access_level', 'head');
+          
+        // Extract inner employee objects from junction payload
+        const junctionHeads = (junctionData || [])
+          .map((row: any) => row.employees)
+          .flat()
+          .filter(Boolean);
+          
+        // Combine and deduplicate by email address
+        const combined = [...(legacyData || []), ...junctionHeads];
+        const uniqueHeads = Array.from(new Map(combined.map(item => [item.email, item])).values());
+
+        if (uniqueHeads.length > 0) {
+          setHeadUsers(uniqueHeads);
+          if (uniqueHeads.length === 1) setEmail(uniqueHeads[0].email);
           else setEmail("");
-        } else setHeadUsers([]);
+        } else {
+          setHeadUsers([]);
+          setEmail("");
+        }
       }
     }
+    
     setDirection(1);
     setStep(3);
   };
