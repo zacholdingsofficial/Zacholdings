@@ -27,7 +27,7 @@ export default function AcademyCourses() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
-  const [filterType, setFilterType] = useState("All"); // New state for filtering type
+  const [filterType, setFilterType] = useState("All"); 
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalTab, setModalTab] = useState<string>("details");
@@ -37,7 +37,7 @@ export default function AcademyCourses() {
   const today = new Date().toISOString().split('T')[0];
   const isUserView = role === 'user';
   const isAdminView = role === 'admin' || role === 'head';
-  const isHeadView = role === 'head'; // Added strict head role for financial data
+  const isHeadView = role === 'head'; 
 
   const [formData, setFormData] = useState({ 
     name: "", description: "", status: "Enrollment", type: "Course", expected_amount: 0, 
@@ -68,6 +68,7 @@ export default function AcademyCourses() {
   const [allocationsForm, setAllocationsForm] = useState<{[empId: number]: {allocated: number, incentive: number}}>({});
   const [expandedFinanceEmpId, setExpandedFinanceEmpId] = useState<number | null>(null);
   const [showPayoutForm, setShowPayoutForm] = useState(false);
+  const [showDescription, setShowDescription] = useState(false);
   const [paymentForm, setPaymentForm] = useState({ employee_id: "", amount: 0, payment_type: "Final Payout", notes: "" });
   const [isPrintingPayslip, setIsPrintingPayslip] = useState(false);
 
@@ -76,11 +77,13 @@ export default function AcademyCourses() {
 
   const visibleCourses = projects.filter(p => {
     if (!p.name || p.company_id?.toString() !== currentCompanyId?.toString()) return false;
+    
+    // FIX: Only show Academy records (Course, Workshop, Internship) and filter out Standard Projects completely
+    const pType = p.metadata?.type || 'Course';
+    if (!ACADEMY_TYPES.includes(pType)) return false;
+
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = filterStatus === "All" || p.status === filterStatus;
-    
-    // Default to 'Course' if no type is set in metadata (for legacy records)
-    const pType = p.metadata?.type || 'Course';
     const matchesType = filterType === "All" || pType === filterType;
 
     const isAssigned = !isUserView || (p.assignee_ids || []).includes(employeeId);
@@ -89,14 +92,18 @@ export default function AcademyCourses() {
   }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   const availableStudents = customers.filter(c => c.company_id === parseInt(currentCompanyId || '0'));
-  const availableTutors = employees.filter(emp => emp.access_level === 'admin' || emp.company_id === parseInt(currentCompanyId || '0'));
+  
+  // FIX: System Admins are now strictly excluded from faculty assignments
+  const availableTutors = employees.filter(emp => 
+    emp.role !== 'admin' && emp.access_level !== 'admin' && emp.company_id === parseInt(currentCompanyId || '0')
+  );
 
   const openNewCourse = () => {
     setSelectedCourse(null);
     setFormData({ name: "", description: "", status: "Enrollment", type: "Course", expected_amount: 0, approval_date: today, due_date: "", company_id: currentCompanyId?.toString() || "", customer_id: "", drive_folder_url: "", assignee_ids: [], tutor_allocations: {} });
     setNewStudent({ name: "", phone: "", email: "", address: "" }); setSelectedStudentId("");
     setNewModuleTitle(""); setNewModuleTutor("");
-    setAllocationsForm({}); setExpandedFinanceEmpId(null); setShowPayoutForm(false);
+    setAllocationsForm({}); setExpandedFinanceEmpId(null); setShowPayoutForm(false); setShowDescription(false);
     setNeedsUpload(null); setConfirmedUpload(false);
     setModalTab("details"); setIsModalOpen(true);
   };
@@ -112,6 +119,7 @@ export default function AcademyCourses() {
       tutor_allocations: course.metadata?.tutor_allocations || {}
     });
     setExpandedFinanceEmpId(null); setShowPayoutForm(false); setClassReportText(""); setTimelineModalEmpId(null); 
+    setShowDescription(!!course.description);
     setNeedsUpload(null); setConfirmedUpload(false);
 
     const currentAlloc: any = {};
@@ -471,7 +479,6 @@ export default function AcademyCourses() {
                 const progressPct = totalModules === 0 ? 0 : Math.round((completedModules / totalModules) * 100);
                 const enrolledCount = invoices.filter(i => i.project_id === course.id).length;
                 
-                // Get the type safely
                 const pType = course.metadata?.type || 'Course';
 
                 return (
@@ -523,7 +530,6 @@ export default function AcademyCourses() {
       {isPrintingPayslip && selectedCourse && isUserView && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[999999] bg-white print:block print:relative print:w-full print:h-auto overflow-visible p-12 font-sans text-slate-900 print:p-0 print:m-0" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
           
-          {/* Header / Brand */}
           <div className="flex justify-between items-start pb-8 border-b-2 border-slate-900 mb-8 mt-4">
              <div className="flex items-center gap-4">
                 <div className="h-16 flex items-center justify-center">
@@ -541,7 +547,6 @@ export default function AcademyCourses() {
              </div>
           </div>
 
-          {/* Recipient Details */}
           <div className="grid grid-cols-2 gap-8 mb-8 p-6 bg-slate-50 rounded-2xl border border-slate-200 text-xs">
              <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Prepared For (Faculty)</p>
@@ -554,7 +559,6 @@ export default function AcademyCourses() {
              </div>
           </div>
 
-          {/* Itemized Table */}
           <div className="border border-slate-200 rounded-2xl overflow-hidden mb-8">
              <div className="grid grid-cols-12 bg-slate-900 text-white px-6 py-3.5 text-[10px] font-bold uppercase tracking-wider">
                 <span className="col-span-8">Compensation Element</span>
@@ -565,7 +569,6 @@ export default function AcademyCourses() {
                 <span className="col-span-4 text-right font-black text-slate-900">₹{(facultyAllocation?.allocated_amount || 0).toLocaleString()}</span>
              </div>
              
-             {/* Only show bonus row if bonus is explicitly greater than 0 */}
              {(facultyAllocation?.incentive_amount || 0) > 0 && (
                 <div className="grid grid-cols-12 px-6 py-4 border-b border-slate-100 text-xs items-center bg-purple-50/30">
                    <span className="col-span-8 font-bold text-purple-900">Performance Incentive / Bonus</span>
@@ -579,7 +582,6 @@ export default function AcademyCourses() {
              </div>
           </div>
 
-          {/* Payout History Ledger */}
           <div className="mb-8">
              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Disbursed Payout History</h3>
              <div className="border border-slate-200 rounded-2xl overflow-hidden">
@@ -602,7 +604,6 @@ export default function AcademyCourses() {
              </div>
           </div>
 
-          {/* Conditional Balance Summary Footer (Hides if balance is 0) */}
           {facultyBalanceDue > 0 && (
              <div className="flex justify-end pt-6 border-t-2 border-slate-200">
                 <div className="w-64 bg-purple-900 text-white p-5 rounded-2xl text-right shadow-lg">
@@ -615,127 +616,10 @@ export default function AcademyCourses() {
         document.body
       )}
 
-      {/* --- ADMIN TIMELINE POPUP MODAL FOR REVIEWING FACULTY REPORTS --- */}
-      {typeof document !== 'undefined' && createPortal(
-        <AnimatePresence>
-          {timelineModalEmpId && isAdminView && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[10005] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 print:hidden">
-              <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="bg-[#FAFCFF] rounded-[2rem] shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden border border-slate-200">
-                 <div className="px-6 py-5 border-b border-slate-200 bg-white flex items-center justify-between shrink-0">
-                    <div className="flex items-center gap-4">
-                       <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600 overflow-hidden border border-slate-200">
-                          {getAvatar(timelineModalEmpId)?.profile_image_url ? <img src={getAvatar(timelineModalEmpId)?.profile_image_url} alt="" className="h-full w-full object-cover" /> : (getAvatar(timelineModalEmpId)?.name || 'U').charAt(0).toUpperCase()}
-                       </div>
-                       <div>
-                          <h3 className="text-lg font-black text-slate-900 tracking-tight leading-none">{getAvatar(timelineModalEmpId)?.name}</h3>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Class Reports & Feedback Review</p>
-                       </div>
-                    </div>
-                    <button onClick={() => {setTimelineModalEmpId(null); setReactionFormId(null);}} className="h-8 w-8 bg-slate-50 hover:bg-slate-100 rounded-full flex items-center justify-center text-slate-500 transition-colors"><X className="h-4 w-4" /></button>
-                 </div>
-
-                 <div className="flex-1 overflow-y-auto p-6 space-y-5">
-                    {reports.find(r => r.project_id === selectedCourse?.id && r.employee_id === timelineModalEmpId)?.entries?.length > 0 ? (
-                       reports.find(r => r.project_id === selectedCourse?.id && r.employee_id === timelineModalEmpId)?.entries.map((entry: any) => {
-                          const hasReaction = !!entry.reaction;
-                          const visual = getReactionVisuals(entry.reaction?.status);
-                          const StatusIcon = visual.icon;
-
-                          return (
-                             <div key={entry.id} className="flex flex-col relative group">
-                                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm z-10 relative">
-                                   {entry.type === 'upload' && (
-                                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-purple-50 text-purple-700 border border-purple-100 text-[9px] font-bold uppercase tracking-wider rounded-lg mb-3">
-                                         <FileText className="h-3 w-3" /> Attached File Confirmation Provided
-                                      </span>
-                                   )}
-                                   <p className="text-[13px] text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">{entry.text}</p>
-                                   <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-50">
-                                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{new Date(entry.timestamp).toLocaleString()}</span>
-                                      {!hasReaction && reactionFormId !== entry.id && (
-                                         <button onClick={() => setReactionFormId(entry.id)} className="text-[10px] font-bold text-purple-600 hover:text-purple-800 uppercase tracking-wider transition-colors flex items-center gap-1"><Plus className="h-3 w-3"/> Add Feedback</button>
-                                      )}
-                                   </div>
-                                </div>
-
-                                {hasReaction && reactionFormId !== entry.id && (
-                                   <div className="ml-6 sm:ml-10 mt-2 relative">
-                                      <CornerDownRight className="absolute -left-5 top-3 h-4 w-4 text-slate-300" />
-                                      <div className={`p-3.5 rounded-xl border ${visual.bg} ${visual.border}`}>
-                                         <div className="flex items-center justify-between mb-1.5">
-                                            <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest ${visual.text}`}>
-                                               <StatusIcon className="h-3.5 w-3.5" /> {entry.reaction.status}
-                                            </span>
-                                            <div className="flex gap-2">
-                                               <button onClick={() => setReactionFormId(entry.id)} className={`text-[10px] font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity ${visual.text} hover:opacity-70`}><Edit2 className="h-3 w-3"/></button>
-                                               <button onClick={() => handleDeleteReaction(timelineModalEmpId, entry.id)} className={`text-[10px] font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity text-rose-500 hover:opacity-70`}><Trash2 className="h-3 w-3"/></button>
-                                            </div>
-                                         </div>
-                                         {entry.reaction.text && <p className={`text-xs mt-1 ${visual.text} opacity-90`}>{entry.reaction.text}</p>}
-                                      </div>
-                                   </div>
-                                )}
-
-                                {reactionFormId === entry.id && (
-                                   <div className="ml-6 sm:ml-10 mt-3 relative animate-in fade-in slide-in-from-top-2">
-                                      <CornerDownRight className="absolute -left-5 top-3 h-4 w-4 text-slate-300" />
-                                      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-lg">
-                                         <div className="flex items-center justify-between mb-3">
-                                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Provide Feedback</span>
-                                            <button onClick={() => setReactionFormId(null)} className="text-slate-400 hover:text-slate-600"><X className="h-3.5 w-3.5" /></button>
-                                         </div>
-                                         <div className="flex flex-wrap gap-2 mb-3">
-                                            <button onClick={() => handleAdminReact(timelineModalEmpId, entry.id, 'Approved', reactionText)} disabled={isSaving} className="flex-1 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5"><ThumbsUp className="h-3 w-3"/> Approve</button>
-                                            <button onClick={() => handleAdminReact(timelineModalEmpId, entry.id, 'Rejected', reactionText)} disabled={isSaving} className="flex-1 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5"><ThumbsDown className="h-3 w-3"/> Reject</button>
-                                            <button onClick={() => handleAdminReact(timelineModalEmpId, entry.id, 'Reviewed', reactionText)} disabled={isSaving} className="flex-1 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5"><Eye className="h-3 w-3"/> Seen</button>
-                                         </div>
-                                         <textarea value={reactionText} onChange={(e) => setReactionText(e.target.value)} placeholder="Optional detailed comment..." className="w-full h-16 rounded-lg border border-slate-200 p-2.5 text-xs outline-none resize-none mb-3 bg-slate-50" />
-                                         <button onClick={() => handleAdminReact(timelineModalEmpId, entry.id, 'Comment', reactionText)} disabled={isSaving || !reactionText.trim()} className="w-full h-9 bg-slate-900 text-white rounded-lg text-[11px] font-bold uppercase tracking-wider">Submit Comment</button>
-                                      </div>
-                                   </div>
-                                )}
-                             </div>
-                          );
-                       })
-                    ) : (
-                       <div className="h-full flex flex-col items-center justify-center text-center p-8 opacity-50">
-                          <CheckCircle2 className="h-10 w-10 text-slate-400 mb-3" />
-                          <p className="text-sm font-bold text-slate-600 uppercase tracking-widest">No reports submitted yet.</p>
-                       </div>
-                    )}
-                 </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>,
-        document.body
-      )}
-
-      {/* --- DRIVE INSTRUCTIONS POPUP MODAL --- */}
-      {typeof document !== 'undefined' && createPortal(
-        <AnimatePresence>
-          {showDriveHelpModal && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[10006] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 print:hidden">
-              <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl space-y-4">
-                 <div className="h-12 w-12 bg-purple-50 text-purple-700 rounded-2xl flex items-center justify-center"><Info className="h-6 w-6" /></div>
-                 <h3 className="text-xl font-black text-slate-900 tracking-tight">Drive Upload Instructions</h3>
-                 <div className="text-xs text-slate-600 space-y-2 leading-relaxed">
-                    <p><strong>Step 1:</strong> Click the <strong>Open Drive Workspace</strong> link to open the batch's shared folder.</p>
-                    <p><strong>Step 2:</strong> Upload your class notes, media, or assignment files directly into that folder.</p>
-                    <p><strong>Step 3:</strong> Return here, write your class summary report, check the confirmation box, and click <strong>Submit Class Report</strong>.</p>
-                 </div>
-                 <button onClick={() => setShowDriveHelpModal(false)} className="w-full bg-slate-900 text-white rounded-xl py-3 text-xs font-bold uppercase tracking-wider mt-2">Got It</button>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>,
-        document.body
-      )}
-
+      {/* MAIN MODAL */}
       {typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
           {isModalOpen && !isPrintingPayslip && (
-            // REMOVED: onClick={() => setIsModalOpen(false)} 
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[9999] flex flex-col items-center justify-center max-sm:px-4 max-sm:pt-20 max-sm:pb-[110px] sm:p-4 bg-slate-900/40 backdrop-blur-sm print:hidden">
               <motion.div initial={{ opacity: 0, y: 40, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 40, scale: 0.95 }} onClick={(e) => e.stopPropagation()} className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-4xl h-full sm:h-[760px] sm:max-h-[90vh] flex flex-col overflow-hidden border border-slate-100 mt-auto sm:mt-0">
                 
@@ -751,21 +635,31 @@ export default function AcademyCourses() {
                     <button onClick={() => setIsModalOpen(false)} className="h-8 w-8 bg-white border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm transition-colors"><X className="h-4 w-4" /></button>
                   </div>
                   
-                  <div className="flex gap-4 sm:gap-8 overflow-x-auto max-sm:[&::-webkit-scrollbar]:hidden">
-                    <button onClick={() => setModalTab('details')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'details' ? 'border-purple-900 text-purple-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>1. Batch Setup</button>
-                    <button onClick={() => setModalTab('syllabus')} disabled={!selectedCourse} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedCourse ? 'opacity-30 cursor-not-allowed' : modalTab === 'syllabus' ? 'border-purple-900 text-purple-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>2. Syllabus</button>
-                    <button onClick={() => setModalTab('summary')} disabled={!selectedCourse} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedCourse ? 'opacity-30 cursor-not-allowed' : modalTab === 'summary' ? 'border-purple-900 text-purple-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>3. Students</button>
-                    
-                    {isHeadView && <button onClick={() => setModalTab('finances')} disabled={!selectedCourse} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedCourse ? 'opacity-30 cursor-not-allowed' : modalTab === 'finances' ? 'border-purple-900 text-purple-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>4. Fee Ledger</button>}
-                    
-                    {isHeadView && <button onClick={() => setModalTab('faculty')} disabled={!selectedCourse} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedCourse ? 'opacity-30 cursor-not-allowed' : modalTab === 'faculty' ? 'border-purple-900 text-purple-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>5. Faculty Payroll</button>}
-                    
-                    {isUserView && <button onClick={() => setModalTab('reports')} disabled={!selectedCourse} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedCourse ? 'opacity-30 cursor-not-allowed' : modalTab === 'reports' ? 'border-purple-900 text-purple-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>4. Class Reports</button>}
-                    
-                    {isUserView && <button onClick={() => setModalTab('my_payouts')} disabled={!selectedCourse} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedCourse ? 'opacity-30 cursor-not-allowed' : modalTab === 'my_payouts' ? 'border-purple-900 text-purple-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>5. My Payouts</button>}
+                  {/* FIX: Dynamic Wizard Tabs for Academy Creation */}
+                  <div className="flex gap-4 sm:gap-8 overflow-x-auto max-sm:[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                    {!selectedCourse ? (
+                      <>
+                        <div className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'details' ? 'border-purple-900 text-purple-900' : 'border-transparent text-slate-400'}`}>Step 1: Batch Setup</div>
+                        <div className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'details_faculty' ? 'border-purple-900 text-purple-900' : 'border-transparent text-slate-400'}`}>Step 2: Assign Faculty</div>
+                        <div className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'syllabus' ? 'border-purple-900 text-purple-900' : 'border-transparent text-slate-400'}`}>Step 3: Syllabus</div>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={() => setModalTab('details')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'details' ? 'border-purple-900 text-purple-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>1. Batch Setup</button>
+                        <button onClick={() => setModalTab('details_faculty')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'details_faculty' ? 'border-purple-900 text-purple-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>2. Faculty</button>
+                        <button onClick={() => setModalTab('syllabus')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'syllabus' ? 'border-purple-900 text-purple-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>3. Syllabus</button>
+                        <button onClick={() => setModalTab('summary')} disabled={!selectedCourse} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedCourse ? 'opacity-30 cursor-not-allowed' : modalTab === 'summary' ? 'border-purple-900 text-purple-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>4. Students</button>
+                        
+                        {isHeadView && <button onClick={() => setModalTab('finances')} disabled={!selectedCourse} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedCourse ? 'opacity-30 cursor-not-allowed' : modalTab === 'finances' ? 'border-purple-900 text-purple-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>5. Fee Ledger</button>}
+                        {isHeadView && <button onClick={() => setModalTab('faculty')} disabled={!selectedCourse} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedCourse ? 'opacity-30 cursor-not-allowed' : modalTab === 'faculty' ? 'border-purple-900 text-purple-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>6. Payroll</button>}
+                        {isUserView && <button onClick={() => setModalTab('reports')} disabled={!selectedCourse} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedCourse ? 'opacity-30 cursor-not-allowed' : modalTab === 'reports' ? 'border-purple-900 text-purple-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>5. Class Reports</button>}
+                        {isUserView && <button onClick={() => setModalTab('my_payouts')} disabled={!selectedCourse} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedCourse ? 'opacity-30 cursor-not-allowed' : modalTab === 'my_payouts' ? 'border-purple-900 text-purple-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>6. My Payouts</button>}
+                      </>
+                    )}
                   </div>
                 </div>
 
+                {/* TAB 1: DETAILS */}
                 {modalTab === 'details' && (
                   <div className="flex-1 overflow-y-auto p-5 sm:p-8 flex flex-col">
                     <div className="flex-1 space-y-6">
@@ -799,7 +693,28 @@ export default function AcademyCourses() {
                         <div><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2 px-1">Ending Date</label><input type="date" value={formData.due_date} onChange={(e) => setFormData({...formData, due_date: e.target.value})} disabled={isUserView} className="w-full h-12 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium shadow-sm disabled:bg-slate-50" /></div>
                       </div>
 
-                      <div><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2 px-1">Batch Description</label><textarea value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} disabled={isUserView} className="w-full h-24 rounded-xl border border-slate-200 bg-white p-4 text-sm outline-none resize-none shadow-sm disabled:bg-slate-50" /></div>
+                      {/* NEW: Batch Description Toggle */}
+                      <div>
+                        {!showDescription && !formData.description ? (
+                          !isUserView && (
+                            <button type="button" onClick={() => setShowDescription(true)} className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-bold text-purple-600 hover:text-purple-800 uppercase tracking-wider transition-colors px-1">
+                              <Plus className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Add Batch Description
+                            </button>
+                          )
+                        ) : (
+                          <div className="animate-in fade-in slide-in-from-top-2">
+                            <div className="flex items-center justify-between mb-1.5 sm:mb-2 px-1">
+                              <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest">Batch Description</label>
+                              {!isUserView && (
+                                <button type="button" onClick={() => { setShowDescription(false); setFormData({...formData, description: ""}); }} className="text-slate-400 hover:text-rose-500 transition-colors" title="Remove Description">
+                                  <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                                </button>
+                              )}
+                            </div>
+                            <textarea value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} disabled={isUserView} className="w-full h-20 sm:h-24 rounded-xl border border-slate-200 bg-white p-3 sm:p-4 text-[12px] sm:text-sm font-medium outline-none focus:border-purple-500 shadow-sm resize-none disabled:bg-slate-50" placeholder="Briefly describe the batch goals or curriculum..." />
+                          </div>
+                        )}
+                      </div>
 
                       {isAdminView && (
                         <div>
@@ -807,37 +722,43 @@ export default function AcademyCourses() {
                           <input type="url" placeholder="https://drive.google.com/..." value={formData.drive_folder_url} onChange={(e) => setFormData({...formData, drive_folder_url: e.target.value})} className="w-full h-12 rounded-xl border border-purple-200 bg-purple-50/50 px-4 text-sm font-medium outline-none shadow-sm" />
                         </div>
                       )}
+                    </div>
+                  </div>
+                )}
 
-                      <div className="pt-2">
-                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-3 px-1">Assign Faculty / Tutors & Task Allocation</label>
-                        <div className="space-y-2">
-                          {availableTutors.map(emp => {
-                            const isSelected = formData.assignee_ids.includes(emp.id);
-                            if (isUserView && !isSelected) return null;
-                            return (
-                              <div key={emp.id} className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center gap-3 ${isSelected ? 'bg-purple-50/50 border-purple-200' : 'bg-white border-slate-200'}`}>
-                                <button disabled={isUserView} onClick={() => { if (isSelected) setFormData({...formData, assignee_ids: formData.assignee_ids.filter(id => id !== emp.id)}); else setFormData({...formData, assignee_ids: [...formData.assignee_ids, emp.id]}); }} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-bold shrink-0 ${isSelected ? 'bg-purple-900 text-white border-transparent' : 'bg-slate-100 text-slate-700'}`}>
-                                  {emp.name}
-                                </button>
-                                {isSelected && isAdminView && (
-                                  <input 
-                                    type="text" 
-                                    placeholder="Task allocation (e.g., Mathematics & Calculus Module)..." 
-                                    value={formData.tutor_allocations[emp.id] || ""} 
-                                    onChange={e => setFormData({
-                                      ...formData, 
-                                      tutor_allocations: {...formData.tutor_allocations, [emp.id]: e.target.value}
-                                    })} 
-                                    className="flex-1 h-9 rounded-lg border border-purple-200 bg-white px-3 text-xs outline-none" 
-                                  />
-                                )}
-                                {isUserView && isSelected && (
-                                  <span className="text-xs font-semibold text-purple-900">Task: {formData.tutor_allocations[emp.id] || 'General Instruction'}</span>
-                                )}
-                              </div>
-                            )
-                          })}
-                        </div>
+                {/* NEW TAB: FACULTY ASSIGNMENT WIZARD */}
+                {modalTab === 'details_faculty' && (
+                  <div className="flex-1 overflow-y-auto p-5 sm:p-8 flex flex-col">
+                    <div className="pt-2">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-3 px-1">Assign Faculty / Tutors & Task Allocation</label>
+                      <div className="space-y-2">
+                        {availableTutors.length === 0 ? <p className="text-xs text-slate-400 italic">No available faculty members to assign.</p> : null}
+                        {availableTutors.map(emp => {
+                          const isSelected = formData.assignee_ids.includes(emp.id);
+                          if (isUserView && !isSelected) return null;
+                          return (
+                            <div key={emp.id} className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center gap-3 ${isSelected ? 'bg-purple-50/50 border-purple-200' : 'bg-white border-slate-200'}`}>
+                              <button disabled={isUserView} onClick={() => { if (isSelected) setFormData({...formData, assignee_ids: formData.assignee_ids.filter(id => id !== emp.id)}); else setFormData({...formData, assignee_ids: [...formData.assignee_ids, emp.id]}); }} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-bold shrink-0 ${isSelected ? 'bg-purple-900 text-white border-transparent' : 'bg-slate-100 text-slate-700'}`}>
+                                {emp.name}
+                              </button>
+                              {isSelected && isAdminView && (
+                                <input 
+                                  type="text" 
+                                  placeholder="Task allocation (e.g., Mathematics & Calculus Module)..." 
+                                  value={formData.tutor_allocations[emp.id] || ""} 
+                                  onChange={e => setFormData({
+                                    ...formData, 
+                                    tutor_allocations: {...formData.tutor_allocations, [emp.id]: e.target.value}
+                                  })} 
+                                  className="flex-1 h-9 rounded-lg border border-purple-200 bg-white px-3 text-xs outline-none" 
+                                />
+                              )}
+                              {isUserView && isSelected && (
+                                <span className="text-xs font-semibold text-purple-900">Task: {formData.tutor_allocations[emp.id] || 'General Instruction'}</span>
+                              )}
+                            </div>
+                          )
+                        })}
                       </div>
                     </div>
                   </div>
@@ -1307,8 +1228,9 @@ export default function AcademyCourses() {
                                       </motion.div>
                                    )}
                                 </AnimatePresence>
+
                              </div>
-                          );
+                          )
                        })}
                     </div>
 
@@ -1322,15 +1244,33 @@ export default function AcademyCourses() {
                   </div>
                 )}
 
+                {/* FIX: Wizard dynamic footer for next/back/submit */}
                 <div className="p-4 sm:p-6 border-t border-slate-100 bg-[#FAFCFF] flex justify-end items-center gap-4 shrink-0 mt-auto">
                   {selectedCourse && isAdminView && modalTab === 'details' && (
                     <button onClick={handleDeleteCourse} disabled={isSaving} className="border border-rose-200 text-rose-600 bg-white hover:bg-rose-50 rounded-xl h-11 px-5 flex items-center justify-center shadow-sm mr-auto transition-colors"><Trash2 className="h-4 w-4" /></button>
                   )}
-                  <button onClick={() => setIsModalOpen(false)} className="rounded-xl border border-slate-200 bg-white h-11 px-6 font-bold text-[13px] text-slate-600 hover:bg-slate-50 shadow-sm transition-colors">Close</button>
+                  
+                  <button onClick={() => setIsModalOpen(false)} className="rounded-xl border border-slate-200 bg-white h-11 px-6 font-bold text-[13px] text-slate-600 hover:bg-slate-50 shadow-sm transition-colors mr-auto">Cancel</button>
+
                   {isAdminView && (
-                    <button onClick={handleSaveCourse} disabled={isSaving} className="bg-purple-900 text-white rounded-xl h-11 px-8 font-bold text-[13px] shadow-md hover:bg-purple-800 transition-colors flex items-center justify-center">
-                      {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Batch"}
-                    </button>
+                    <>
+                      {!selectedCourse && modalTab === 'details' && (
+                        <button onClick={() => setModalTab('details_faculty')} className="bg-slate-900 text-white hover:bg-slate-800 rounded-xl h-11 px-8 font-bold text-[13px] shadow-md transition-colors flex items-center justify-center">Next: Assign Faculty</button>
+                      )}
+                      {!selectedCourse && modalTab === 'details_faculty' && (
+                        <button onClick={() => setModalTab('syllabus')} className="bg-slate-900 text-white hover:bg-slate-800 rounded-xl h-11 px-8 font-bold text-[13px] shadow-md transition-colors flex items-center justify-center">Next: Build Syllabus</button>
+                      )}
+                      {!selectedCourse && modalTab === 'syllabus' && (
+                        <button onClick={handleSaveCourse} disabled={isSaving} className="bg-purple-900 text-white hover:bg-purple-800 rounded-xl h-11 px-8 font-bold text-[13px] shadow-md transition-colors flex items-center justify-center">
+                          {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Finish & Create Batch"}
+                        </button>
+                      )}
+                      {selectedCourse && (
+                        <button onClick={handleSaveCourse} disabled={isSaving} className="bg-purple-900 text-white hover:bg-purple-800 rounded-xl h-11 px-8 font-bold text-[13px] shadow-md transition-colors flex items-center justify-center">
+                          {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Changes"}
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
 

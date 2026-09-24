@@ -24,7 +24,7 @@ export default function StandardProjects() {
   const [filterCompanyId, setFilterCompanyId] = useState<string>("all");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalTab, setModalTab] = useState<"details" | "tasks" | "progress" | "finance">("details");
+  const [modalTab, setModalTab] = useState<"details" | "team" | "tasks" | "progress" | "finance">("details");
   const [selectedProject, setSelectedProject] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -37,12 +37,12 @@ export default function StandardProjects() {
   const [expandedFinanceEmpId, setExpandedFinanceEmpId] = useState<number | null>(null);
   const [showPayoutForm, setShowPayoutForm] = useState(false);
   const [showDriveHelp, setShowDriveHelp] = useState(false);
+  const [showDescription, setShowDescription] = useState(false); // NEW: Toggle state for description box
 
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [taskToUpload, setTaskToUpload] = useState<any>(null);
   const [uploadNote, setUploadNote] = useState(""); 
 
-  // Timeline UI States
   const [timelineModalEmpId, setTimelineModalEmpId] = useState<number | null>(null);
   const [reactionFormId, setReactionFormId] = useState<string | null>(null);
   const [reactionText, setReactionText] = useState("");
@@ -72,7 +72,6 @@ export default function StandardProjects() {
 
   const currentCompanyId = role === 'admin' ? (activeWorkspace || "") : companyId;
 
-  // Safe Data Variables for Rendering (Prevents .map crashes if data is malformed in DB)
   const myReport = selectedProject ? reports.find(r => r.project_id === selectedProject.id && r.employee_id === employeeId) : null;
   const myEntries = Array.isArray(myReport?.entries) ? myReport.entries : [];
 
@@ -81,6 +80,12 @@ export default function StandardProjects() {
 
   const visibleProjects = projects.filter(p => {
     if (!p.name) return false;
+
+    const pType = p.metadata?.type;
+    if (pType === 'Course' || pType === 'Workshop' || pType === 'Internship') {
+      return false;
+    }
+
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = filterStatus === "All" || p.status === filterStatus;
     const isAssigned = (role === 'admin' || role === 'head') || (Array.isArray(p.assignee_ids) ? p.assignee_ids : []).includes(employeeId);
@@ -94,7 +99,10 @@ export default function StandardProjects() {
   }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   const availableCustomers = customers.filter(c => c.company_id === parseInt(formData.company_id || '0'));
-  const availableEmployees = employees.filter(emp => emp.access_level === 'admin' || emp.company_id === parseInt(formData.company_id || '0'));
+  
+  const availableEmployees = employees.filter(emp => 
+    emp.role !== 'admin' && emp.access_level !== 'admin' && emp.company_id === parseInt(formData.company_id || '0')
+  );
 
   const handleProjectClick = (project: any) => {
     if ((role === 'admin' || role === 'head') && (Array.isArray(project.assignee_ids) ? project.assignee_ids : []).includes(employeeId)) {
@@ -109,7 +117,7 @@ export default function StandardProjects() {
     setSelectedProject(null);
     setFormData({ name: "", description: "", priority: "Medium", status: "Planning", expected_amount: 0, approval_date: today, due_date: "", company_id: currentCompanyId?.toString() || "", customer_id: "", internal_company_id: "", drive_folder_url: "", assignee_ids: [], milestones: DEFAULT_MILESTONES });
     setCustomerType("existing"); setNewCustomer({ name: "", phone: "" }); setPendingTasks([]); setNewTaskTitle(""); setNewTaskAssignee(""); setNewTaskDeadline("");
-    setAllocationsForm({}); setExpandedFinanceEmpId(null); setShowPayoutForm(false); setShowDriveHelp(false);
+    setAllocationsForm({}); setExpandedFinanceEmpId(null); setShowPayoutForm(false); setShowDriveHelp(false); setShowDescription(false);
     setModalTab("details"); setIsModalOpen(true);
   };
 
@@ -118,7 +126,6 @@ export default function StandardProjects() {
     setRoleSelectProject(null);
     setSelectedProject(project);
     
-    // SAFE MERGE: Guarantees legacy projects won't crash when opening the Timeline Milestones
     const safeMilestones = {
       in_progress: { ...DEFAULT_MILESTONES.in_progress, ...(project.milestones?.in_progress || {}) },
       review: { ...DEFAULT_MILESTONES.review, ...(project.milestones?.review || {}) },
@@ -136,6 +143,7 @@ export default function StandardProjects() {
     setCustomerType(project.internal_company_id ? "in_house" : project.customer_id ? "existing" : "in_house"); 
     setNewCustomer({ name: "", phone: "" }); setPendingTasks([]); setNewTaskTitle(""); setNewTaskAssignee(""); setNewTaskDeadline("");
     setExpandedFinanceEmpId(null); setShowPayoutForm(false); setShowDriveHelp(false); setTimelineModalEmpId(null); setReactionFormId(null);
+    setShowDescription(!!project.description);
 
     const currentAlloc: any = {};
     if (Array.isArray(project.assignee_ids)) {
@@ -211,7 +219,7 @@ export default function StandardProjects() {
       }
 
       await fetchAllData(); 
-      if(modalTab === 'details') setIsModalOpen(false); 
+      if(modalTab === 'details' || modalTab === 'tasks') setIsModalOpen(false); 
       else alert('Project updated successfully.');
     } catch (error: any) { alert(error.message); } finally { setIsSaving(false); }
   };
@@ -551,7 +559,6 @@ export default function StandardProjects() {
           <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9InJnYmEoMTQ4LCAxNjMsIDE4NCwgMC4wOCkiLz48L3N2Zz4=')] [mask-image:linear-gradient(to_bottom,white,transparent)]" />
         </div>
 
-        {/* HEADER */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 sm:gap-6 print:hidden">
           <div>
             <p className="text-[9px] sm:text-[11px] font-bold text-blue-600 uppercase tracking-[0.2em] mb-1.5 sm:mb-2 bg-blue-50 inline-block px-3 py-1 rounded-full">Workflows & Tasks</p>
@@ -564,7 +571,6 @@ export default function StandardProjects() {
           )}
         </div>
 
-        {/* FILTERS */}
         <div className="bg-white p-2 rounded-xl sm:rounded-2xl border border-slate-100 shadow-sm flex flex-col sm:flex-row gap-2 print:hidden">
           <div className="relative flex-1">
             <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 h-3.5 sm:h-4 w-3.5 sm:w-4 text-slate-400" />
@@ -595,7 +601,6 @@ export default function StandardProjects() {
           </div>
         </div>
 
-        {/* PROJECTS GRID */}
         <div className="space-y-4 print:hidden">
           {visibleProjects.length === 0 ? (
              <div className="h-48 sm:h-64 border border-slate-200 border-dashed rounded-2xl sm:rounded-3xl flex flex-col items-center justify-center text-slate-400 bg-slate-50/50">
@@ -634,7 +639,6 @@ export default function StandardProjects() {
                           </p>
                         </div>
 
-                        {/* Status Badge driven by Milestones */}
                         <div className="shrink-0 flex justify-end">
                            <div className={`px-3 py-1.5 rounded-lg text-[9px] sm:text-[10px] font-bold uppercase tracking-widest border shadow-sm ${getStatusStyle(project.status || 'Planning')}`}>
                              {project.status || 'Planning'}
@@ -685,7 +689,6 @@ export default function StandardProjects() {
           )}
         </div>
 
-        {/* --- PRINTABLE PAYSLIP --- */}
         {isPrintingPayslip && selectedProject && isUserView && (
           <div className="absolute inset-0 bg-white z-[100] p-10 print:block hidden">
             <div className="text-center mb-10 pb-6 border-b border-slate-200">
@@ -749,7 +752,6 @@ export default function StandardProjects() {
 
       </div>
 
-      {/* --- ADMIN/HEAD ROLE SELECT INTERCEPT MODAL --- */}
       {typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
           {roleSelectProject && (
@@ -776,7 +778,6 @@ export default function StandardProjects() {
         document.body
       )}
 
-      {/* --- ADMIN TIMELINE POPUP MODAL --- */}
       {typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
           {timelineModalEmpId && isAdminView && (
@@ -803,7 +804,6 @@ export default function StandardProjects() {
 
                           return (
                             <div key={entry.id} className="flex flex-col relative group">
-                               {/* Main Entry Box */}
                                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm z-10 relative">
                                   {entry.type === 'upload' && (
                                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-100 text-[9px] font-bold uppercase tracking-wider rounded-lg mb-3">
@@ -819,7 +819,6 @@ export default function StandardProjects() {
                                   </div>
                                </div>
 
-                               {/* Reaction Display Box */}
                                {hasReaction && reactionFormId !== entry.id && (
                                   <div className="ml-6 sm:ml-10 mt-2 relative">
                                      <CornerDownRight className="absolute -left-5 top-3 h-4 w-4 text-slate-300" />
@@ -838,7 +837,6 @@ export default function StandardProjects() {
                                   </div>
                                )}
 
-                               {/* Reaction Input Form */}
                                {reactionFormId === entry.id && (
                                   <div className="ml-6 sm:ml-10 mt-3 relative animate-in fade-in slide-in-from-top-2">
                                      <CornerDownRight className="absolute -left-5 top-3 h-4 w-4 text-slate-300" />
@@ -879,7 +877,6 @@ export default function StandardProjects() {
         document.body
       )}
 
-      {/* --- EMPLOYEE UPLOAD WORK MODAL (PHASE C) --- */}
       {typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
           {isUploadModalOpen && taskToUpload && (
@@ -935,7 +932,6 @@ export default function StandardProjects() {
         document.body
       )}
 
-      {/* --- MAIN PROJECT MODAL --- */}
       {typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
           {isModalOpen && !isPrintingPayslip && (
@@ -964,10 +960,21 @@ export default function StandardProjects() {
                   </div>
 
                   <div className="flex gap-4 sm:gap-8 overflow-x-auto max-sm:[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                    <button onClick={() => setModalTab('details')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'details' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>1. Details</button>
-                    <button onClick={() => setModalTab('tasks')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'tasks' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>2. Action Items</button>
-                    <button onClick={() => setModalTab('progress')} disabled={!selectedProject} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedProject ? 'opacity-30 cursor-not-allowed' : modalTab === 'progress' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>3. Timeline</button>
-                    <button onClick={() => setModalTab('finance')} disabled={!selectedProject} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedProject ? 'opacity-30 cursor-not-allowed' : modalTab === 'finance' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>4. Budget & Finances</button>
+                    {!selectedProject ? (
+                      <>
+                        <div className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'details' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400'}`}>Step 1: Details</div>
+                        <div className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'team' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400'}`}>Step 2: Assign Team</div>
+                        <div className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'tasks' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400'}`}>Step 3: Action Items</div>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={() => setModalTab('details')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'details' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>1. Details</button>
+                        <button onClick={() => setModalTab('team')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'team' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>2. Team</button>
+                        <button onClick={() => setModalTab('tasks')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'tasks' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>3. Action Items</button>
+                        <button onClick={() => setModalTab('progress')} disabled={!selectedProject} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedProject ? 'opacity-30 cursor-not-allowed' : modalTab === 'progress' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>4. Timeline</button>
+                        <button onClick={() => setModalTab('finance')} disabled={!selectedProject} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedProject ? 'opacity-30 cursor-not-allowed' : modalTab === 'finance' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>5. Budget & Finances</button>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -1008,26 +1015,6 @@ export default function StandardProjects() {
                               ) : (
                                 <span className="text-slate-400 text-[13px] font-medium">Not provided</span>
                               )}
-                            </div>
-                          </div>
-
-                          <div className="pt-6 border-t border-slate-200">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Project Team Members</p>
-                            <div className="flex flex-wrap gap-2.5">
-                              {formData.assignee_ids.length === 0 ? <p className="text-xs text-slate-400 italic">No assigned team members.</p> : null}
-                              {formData.assignee_ids.map(id => {
-                                const emp = getAvatar(id);
-                                return (
-                                  <div key={id} className="flex items-center gap-2 bg-white px-3.5 py-2 rounded-full border border-slate-200 shadow-sm">
-                                    {emp?.profile_image_url ? (
-                                      <img src={emp.profile_image_url} className="h-5 w-5 sm:h-6 sm:w-6 rounded-full object-cover" alt="" />
-                                    ) : (
-                                      <div className="h-5 w-5 sm:h-6 sm:w-6 rounded-full bg-slate-100 flex items-center justify-center text-[9px] font-bold text-slate-500">{emp?.name.charAt(0)}</div>
-                                    )}
-                                    <span className="text-[11px] sm:text-xs font-bold text-slate-700">{emp?.name}</span>
-                                  </div>
-                                )
-                              })}
                             </div>
                           </div>
                         </div>
@@ -1122,31 +1109,79 @@ export default function StandardProjects() {
                           )}
                         </div>
 
-                        <div><label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1">Description</label><textarea value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} className="w-full h-20 sm:h-24 rounded-xl border border-slate-200 bg-white p-3 sm:p-4 text-[12px] sm:text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 shadow-sm resize-none disabled:bg-slate-50" /></div>
+                        {/* NEW: Project Description Toggle */}
+                        <div>
+                          {!showDescription && !formData.description ? (
+                            <button type="button" onClick={() => setShowDescription(true)} className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-bold text-blue-600 hover:text-blue-800 uppercase tracking-wider transition-colors px-1">
+                              <Plus className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Add Project Description
+                            </button>
+                          ) : (
+                            <div className="animate-in fade-in slide-in-from-top-2">
+                              <div className="flex items-center justify-between mb-1.5 sm:mb-2 px-1">
+                                <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest">Description</label>
+                                <button type="button" onClick={() => { setShowDescription(false); setFormData({...formData, description: ""}); }} className="text-slate-400 hover:text-rose-500 transition-colors" title="Remove Description">
+                                  <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                                </button>
+                              </div>
+                              <textarea value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} className="w-full h-20 sm:h-24 rounded-xl border border-slate-200 bg-white p-3 sm:p-4 text-[12px] sm:text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 shadow-sm resize-none disabled:bg-slate-50" placeholder="Briefly describe the project goals or scope..." />
+                            </div>
+                          )}
+                        </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
                           <div><label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1">Priority</label><select value={formData.priority} onChange={(e) => setFormData({...formData, priority: e.target.value})} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 text-[12px] sm:text-sm font-medium outline-none shadow-sm cursor-pointer disabled:bg-slate-50"><option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option></select></div>
                           <div><label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1">Approval Date</label><input type="date" value={formData.approval_date} onChange={(e) => setFormData({...formData, approval_date: e.target.value})} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 text-[12px] sm:text-sm font-medium outline-none shadow-sm disabled:bg-slate-50" /></div>
                           <div><label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1">Due Date</label><input type="date" value={formData.due_date} onChange={(e) => setFormData({...formData, due_date: e.target.value})} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 text-[12px] sm:text-sm font-medium outline-none shadow-sm disabled:bg-slate-50" /></div>
                         </div>
-
-                        <div className="pt-2">
-                          <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2 sm:mb-3 px-1">Assign Team Members</label>
-                          <div className="flex flex-wrap gap-2 sm:gap-2.5">
-                            {availableEmployees.map(emp => {
-                              const isSelected = formData.assignee_ids.includes(emp.id);
-                              return (
-                                <button key={emp.id} onClick={() => { if (isSelected) setFormData({...formData, assignee_ids: formData.assignee_ids.filter(id => id !== emp.id)}); else setFormData({...formData, assignee_ids: [...formData.assignee_ids, emp.id]}); }} className={`flex items-center gap-2 sm:gap-2.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl border text-[11px] sm:text-xs font-bold transition-all shadow-sm ${isSelected ? 'bg-gradient-to-r from-blue-900 to-indigo-800 text-white border-transparent' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'}`}>{emp.profile_image_url ? <img src={emp.profile_image_url} alt="" className="h-4 w-4 sm:h-5 sm:w-5 rounded-full object-cover shadow-sm" /> : <User className="h-3 w-3 sm:h-4 sm:w-4 text-slate-400" />} {emp.name}</button>
-                              )
-                            })}
-                          </div>
-                        </div>
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* TAB 2: TASKS PANEL */}
+                {/* NEW TAB: TEAM ASSIGNMENT WIZARD */}
+                {modalTab === 'team' && (
+                  <div className="flex-1 overflow-y-auto min-h-0 overscroll-contain p-5 sm:p-8 flex flex-col sm:[&::-webkit-scrollbar]:w-1.5 sm:[&::-webkit-scrollbar-thumb]:bg-slate-300 sm:[&::-webkit-scrollbar-thumb]:rounded-full sm:[&::-webkit-scrollbar-track]:bg-transparent max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none] max-sm:[scrollbar-width:none]">
+                     <div className="pt-2">
+                        <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2 sm:mb-3 px-1">Assign Team Members to Project</label>
+                        <div className="flex flex-wrap gap-2 sm:gap-2.5">
+                          {availableEmployees.length === 0 ? <p className="text-xs text-slate-400 italic">No available employees to assign.</p> : null}
+                          {availableEmployees.map(emp => {
+                            const isSelected = formData.assignee_ids.includes(emp.id);
+                            return (
+                              <button key={emp.id} onClick={() => { if (isSelected) setFormData({...formData, assignee_ids: formData.assignee_ids.filter(id => id !== emp.id)}); else setFormData({...formData, assignee_ids: [...formData.assignee_ids, emp.id]}); }} className={`flex items-center gap-2 sm:gap-2.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl border text-[11px] sm:text-xs font-bold transition-all shadow-sm ${isSelected ? 'bg-gradient-to-r from-blue-900 to-indigo-800 text-white border-transparent' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'}`}>
+                                 {emp.profile_image_url ? <img src={emp.profile_image_url} alt="" className="h-4 w-4 sm:h-5 sm:w-5 rounded-full object-cover shadow-sm" /> : <User className="h-3 w-3 sm:h-4 sm:w-4 text-slate-400" />} {emp.name}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Display Roster */}
+                      {isUserView && (
+                        <div className="pt-6 border-t border-slate-200 mt-6">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Project Team Members</p>
+                          <div className="flex flex-wrap gap-2.5">
+                            {formData.assignee_ids.length === 0 ? <p className="text-xs text-slate-400 italic">No assigned team members.</p> : null}
+                            {formData.assignee_ids.map(id => {
+                              const emp = getAvatar(id);
+                              return (
+                                <div key={id} className="flex items-center gap-2 bg-white px-3.5 py-2 rounded-full border border-slate-200 shadow-sm">
+                                  {emp?.profile_image_url ? (
+                                    <img src={emp.profile_image_url} className="h-5 w-5 sm:h-6 sm:w-6 rounded-full object-cover" alt="" />
+                                  ) : (
+                                    <div className="h-5 w-5 sm:h-6 sm:w-6 rounded-full bg-slate-100 flex items-center justify-center text-[9px] font-bold text-slate-500">{emp?.name.charAt(0)}</div>
+                                  )}
+                                  <span className="text-[11px] sm:text-xs font-bold text-slate-700">{emp?.name}</span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+                  </div>
+                )}
+
+                {/* TAB 3: TASKS PANEL */}
                 {modalTab === 'tasks' && (
                   <div className="flex-1 overflow-y-auto min-h-0 overscroll-contain p-5 sm:p-8 flex flex-col sm:[&::-webkit-scrollbar]:w-1.5 sm:[&::-webkit-scrollbar-thumb]:bg-slate-300 sm:[&::-webkit-scrollbar-thumb]:rounded-full sm:[&::-webkit-scrollbar-track]:bg-transparent max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none] max-sm:[scrollbar-width:none]">
                     <div className="w-full flex flex-col h-full gap-5 sm:gap-6">
@@ -1264,7 +1299,7 @@ export default function StandardProjects() {
                   </div>
                 )}
 
-                {/* TAB 3: TIMELINE & MILESTONES */}
+                {/* TAB 4: TIMELINE & MILESTONES */}
                 {modalTab === 'progress' && (
                   <div className="flex-1 overflow-y-auto min-h-0 overscroll-contain p-5 sm:p-8 flex flex-col sm:[&::-webkit-scrollbar]:w-1.5 sm:[&::-webkit-scrollbar-thumb]:bg-slate-300 sm:[&::-webkit-scrollbar-thumb]:rounded-full sm:[&::-webkit-scrollbar-track]:bg-transparent max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none] max-sm:[scrollbar-width:none]">
 
@@ -1440,7 +1475,7 @@ export default function StandardProjects() {
                   </div>
                 )}
 
-                {/* TAB 4: FINANCIALS */}
+                {/* TAB 5: FINANCIALS */}
                 {modalTab === 'finance' && (
                   <div className="flex-1 overflow-y-auto min-h-0 overscroll-contain p-5 sm:p-8 flex flex-col sm:[&::-webkit-scrollbar]:w-1.5 sm:[&::-webkit-scrollbar-thumb]:bg-slate-300 sm:[&::-webkit-scrollbar-thumb]:rounded-full sm:[&::-webkit-scrollbar-track]:bg-transparent max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none] max-sm:[scrollbar-width:none]">
                     <div className="w-full flex flex-col h-full gap-4 sm:gap-5">
@@ -1626,23 +1661,28 @@ export default function StandardProjects() {
                     <button onClick={handleDeleteProject} disabled={isSaving} className="border border-rose-200 text-rose-600 bg-white hover:bg-rose-50 rounded-xl h-10 sm:h-12 px-3 sm:px-5 flex items-center justify-center shadow-sm mr-auto transition-colors shrink-0"><Trash2 className="h-4 w-4" /></button>
                   )}
 
-                  <button onClick={() => setIsModalOpen(false)} className="rounded-xl border border-slate-200 bg-white h-10 sm:h-12 px-4 sm:px-8 font-bold text-[12px] sm:text-sm text-slate-600 hover:bg-slate-50 shadow-sm transition-colors flex-1 sm:flex-none">Close</button>
+                  <button onClick={() => setIsModalOpen(false)} className="rounded-xl border border-slate-200 bg-white h-10 sm:h-12 px-4 sm:px-8 font-bold text-[12px] sm:text-sm text-slate-600 hover:bg-slate-50 shadow-sm transition-colors mr-auto flex-1 sm:flex-none">Cancel</button>
 
                   {isAdminView && (
                     <>
                       {!selectedProject && modalTab === 'details' && (
+                        <button onClick={() => setModalTab('team')} className="bg-slate-900 text-white hover:bg-slate-800 rounded-xl h-10 sm:h-12 px-6 sm:px-10 font-bold text-[12px] sm:text-sm shadow-md transition-all flex-1 sm:flex-none flex items-center justify-center">
+                          Next: Assign Team
+                        </button>
+                      )}
+                      {!selectedProject && modalTab === 'team' && (
                         <button onClick={() => setModalTab('tasks')} className="bg-slate-900 text-white hover:bg-slate-800 rounded-xl h-10 sm:h-12 px-6 sm:px-10 font-bold text-[12px] sm:text-sm shadow-md transition-all flex-1 sm:flex-none flex items-center justify-center">
                           Next: Action Items
                         </button>
                       )}
                       {!selectedProject && modalTab === 'tasks' && (
                         <button onClick={handleSaveProject} disabled={isSaving} className="bg-gradient-to-r from-blue-900 to-indigo-800 text-white rounded-xl h-10 sm:h-12 px-6 sm:px-10 font-bold text-[12px] sm:text-sm shadow-md shadow-blue-900/20 hover:shadow-lg hover:-translate-y-0.5 transition-all flex-1 sm:flex-none flex items-center justify-center">
-                          {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : "Create Project"}
+                          {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : "Finish & Create Project"}
                         </button>
                       )}
                       {selectedProject && (
                         <button onClick={handleSaveProject} disabled={isSaving} className="bg-gradient-to-r from-blue-900 to-indigo-800 text-white rounded-xl h-10 sm:h-12 px-6 sm:px-10 font-bold text-[12px] sm:text-sm shadow-md shadow-blue-900/20 hover:shadow-lg hover:-translate-y-0.5 transition-all flex-1 sm:flex-none flex items-center justify-center">
-                          {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : "Save Details"}
+                          {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : "Save Changes"}
                         </button>
                       )}
                     </>
