@@ -1,8 +1,7 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Search, FolderKanban, CheckCircle2, AlertCircle, X, Check, User, Trash2, Clock, Download, Loader2, ChevronDown, ExternalLink, UploadCloud, Calendar, Info, Layers, FileText, Edit2, ThumbsUp, ThumbsDown, Eye, MessageCircle, CornerDownRight, Lock, BookOpen } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../../../store/authStore";
 import { useDataStore } from "../../../store/dataStore";
 import { supabase } from "../../../supabase";
@@ -15,9 +14,7 @@ const DEFAULT_MILESTONES = {
   completed: { client_approved: false, final_handover: false }
 };
 
-// MODIFIED: Accept new routing props for overriding the view from the Global Admin dashboard
-export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, onClearOverride }: { autoOpenProjectId?: number | null, forcedCompanyId?: number | null, onClearOverride?: () => void }) {
-  const navigate = useNavigate();
+export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, onClearOverride, onCrossHandoff }: { autoOpenProjectId?: number | null, forcedCompanyId?: number | null, onClearOverride?: () => void, onCrossHandoff?: (projectId: number, compId: number) => void }) {
   const { role, employeeId, activeWorkspace, companyId } = useAuthStore();
   const store = useDataStore();
   const { projects, tasks, reports, employees, companies, customers, salaryPayments, projectAllocations, fetchAllData } = store;
@@ -39,8 +36,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const isHead = role === 'head' || isImpersonating;
   const isUserView = role === 'user' || viewMode === 'user';
   const isAdminView = (isGlobalAdmin || isHead) && viewMode === 'admin';
-  
-  // MODIFIED: Uses forcedCompanyId if provided by the router, otherwise falls back to standard logic
   const currentCompanyId = forcedCompanyId ? forcedCompanyId.toString() : (isGlobalAdmin ? "" : (activeWorkspace || companyId));
 
   const [expandedFinanceEmpId, setExpandedFinanceEmpId] = useState<number | null>(null);
@@ -116,8 +111,8 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     return assignments.some((cr: any) => cr.company_id?.toString() === formData.company_id?.toString());
   });
 
-  // Automatically open the project modal if triggered by the router intercept
-  useEffect(() => {
+  // MODIFIED: Changed to useLayoutEffect to prevent any visual flickering before the modal opens
+  useLayoutEffect(() => {
     if (autoOpenProjectId && projects.length > 0) {
       const projToOpen = projects.find((p: any) => p.id === autoOpenProjectId);
       if (projToOpen) {
@@ -126,19 +121,20 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     }
   }, [autoOpenProjectId, projects, role]);
 
-  // MODIFIED: Centralized modal closing function that clears the router override
   const handleCloseModal = () => {
     setIsModalOpen(false);
     if (onClearOverride) onClearOverride();
   };
 
   const handleProjectClick = (project: any) => {
-    // Intercept Academy Projects and route them to AcademyCourses
     const projComp = companies.find((c: any) => c.id === project.company_id);
     const isAcademyProj = projComp?.business_type === 'academy' || ['Course', 'Workshop', 'Internship'].includes(project.metadata?.type);
 
     if (isGlobalAdmin && isAcademyProj) {
-      navigate('/projects', { state: { openProjectId: project.id, targetCompanyId: project.company_id } });
+      // MODIFIED: Instantly trigger cross-handoff instead of waiting for a slow URL route change
+      if (onCrossHandoff) {
+        onCrossHandoff(project.id, project.company_id);
+      }
       return;
     }
 
@@ -657,7 +653,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
                 const dueStatus = project.status !== 'Completed' ? getDueDateStatus(project.due_date) : null;
                 
-                // MODIFIED: Academy Project Styling Check
                 const projComp = companies.find(c => c.id === project.company_id);
                 const isAcademyProj = projComp?.business_type === 'academy' || ['Course', 'Workshop', 'Internship'].includes(project.metadata?.type);
                 const owningCompanyName = projComp?.name;
@@ -1099,7 +1094,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
                             <div>
                               <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1">Owning Subsidiary</label>
-                              {/* MODIFIED: This dropdown is firmly locked unless you are the Global Admin, forcing regular users to stay in their lane */}
                               <select value={formData.company_id} onChange={(e) => setFormData({...formData, company_id: e.target.value, customer_id: "", internal_company_id: "", assignee_ids: []})} disabled={!isGlobalAdmin} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 text-[12px] sm:text-[13px] font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 shadow-sm cursor-pointer disabled:bg-slate-100 disabled:text-slate-400">
                                 <option value="" disabled>Select Company...</option>
                                 {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -1536,28 +1530,32 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
                 {/* MODIFIED: Fixed Modal Footer Alignment */}
                 <div className="p-4 sm:p-6 border-t border-slate-100 bg-[#FAFCFF] flex justify-end items-center gap-3 shrink-0 mt-auto">
-                  {selectedCourse && isAdminView && modalTab === 'details' && (
-                    <button onClick={handleDeleteCourse} disabled={isSaving} className="border border-rose-200 text-rose-600 bg-white hover:bg-rose-50 rounded-xl h-11 px-5 flex items-center justify-center shadow-sm mr-auto transition-colors shrink-0"><Trash2 className="h-4 w-4" /></button>
+                  {selectedProject && isAdminView && modalTab === 'details' && (
+                    <button onClick={handleDeleteProject} disabled={isSaving} className="border border-rose-200 text-rose-600 bg-white hover:bg-rose-50 rounded-xl h-11 px-5 flex items-center justify-center shadow-sm mr-auto transition-colors shrink-0"><Trash2 className="h-4 w-4" /></button>
                   )}
                   
                   <button onClick={handleCloseModal} className="rounded-xl border border-slate-200 bg-white h-11 px-6 font-bold text-[13px] text-slate-600 hover:bg-slate-50 shadow-sm transition-colors flex-1 sm:flex-none">Cancel</button>
 
                   {isAdminView && (
                     <>
-                      {!selectedCourse && modalTab === 'details' && (
-                        <button onClick={() => setModalTab('details_faculty')} className="bg-slate-900 text-white hover:bg-slate-800 rounded-xl h-11 px-8 font-bold text-[13px] shadow-md transition-colors flex items-center justify-center flex-1 sm:flex-none">Next: Assign Faculty</button>
-                      )}
-                      {!selectedCourse && modalTab === 'details_faculty' && (
-                        <button onClick={() => setModalTab('syllabus')} className="bg-slate-900 text-white hover:bg-slate-800 rounded-xl h-11 px-8 font-bold text-[13px] shadow-md transition-colors flex items-center justify-center flex-1 sm:flex-none">Next: Build Syllabus</button>
-                      )}
-                      {!selectedCourse && modalTab === 'syllabus' && (
-                        <button onClick={handleSaveCourse} disabled={isSaving} className="bg-purple-900 text-white hover:bg-purple-800 rounded-xl h-11 px-8 font-bold text-[13px] shadow-md transition-colors flex items-center justify-center flex-1 sm:flex-none">
-                          {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Finish & Create Batch"}
+                      {!selectedProject && modalTab === 'details' && (
+                        <button onClick={() => setModalTab('team')} className="bg-slate-900 text-white hover:bg-slate-800 rounded-xl h-11 px-8 font-bold text-[13px] shadow-md transition-all flex-1 sm:flex-none flex items-center justify-center">
+                          Next: Assign Team
                         </button>
                       )}
-                      {selectedCourse && (
-                        <button onClick={handleSaveCourse} disabled={isSaving} className="bg-purple-900 text-white hover:bg-purple-800 rounded-xl h-11 px-8 font-bold text-[13px] shadow-md transition-colors flex items-center justify-center flex-1 sm:flex-none">
-                          {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Changes"}
+                      {!selectedProject && modalTab === 'team' && (
+                        <button onClick={() => setModalTab('tasks')} className="bg-slate-900 text-white hover:bg-slate-800 rounded-xl h-11 px-8 font-bold text-[13px] shadow-md transition-all flex-1 sm:flex-none flex items-center justify-center">
+                          Next: Action Items
+                        </button>
+                      )}
+                      {!selectedProject && modalTab === 'tasks' && (
+                        <button onClick={handleSaveProject} disabled={isSaving} className="bg-gradient-to-r from-blue-900 to-indigo-800 text-white rounded-xl h-11 px-8 font-bold text-[13px] shadow-md shadow-blue-900/20 hover:shadow-lg hover:-translate-y-0.5 transition-all flex-1 sm:flex-none flex items-center justify-center">
+                          {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : "Finish & Create Project"}
+                        </button>
+                      )}
+                      {selectedProject && (
+                        <button onClick={handleSaveProject} disabled={isSaving} className="bg-gradient-to-r from-blue-900 to-indigo-800 text-white rounded-xl h-11 px-8 font-bold text-[13px] shadow-md shadow-blue-900/20 hover:shadow-lg hover:-translate-y-0.5 transition-all flex-1 sm:flex-none flex items-center justify-center">
+                          {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : "Save Changes"}
                         </button>
                       )}
                     </>

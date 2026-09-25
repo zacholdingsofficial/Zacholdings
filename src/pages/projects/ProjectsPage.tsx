@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useState } from "react";
 import { useAuthStore } from "../../store/authStore";
 import { useDataStore } from "../../store/dataStore";
 
@@ -11,35 +10,23 @@ export default function ProjectsPage() {
   const { role, activeWorkspace, companyId } = useAuthStore();
   const { companies } = useDataStore();
   
-  const location = useLocation();
-  const navigate = useNavigate();
-
+  // We removed the slow React Router hack and replaced it with instantaneous state.
   const [targetProjectId, setTargetProjectId] = useState<number | null>(null);
   const [overrideCompanyId, setOverrideCompanyId] = useState<number | null>(null);
 
-  // Catch the redirect signal from the Customers Page or Global Admin Dashboard
-  useEffect(() => {
-    if (location.state?.openProjectId) {
-      setTargetProjectId(location.state.openProjectId);
-      
-      // If a specific company was requested (e.g., clicking an Academy project from standard view)
-      if (location.state.targetCompanyId) {
-        setOverrideCompanyId(location.state.targetCompanyId);
-      }
-      
-      // Clear the router state immediately so refresh doesn't trigger it again
-      navigate(location.pathname, { replace: true, state: {} });
-    }
-  }, [location, navigate]);
-
-  // Function to clear the override when the modal closes
+  // Function to instantly clear the override when the modal closes
   const handleClearOverride = () => {
     setTargetProjectId(null);
     setOverrideCompanyId(null);
   };
 
+  // Function to instantly switch the view without touching the URL router
+  const handleCrossHandoff = (projectId: number, compId: number) => {
+    setTargetProjectId(projectId);
+    setOverrideCompanyId(compId);
+  };
+
   // 1. Determine which company we are currently viewing
-  // If an override is active, use that. Otherwise, fallback to the standard active workspace logic.
   const effectiveCompanyId = overrideCompanyId || ((role === 'admin' || role === 'head') && activeWorkspace ? activeWorkspace : companyId);
   const currentCompany = companies.find((c: any) => c.id == effectiveCompanyId);
 
@@ -54,6 +41,7 @@ export default function ProjectsPage() {
           autoOpenProjectId={targetProjectId} 
           forcedCompanyId={overrideCompanyId} 
           onClearOverride={handleClearOverride} 
+          onCrossHandoff={handleCrossHandoff}
         />
       ); 
       
@@ -62,7 +50,8 @@ export default function ProjectsPage() {
         <StandardProjects 
           autoOpenProjectId={targetProjectId} 
           forcedCompanyId={overrideCompanyId} 
-          onClearOverride={handleClearOverride} 
+          onClearOverride={handleClearOverride}
+          onCrossHandoff={handleCrossHandoff} 
         />
       ); // Placeholder
       
@@ -73,6 +62,7 @@ export default function ProjectsPage() {
           autoOpenProjectId={targetProjectId} 
           forcedCompanyId={overrideCompanyId} 
           onClearOverride={handleClearOverride} 
+          onCrossHandoff={handleCrossHandoff}
         />
       );
   }

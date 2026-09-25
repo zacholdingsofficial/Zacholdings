@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useRef, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Search, BookOpen, X, Check, User, Trash2, Loader2, GraduationCap, Users, Library, CheckCircle2, ChevronDown, ExternalLink, Download, FileText, Eye, ThumbsUp, ThumbsDown, MessageCircle, Edit2, CornerDownRight, Info, Building2 } from "lucide-react";
+import { Plus, Search, BookOpen, X, Check, User, Trash2, Loader2, GraduationCap, Users, Library, CheckCircle2, ChevronDown, ExternalLink, UploadCloud, Calendar, Info, Layers, FileText, Eye, ThumbsUp, ThumbsDown, MessageCircle, Edit2, CornerDownRight, Lock, Building2 } from "lucide-react";
 import { useAuthStore } from "../../../store/authStore";
 import { useDataStore } from "../../../store/dataStore";
 import { supabase } from "../../../supabase";
@@ -9,8 +9,7 @@ import { supabase } from "../../../supabase";
 const ACADEMY_STATUSES = ['Enrollment', 'Ongoing', 'Graduated', 'Postponed', 'On Hold'];
 const ACADEMY_TYPES = ['Course', 'Workshop', 'Internship'];
 
-// MODIFIED: Accept new routing props for overriding the view from the Global Admin dashboard
-export default function AcademyCourses({ autoOpenProjectId, forcedCompanyId, onClearOverride }: { autoOpenProjectId?: number | null, forcedCompanyId?: number | null, onClearOverride?: () => void }) {
+export default function AcademyCourses({ autoOpenProjectId, forcedCompanyId, onClearOverride, onCrossHandoff }: { autoOpenProjectId?: number | null, forcedCompanyId?: number | null, onClearOverride?: () => void, onCrossHandoff?: (projectId: number, compId: number) => void }) {
   const { role, employeeId, activeWorkspace, companyId } = useAuthStore();
   const store = useDataStore() || {};
   
@@ -36,8 +35,10 @@ export default function AcademyCourses({ autoOpenProjectId, forcedCompanyId, onC
 
   const today = new Date().toISOString().split('T')[0];
   const isUserView = role === 'user';
-  const isAdminView = role === 'admin' || role === 'head';
-  const isHeadView = role === 'head'; 
+  const isImpersonating = role === 'admin' && activeWorkspace !== null;
+  const isGlobalAdmin = role === 'admin' && !isImpersonating;
+  const isAdminView = isGlobalAdmin || role === 'head' || isImpersonating;
+  const isHeadView = role === 'head' || isImpersonating; 
 
   const [formData, setFormData] = useState({ 
     name: "", description: "", status: "Enrollment", type: "Course", expected_amount: 0, 
@@ -69,12 +70,19 @@ export default function AcademyCourses({ autoOpenProjectId, forcedCompanyId, onC
   const [paymentForm, setPaymentForm] = useState({ employee_id: "", amount: 0, payment_type: "Final Payout", notes: "" });
   const [isPrintingPayslip, setIsPrintingPayslip] = useState(false);
 
-  // MODIFIED: Uses forcedCompanyId if provided by the router, otherwise falls back to standard logic
-  const currentCompanyId = forcedCompanyId ? forcedCompanyId.toString() : (role === 'admin' ? (activeWorkspace || "") : companyId);
-  const currentCompany = companies.find((c: any) => c.id.toString() === currentCompanyId?.toString());
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [removeLogo, setRemoveLogo] = useState(false);
+  const [showLogoMenu, setShowLogoMenu] = useState(false);
+
+  // Use forcedCompanyId if router provides it, otherwise fallback
+  const currentCompanyId = forcedCompanyId ? forcedCompanyId.toString() : (isGlobalAdmin ? "" : (activeWorkspace || companyId));
+  const currentCompany = companies.find((c: any) => c.id?.toString() === currentCompanyId?.toString());
+  const showFinance = role === 'admin' || (role === 'head' && currentCompany?.allow_head_finance !== false);
 
   const visibleCourses = projects.filter(p => {
-    if (!p.name || p.company_id?.toString() !== currentCompanyId?.toString()) return false;
+    if (!p.name) return false;
     
     const pType = p.metadata?.type || 'Course';
     if (!ACADEMY_TYPES.includes(pType)) return false;
@@ -83,9 +91,12 @@ export default function AcademyCourses({ autoOpenProjectId, forcedCompanyId, onC
     const matchesStatus = filterStatus === "All" || p.status === filterStatus;
     const matchesType = filterType === "All" || pType === filterType;
 
+    if (isGlobalAdmin) {
+       return matchesSearch && matchesStatus && matchesType && (forcedCompanyId ? p.company_id?.toString() === forcedCompanyId.toString() : true);
+    }
+
     const isAssigned = !isUserView || (p.assignee_ids || []).includes(employeeId);
-    
-    return matchesSearch && matchesStatus && matchesType && isAssigned;
+    return matchesSearch && matchesStatus && matchesType && isAssigned && p.company_id?.toString() === currentCompanyId?.toString();
   }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   const availableStudents = customers.filter(c => c.company_id === parseInt(currentCompanyId || '0'));
@@ -101,8 +112,8 @@ export default function AcademyCourses({ autoOpenProjectId, forcedCompanyId, onC
     return assignments.some((cr: any) => cr.company_id?.toString() === formData.company_id?.toString());
   });
 
-  // Automatically open the course modal if triggered by the router intercept
-  useEffect(() => {
+  // MODIFIED: useLayoutEffect guarantees the modal opens BEFORE the browser paints the empty screen
+  useLayoutEffect(() => {
     if (autoOpenProjectId && projects.length > 0) {
       const projToOpen = projects.find((p: any) => p.id === autoOpenProjectId);
       if (projToOpen) {
@@ -111,7 +122,6 @@ export default function AcademyCourses({ autoOpenProjectId, forcedCompanyId, onC
     }
   }, [autoOpenProjectId, projects]);
 
-  // MODIFIED: Centralized modal closing function that clears the router override
   const handleCloseModal = () => {
     setIsModalOpen(false);
     if (onClearOverride) onClearOverride();
@@ -1106,7 +1116,7 @@ export default function AcademyCourses({ autoOpenProjectId, forcedCompanyId, onC
                   </div>
                 )}
 
-                {/* MODIFIED: Fixed Modal Footer Alignment */}
+                {/* MODIFIED: Fixed Modal Footer Alignment & Wired Handle Close */}
                 <div className="p-4 sm:p-6 border-t border-slate-100 bg-[#FAFCFF] flex justify-end items-center gap-3 shrink-0 mt-auto">
                   {selectedCourse && isAdminView && modalTab === 'details' && (
                     <button onClick={handleDeleteCourse} disabled={isSaving} className="border border-rose-200 text-rose-600 bg-white hover:bg-rose-50 rounded-xl h-11 px-5 flex items-center justify-center shadow-sm mr-auto transition-colors shrink-0"><Trash2 className="h-4 w-4" /></button>
