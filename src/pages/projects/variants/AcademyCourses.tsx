@@ -9,7 +9,8 @@ import { supabase } from "../../../supabase";
 const ACADEMY_STATUSES = ['Enrollment', 'Ongoing', 'Graduated', 'Postponed', 'On Hold'];
 const ACADEMY_TYPES = ['Course', 'Workshop', 'Internship'];
 
-export default function AcademyCourses({ autoOpenProjectId }: { autoOpenProjectId?: number | null }) {
+// MODIFIED: Accept new routing props for overriding the view from the Global Admin dashboard
+export default function AcademyCourses({ autoOpenProjectId, forcedCompanyId, onClearOverride }: { autoOpenProjectId?: number | null, forcedCompanyId?: number | null, onClearOverride?: () => void }) {
   const { role, employeeId, activeWorkspace, companyId } = useAuthStore();
   const store = useDataStore() || {};
   
@@ -68,7 +69,8 @@ export default function AcademyCourses({ autoOpenProjectId }: { autoOpenProjectI
   const [paymentForm, setPaymentForm] = useState({ employee_id: "", amount: 0, payment_type: "Final Payout", notes: "" });
   const [isPrintingPayslip, setIsPrintingPayslip] = useState(false);
 
-  const currentCompanyId = role === 'admin' ? (activeWorkspace || "") : companyId;
+  // MODIFIED: Uses forcedCompanyId if provided by the router, otherwise falls back to standard logic
+  const currentCompanyId = forcedCompanyId ? forcedCompanyId.toString() : (role === 'admin' ? (activeWorkspace || "") : companyId);
   const currentCompany = companies.find((c: any) => c.id.toString() === currentCompanyId?.toString());
 
   const visibleCourses = projects.filter(p => {
@@ -108,6 +110,12 @@ export default function AcademyCourses({ autoOpenProjectId }: { autoOpenProjectI
       }
     }
   }, [autoOpenProjectId, projects]);
+
+  // MODIFIED: Centralized modal closing function that clears the router override
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    if (onClearOverride) onClearOverride();
+  };
 
   const openNewCourse = () => {
     setSelectedCourse(null);
@@ -169,7 +177,7 @@ export default function AcademyCourses({ autoOpenProjectId }: { autoOpenProjectI
         if (error) throw error;
       }
       
-      await fetchAllData(); setIsModalOpen(false);
+      await fetchAllData(); handleCloseModal();
     } catch (error: any) { alert(error.message); } finally { setIsSaving(false); }
   };
 
@@ -372,7 +380,7 @@ export default function AcademyCourses({ autoOpenProjectId }: { autoOpenProjectI
     if (!window.confirm(`Delete "${selectedCourse.name}"?`)) return;
     setIsSaving(true);
     await supabase.from('projects').delete().eq('id', selectedCourse.id);
-    await fetchAllData(); setIsModalOpen(false); setIsSaving(false);
+    await fetchAllData(); handleCloseModal(); setIsSaving(false);
   };
 
   const handleAddModule = async () => {
@@ -631,7 +639,13 @@ export default function AcademyCourses({ autoOpenProjectId }: { autoOpenProjectI
       {typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
           {isModalOpen && !isPrintingPayslip && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[9999] flex flex-col items-center justify-center max-sm:px-4 max-sm:pt-20 max-sm:pb-[110px] sm:p-4 bg-slate-900/40 backdrop-blur-sm print:hidden">
+            <motion.div 
+               initial={{ opacity: 0 }} 
+               animate={{ opacity: 1 }} 
+               exit={{ opacity: 0 }} 
+               onClick={handleCloseModal} 
+               className="fixed inset-0 z-[9999] flex flex-col items-center justify-center max-sm:px-4 max-sm:pt-20 max-sm:pb-[110px] sm:p-4 bg-slate-900/40 backdrop-blur-sm print:hidden"
+            >
               <motion.div initial={{ opacity: 0, y: 40, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 40, scale: 0.95 }} onClick={(e) => e.stopPropagation()} className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-4xl h-full sm:h-[760px] sm:max-h-[90vh] flex flex-col overflow-hidden border border-slate-100 mt-auto sm:mt-0">
                 
                 <div className="px-5 sm:px-8 pt-5 sm:pt-7 border-b border-slate-100 bg-[#FAFCFF] shrink-0">
@@ -643,7 +657,7 @@ export default function AcademyCourses({ autoOpenProjectId }: { autoOpenProjectI
                         <h3 className="text-lg sm:text-2xl font-bold text-slate-900 tracking-tight leading-none mt-1 truncate">{selectedCourse ? selectedCourse.name : 'Create New Batch'}</h3>
                       </div>
                     </div>
-                    <button onClick={() => setIsModalOpen(false)} className="h-8 w-8 bg-white border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm transition-colors"><X className="h-4 w-4" /></button>
+                    <button onClick={handleCloseModal} className="h-8 w-8 bg-white border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm transition-colors"><X className="h-4 w-4" /></button>
                   </div>
                   
                   <div className="flex gap-4 sm:gap-8 overflow-x-auto max-sm:[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
@@ -1076,7 +1090,7 @@ export default function AcademyCourses({ autoOpenProjectId }: { autoOpenProjectI
                                                      </div>
                                                      <div className="flex items-center gap-3">
                                                         <span className="font-black text-emerald-600">+ ₹{parseFloat(p.amount).toLocaleString()}</span>
-                                                        <button onClick={() => handleDeleteFacultyPayment(p.id)} className="text-rose-500 hover:text-rose-700 p-1"><Trash2 className="h-3 w-3" /></button>
+                                                        <button onClick={(e) => { e.stopPropagation(); handleDeleteFacultyPayment(p.id); }} className="text-rose-500 hover:text-rose-700 p-1"><Trash2 className="h-3 w-3" /></button>
                                                      </div>
                                                   </div>
                                                ))}
@@ -1092,13 +1106,13 @@ export default function AcademyCourses({ autoOpenProjectId }: { autoOpenProjectI
                   </div>
                 )}
 
-                {/* MODIFIED: Modal Footer - Fixed Cancel Button Position */}
+                {/* MODIFIED: Fixed Modal Footer Alignment */}
                 <div className="p-4 sm:p-6 border-t border-slate-100 bg-[#FAFCFF] flex justify-end items-center gap-3 shrink-0 mt-auto">
                   {selectedCourse && isAdminView && modalTab === 'details' && (
                     <button onClick={handleDeleteCourse} disabled={isSaving} className="border border-rose-200 text-rose-600 bg-white hover:bg-rose-50 rounded-xl h-11 px-5 flex items-center justify-center shadow-sm mr-auto transition-colors shrink-0"><Trash2 className="h-4 w-4" /></button>
                   )}
                   
-                  <button onClick={() => setIsModalOpen(false)} className="rounded-xl border border-slate-200 bg-white h-11 px-6 font-bold text-[13px] text-slate-600 hover:bg-slate-50 shadow-sm transition-colors flex-1 sm:flex-none">Cancel</button>
+                  <button onClick={handleCloseModal} className="rounded-xl border border-slate-200 bg-white h-11 px-6 font-bold text-[13px] text-slate-600 hover:bg-slate-50 shadow-sm transition-colors flex-1 sm:flex-none">Cancel</button>
 
                   {isAdminView && (
                     <>

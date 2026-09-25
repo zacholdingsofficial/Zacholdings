@@ -15,7 +15,8 @@ const DEFAULT_MILESTONES = {
   completed: { client_approved: false, final_handover: false }
 };
 
-export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjectId?: number | null }) {
+// MODIFIED: Accept new routing props for overriding the view from the Global Admin dashboard
+export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, onClearOverride }: { autoOpenProjectId?: number | null, forcedCompanyId?: number | null, onClearOverride?: () => void }) {
   const navigate = useNavigate();
   const { role, employeeId, activeWorkspace, companyId } = useAuthStore();
   const store = useDataStore();
@@ -38,7 +39,9 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
   const isHead = role === 'head' || isImpersonating;
   const isUserView = role === 'user' || viewMode === 'user';
   const isAdminView = (isGlobalAdmin || isHead) && viewMode === 'admin';
-  const currentCompanyId = isGlobalAdmin ? "" : (activeWorkspace || companyId);
+  
+  // MODIFIED: Uses forcedCompanyId if provided by the router, otherwise falls back to standard logic
+  const currentCompanyId = forcedCompanyId ? forcedCompanyId.toString() : (isGlobalAdmin ? "" : (activeWorkspace || companyId));
 
   const [expandedFinanceEmpId, setExpandedFinanceEmpId] = useState<number | null>(null);
   const [showPayoutForm, setShowPayoutForm] = useState(false);
@@ -113,6 +116,7 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
     return assignments.some((cr: any) => cr.company_id?.toString() === formData.company_id?.toString());
   });
 
+  // Automatically open the project modal if triggered by the router intercept
   useEffect(() => {
     if (autoOpenProjectId && projects.length > 0) {
       const projToOpen = projects.find((p: any) => p.id === autoOpenProjectId);
@@ -122,7 +126,14 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
     }
   }, [autoOpenProjectId, projects, role]);
 
+  // MODIFIED: Centralized modal closing function that clears the router override
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    if (onClearOverride) onClearOverride();
+  };
+
   const handleProjectClick = (project: any) => {
+    // Intercept Academy Projects and route them to AcademyCourses
     const projComp = companies.find((c: any) => c.id === project.company_id);
     const isAcademyProj = projComp?.business_type === 'academy' || ['Course', 'Workshop', 'Internship'].includes(project.metadata?.type);
 
@@ -247,7 +258,7 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
       }
 
       await fetchAllData(); 
-      if(modalTab === 'details' || modalTab === 'tasks') setIsModalOpen(false); 
+      if(modalTab === 'details' || modalTab === 'tasks') handleCloseModal(); 
       else alert(`Project updated successfully.`);
     } catch (error: any) { alert(error.message); } finally { setIsSaving(false); }
   };
@@ -451,7 +462,7 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
     if (!window.confirm(`Delete "${selectedProject.name}"?`)) return;
     setIsSaving(true);
     await supabase.from('projects').delete().eq('id', selectedProject.id);
-    await fetchAllData(); setIsModalOpen(false); setIsSaving(false);
+    await fetchAllData(); handleCloseModal(); setIsSaving(false);
   };
 
   const handleAddTask = async () => {
@@ -646,7 +657,7 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
 
                 const dueStatus = project.status !== 'Completed' ? getDueDateStatus(project.due_date) : null;
                 
-                // Academy Project Check
+                // MODIFIED: Academy Project Styling Check
                 const projComp = companies.find(c => c.id === project.company_id);
                 const isAcademyProj = projComp?.business_type === 'academy' || ['Course', 'Workshop', 'Internship'].includes(project.metadata?.type);
                 const owningCompanyName = projComp?.name;
@@ -986,7 +997,7 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
               initial={{ opacity: 0 }} 
               animate={{ opacity: 1 }} 
               exit={{ opacity: 0 }} 
-              onClick={() => setIsModalOpen(false)}
+              onClick={handleCloseModal}
               className="fixed inset-0 z-[9999] flex flex-col items-center justify-center max-sm:px-4 max-sm:pt-20 max-sm:pb-[110px] sm:p-4 bg-slate-900/40 backdrop-blur-sm print:hidden"
             >
               <motion.div 
@@ -1003,7 +1014,7 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
                       <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-blue-600 bg-blue-50 px-2 sm:px-2.5 py-1 rounded-full">{isAdminView ? 'Admin Workspace' : 'User Workspace'}</span>
                       <h3 className="text-lg sm:text-2xl font-bold text-slate-900 tracking-tight mt-1.5 truncate">{selectedProject ? selectedProject.name : 'Create New Project'}</h3>
                     </div>
-                    <button onClick={() => setIsModalOpen(false)} className="h-8 w-8 sm:h-9 sm:w-9 bg-white border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm transition-colors shrink-0"><X className="h-3.5 w-3.5 sm:h-4 sm:w-4" /></button>
+                    <button onClick={handleCloseModal} className="h-8 w-8 sm:h-9 sm:w-9 bg-white border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm transition-colors shrink-0"><X className="h-3.5 w-3.5 sm:h-4 sm:w-4" /></button>
                   </div>
 
                   <div className="flex gap-4 sm:gap-8 overflow-x-auto max-sm:[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
@@ -1523,217 +1534,30 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
                   </div>
                 )}
 
-                {/* TAB 5: FINANCIALS (STRICTLY LOCKED) */}
-                {modalTab === 'finance' && showFinance && (
-                  <div className="flex-1 overflow-y-auto min-h-0 overscroll-contain p-5 sm:p-8 flex flex-col sm:[&::-webkit-scrollbar]:w-1.5 sm:[&::-webkit-scrollbar-thumb]:bg-slate-300 sm:[&::-webkit-scrollbar-thumb]:rounded-full sm:[&::-webkit-scrollbar-track]:bg-transparent max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none] max-sm:[scrollbar-width:none]">
-                    <div className="w-full flex flex-col h-full gap-4 sm:gap-5">
-
-                      {isUserView ? (
-                         <div className="w-full max-w-2xl mx-auto bg-white border border-slate-100 rounded-3xl p-6 sm:p-10 shadow-sm flex flex-col items-center">
-                            <div className="w-full grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-8">
-                               <div className="bg-slate-50 border border-slate-100 rounded-xl sm:rounded-2xl p-4 sm:p-5 text-center">
-                                  <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Earned</p>
-                                  <p className="text-xl sm:text-2xl font-black text-emerald-600">₹{userTotalAllocated.toLocaleString()}</p>
-                               </div>
-                               <div className="bg-slate-50 border border-slate-100 rounded-xl sm:rounded-2xl p-4 sm:p-5 text-center">
-                                  <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Payments Rec'd</p>
-                                  <p className="text-xl sm:text-2xl font-black text-slate-800">₹{userTotalEarned.toLocaleString()}</p>
-                               </div>
-                               <div className="bg-slate-50 border border-slate-100 rounded-xl sm:rounded-2xl p-4 sm:p-5 text-center">
-                                  <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Balance Due</p>
-                                  <p className="text-xl sm:text-2xl font-black text-rose-500">₹{userBalanceDue.toLocaleString()}</p>
-                               </div>
-                            </div>
-
-                            <button onClick={handlePrintPayslip} disabled={isPrintingPayslip} className="bg-gradient-to-r from-blue-900 to-indigo-800 text-white rounded-xl h-12 sm:h-14 px-6 sm:px-10 text-[12px] sm:text-sm font-bold shadow-xl shadow-blue-900/20 hover:shadow-2xl hover:-translate-y-1 transition-all flex items-center gap-2">
-                               <Download className="h-4 w-4 sm:h-5 sm:w-5" /> Download PDF Payslip
-                            </button>
-                         </div>
-                      ) : (
-                         <>
-                            <div className="flex justify-end shrink-0">
-                               <button 
-                                  onClick={() => setShowPayoutForm(!showPayoutForm)} 
-                                  className={`px-3 sm:px-4 py-2 rounded-xl text-[11px] sm:text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm ${showPayoutForm ? 'bg-slate-100 text-slate-600 border border-slate-200' : 'bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100'}`}
-                               >
-                                  {showPayoutForm ? <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />} 
-                                  {showPayoutForm ? "Close Payout" : "Issue Payout"}
-                               </button>
-                            </div>
-
-                            <AnimatePresence>
-                               {showPayoutForm && (
-                                 <motion.div 
-                                    initial={{ height: 0, opacity: 0 }} 
-                                    animate={{ height: 'auto', opacity: 1 }} 
-                                    exit={{ height: 0, opacity: 0 }}
-                                    className="overflow-hidden shrink-0"
-                                 >
-                                    <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl sm:rounded-3xl p-5 sm:p-6 mb-2">
-                                       <h4 className="text-[12px] sm:text-sm font-bold text-emerald-800 uppercase tracking-widest mb-4 sm:mb-5">Issue Payout / Advance</h4>
-                                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
-                                          <div className="lg:col-span-1">
-                                            <label className="text-[9px] sm:text-[10px] font-bold text-emerald-600 uppercase block mb-1.5 px-1">Employee</label>
-                                            <select value={paymentForm.employee_id} onChange={e => setPaymentForm({...paymentForm, employee_id: e.target.value})} className="w-full h-10 sm:h-11 rounded-xl border border-emerald-200 bg-white px-3 text-[12px] sm:text-sm font-bold text-slate-800 outline-none focus:border-emerald-500 shadow-sm cursor-pointer"><option value="">-- Select --</option>{(formData.assignee_ids || []).map(id => <option key={id} value={id}>{getAvatar(id)?.name}</option>)}</select>
-                                          </div>
-                                          <div className="lg:col-span-1">
-                                            <label className="text-[9px] sm:text-[10px] font-bold text-emerald-600 uppercase block mb-1.5 px-1">Amount (₹)</label>
-                                            <input type="number" value={paymentForm.amount} onChange={e => setPaymentForm({...paymentForm, amount: parseFloat(e.target.value)||0})} className="w-full h-10 sm:h-11 rounded-xl border border-emerald-200 bg-white px-3 text-[12px] sm:text-sm font-black text-emerald-700 outline-none focus:border-emerald-500 shadow-sm min-w-0" />
-                                          </div>
-                                          <div className="lg:col-span-1">
-                                            <label className="text-[9px] sm:text-[10px] font-bold text-emerald-600 uppercase block mb-1.5 px-1">Type</label>
-                                            <select value={paymentForm.payment_type} onChange={e => setPaymentForm({...paymentForm, payment_type: e.target.value})} className="w-full h-10 sm:h-11 rounded-xl border border-emerald-200 bg-white px-3 text-[12px] sm:text-sm font-bold text-slate-800 outline-none focus:border-emerald-500 shadow-sm cursor-pointer"><option>Advance</option><option>Final Payout</option><option>Incentive / Bonus</option></select>
-                                          </div>
-                                          <div className="lg:col-span-2">
-                                            <label className="text-[9px] sm:text-[10px] font-bold text-emerald-600 uppercase block mb-1.5 px-1">Notes (Optional)</label>
-                                            <div className="flex gap-2">
-                                              <input type="text" placeholder="Ref or details..." value={paymentForm.notes} onChange={e => setPaymentForm({...paymentForm, notes: e.target.value})} className="flex-1 h-10 sm:h-11 rounded-xl border border-emerald-200 bg-white px-3 text-[12px] sm:text-sm font-medium outline-none focus:border-emerald-500 shadow-sm min-w-0" />
-                                              <button onClick={handleRecordProjectPayment} disabled={isSaving} className="h-10 sm:h-11 px-4 sm:px-6 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white text-[11px] sm:text-xs font-bold rounded-xl shadow-md hover:shadow-lg transition-all shrink-0">Transfer</button>
-                                            </div>
-                                          </div>
-                                       </div>
-                                    </div>
-                                 </motion.div>
-                               )}
-                            </AnimatePresence>
-
-                            <div className="bg-white border border-slate-100 shadow-sm rounded-2xl sm:rounded-3xl overflow-hidden flex flex-col flex-1 min-h-0 relative">
-                               <div className="w-full h-full overflow-y-auto sm:[&::-webkit-scrollbar]:w-1.5 sm:[&::-webkit-scrollbar-thumb]:bg-slate-300 sm:[&::-webkit-scrollbar-thumb]:rounded-full sm:[&::-webkit-scrollbar-track]:bg-transparent max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none max-sm:[scrollbar-width:none]">
-                                 <div className="grid grid-cols-12 gap-2 sm:gap-4 bg-slate-50 px-3 sm:px-6 py-3 border-b border-slate-100 text-[8px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center sticky top-0 z-10">
-                                    <div className="col-span-2 text-left">Team Member</div>
-                                    <div className="col-span-2 text-emerald-600">Paid (₹)</div>
-                                    <div className="col-span-2">Allocated</div>
-                                    <div className="col-span-2">Bonus</div>
-                                    <div className="col-span-2">Total</div>
-                                    <div className="col-span-2 text-right">Balance Due</div>
-                                 </div>
-
-                                 {(formData.assignee_ids || []).length === 0 && <p className="text-[12px] sm:text-sm text-center text-slate-400 italic py-6 sm:py-8">No team members assigned.</p>}
-
-                                 <div className="flex flex-col pb-16">
-                                    {(formData.assignee_ids || []).map(empId => {
-                                       const emp = getAvatar(empId);
-                                       const alloc = allocationsForm[empId] || {allocated: 0, incentive: 0};
-                                       const empPaid = salaryPayments.filter(sp => sp.project_id === selectedProject.id && sp.employee_id === empId).reduce((sum, sp) => sum + parseFloat(sp.amount || 0), 0);
-                                       const empPaymentsList = salaryPayments.filter(sp => sp.project_id === selectedProject.id && sp.employee_id === empId);
-                                       const lineTotal = alloc.allocated + alloc.incentive;
-                                       const empBalance = lineTotal - empPaid;
-                                       const isExpanded = expandedFinanceEmpId === empId;
-
-                                       return (
-                                         <div key={empId} className="flex flex-col border-b border-slate-50 hover:bg-slate-50/50 transition-colors last:border-none">
-                                            <div 
-                                               className="grid grid-cols-12 gap-2 sm:gap-4 items-center px-3 sm:px-6 py-3 cursor-pointer group"
-                                               onClick={() => setExpandedFinanceEmpId(isExpanded ? null : empId)}
-                                            >
-                                               <div className="col-span-2 flex items-center gap-1.5 sm:gap-3 min-w-0 relative">
-                                                 <div className="h-6 w-6 sm:h-8 sm:w-8 rounded-full bg-slate-100 flex items-center justify-center text-[9px] sm:text-[10px] font-bold text-slate-600 overflow-hidden shadow-sm shrink-0">{emp?.profile_image_url ? <img src={emp.profile_image_url} alt="" className="h-full w-full object-cover" /> : (emp?.name || 'U').charAt(0).toUpperCase()}</div>
-                                                 <span className="text-[10px] sm:text-[12px] font-bold text-slate-900 truncate">{emp?.name}</span>
-                                                 <ChevronDown className={`absolute -left-3 sm:-left-4 text-slate-300 h-3 w-3 sm:h-4 sm:w-4 transition-transform ${isExpanded ? 'rotate-180' : 'opacity-0 group-hover:opacity-100'}`} />
-                                               </div>
-
-                                               <div className="col-span-2 text-[10px] sm:text-[13px] font-bold text-emerald-600 text-center truncate">
-                                                  ₹{empPaid.toLocaleString()}
-                                               </div>
-
-                                               <div className="col-span-2" onClick={e => e.stopPropagation()}>
-                                                  <input type="number" value={alloc.allocated} onChange={e => setAllocationsForm({...allocationsForm, [empId]: {...alloc, allocated: parseFloat(e.target.value)||0}})} className="w-full h-8 sm:h-10 border border-slate-200 rounded-md sm:rounded-xl px-1 sm:px-3 font-bold text-[10px] sm:text-[13px] outline-none focus:border-blue-500 transition-all text-center min-w-0 bg-white" />
-                                               </div>
-
-                                               <div className="col-span-2" onClick={e => e.stopPropagation()}>
-                                                  <input type="number" value={alloc.incentive} onChange={e => setAllocationsForm({...allocationsForm, [empId]: {...alloc, incentive: parseFloat(e.target.value)||0}})} className="w-full h-8 sm:h-10 border border-emerald-200 bg-emerald-50 text-emerald-700 rounded-md sm:rounded-xl px-1 sm:px-3 font-bold text-[10px] sm:text-[13px] outline-none focus:border-emerald-500 transition-all text-center min-w-0" />
-                                               </div>
-
-                                               <div className="col-span-2 text-[10px] sm:text-[13px] font-bold text-slate-700 text-center truncate">
-                                                  ₹{lineTotal.toLocaleString()}
-                                               </div>
-
-                                               <div className="col-span-2 text-right text-[11px] sm:text-[14px] font-black text-slate-900 truncate">
-                                                  ₹{empBalance.toLocaleString()}
-                                               </div>
-                                            </div>
-
-                                            <AnimatePresence>
-                                               {isExpanded && (
-                                                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden bg-slate-50/50">
-                                                    <div className="px-4 sm:px-12 py-3 sm:py-4">
-                                                       <h5 className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 sm:mb-3">Transaction History</h5>
-                                                       {empPaymentsList.length === 0 ? (
-                                                          <p className="text-[10px] sm:text-[11px] text-slate-500 italic">No payments recorded for this member yet.</p>
-                                                       ) : (
-                                                          <div className="space-y-1.5 sm:space-y-2">
-                                                             {empPaymentsList.map(p => (
-                                                                <div key={p.id} className="flex justify-between items-center text-[10px] sm:text-[12px] bg-white border border-slate-100 p-2 sm:p-2.5 rounded-lg shadow-sm">
-                                                                   <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                                                                      <CheckCircle2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-500 shrink-0" />
-                                                                      <div className="truncate">
-                                                                         <span className="font-bold text-slate-700 mr-2">{new Date(p.payment_date).toLocaleDateString()}</span>
-                                                                         <span className="text-slate-500 truncate">({p.payment_type}){p.notes && ` - ${p.notes}`}</span>
-                                                                      </div>
-                                                                   </div>
-                                                                   <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-                                                                      <span className="font-black text-emerald-600">+ ₹{parseFloat(p.amount).toLocaleString()}</span>
-                                                                      {(role === 'admin' || role === 'head') && (
-                                                                         <button onClick={(e) => { e.stopPropagation(); handleDeleteProjectPayment(p.id); }} className="text-rose-400 hover:text-rose-600 p-1 bg-rose-50 rounded-md transition-colors"><Trash2 className="h-3 w-3 sm:h-3.5 w-3.5" /></button>
-                                                                      )}
-                                                                   </div>
-                                                                </div>
-                                                             ))}
-                                                          </div>
-                                                       )}
-                                                    </div>
-                                                 </motion.div>
-                                               )}
-                                            </AnimatePresence>
-
-                                         </div>
-                                       )
-                                    })}
-                                 </div>
-                               </div>
-
-                               {hasAllocationChanges && (
-                                 <div className="absolute bottom-0 left-0 right-0 bg-slate-50/90 backdrop-blur-md px-4 sm:px-6 py-3 border-t border-slate-200 flex justify-end shrink-0 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                                    <button onClick={handleSaveAllocations} disabled={isSaving} className="bg-gradient-to-r from-blue-900 to-indigo-800 text-white hover:shadow-lg hover:-translate-y-0.5 rounded-lg sm:rounded-xl h-9 sm:h-10 px-4 sm:px-6 text-[11px] sm:text-xs font-bold shadow-sm transition-all flex items-center">
-                                       {isSaving ? <><Loader2 className="h-3 w-3 mr-2 animate-spin" /> Saving...</> : "Save Allocations"}
-                                    </button>
-                                 </div>
-                               )}
-                            </div>
-                         </>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* MODIFIED: Modal Footer - Fixed Cancel Button Position next to Save */}
+                {/* MODIFIED: Fixed Modal Footer Alignment */}
                 <div className="p-4 sm:p-6 border-t border-slate-100 bg-[#FAFCFF] flex justify-end items-center gap-3 shrink-0 mt-auto">
-                  {selectedProject && isAdminView && modalTab === 'details' && (
-                    <button onClick={handleDeleteProject} disabled={isSaving} className="border border-rose-200 text-rose-600 bg-white hover:bg-rose-50 rounded-xl h-10 sm:h-12 px-3 sm:px-5 flex items-center justify-center shadow-sm mr-auto transition-colors shrink-0"><Trash2 className="h-4 w-4" /></button>
+                  {selectedCourse && isAdminView && modalTab === 'details' && (
+                    <button onClick={handleDeleteCourse} disabled={isSaving} className="border border-rose-200 text-rose-600 bg-white hover:bg-rose-50 rounded-xl h-11 px-5 flex items-center justify-center shadow-sm mr-auto transition-colors shrink-0"><Trash2 className="h-4 w-4" /></button>
                   )}
-
-                  <button onClick={() => setIsModalOpen(false)} className="rounded-xl border border-slate-200 bg-white h-10 sm:h-12 px-4 sm:px-8 font-bold text-[12px] sm:text-sm text-slate-600 hover:bg-slate-50 shadow-sm transition-colors flex-1 sm:flex-none">Cancel</button>
+                  
+                  <button onClick={handleCloseModal} className="rounded-xl border border-slate-200 bg-white h-11 px-6 font-bold text-[13px] text-slate-600 hover:bg-slate-50 shadow-sm transition-colors flex-1 sm:flex-none">Cancel</button>
 
                   {isAdminView && (
                     <>
-                      {!selectedProject && modalTab === 'details' && (
-                        <button onClick={() => setModalTab('team')} className="bg-slate-900 text-white hover:bg-slate-800 rounded-xl h-10 sm:h-12 px-6 sm:px-10 font-bold text-[12px] sm:text-sm shadow-md transition-all flex-1 sm:flex-none flex items-center justify-center">
-                          Next: Assign Team
+                      {!selectedCourse && modalTab === 'details' && (
+                        <button onClick={() => setModalTab('details_faculty')} className="bg-slate-900 text-white hover:bg-slate-800 rounded-xl h-11 px-8 font-bold text-[13px] shadow-md transition-colors flex items-center justify-center flex-1 sm:flex-none">Next: Assign Faculty</button>
+                      )}
+                      {!selectedCourse && modalTab === 'details_faculty' && (
+                        <button onClick={() => setModalTab('syllabus')} className="bg-slate-900 text-white hover:bg-slate-800 rounded-xl h-11 px-8 font-bold text-[13px] shadow-md transition-colors flex items-center justify-center flex-1 sm:flex-none">Next: Build Syllabus</button>
+                      )}
+                      {!selectedCourse && modalTab === 'syllabus' && (
+                        <button onClick={handleSaveCourse} disabled={isSaving} className="bg-purple-900 text-white hover:bg-purple-800 rounded-xl h-11 px-8 font-bold text-[13px] shadow-md transition-colors flex items-center justify-center flex-1 sm:flex-none">
+                          {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Finish & Create Batch"}
                         </button>
                       )}
-                      {!selectedProject && modalTab === 'team' && (
-                        <button onClick={() => setModalTab('tasks')} className="bg-slate-900 text-white hover:bg-slate-800 rounded-xl h-10 sm:h-12 px-6 sm:px-10 font-bold text-[12px] sm:text-sm shadow-md transition-all flex-1 sm:flex-none flex items-center justify-center">
-                          Next: Action Items
-                        </button>
-                      )}
-                      {!selectedProject && modalTab === 'tasks' && (
-                        <button onClick={handleSaveProject} disabled={isSaving} className="bg-gradient-to-r from-blue-900 to-indigo-800 text-white rounded-xl h-10 sm:h-12 px-6 sm:px-10 font-bold text-[12px] sm:text-sm shadow-md shadow-blue-900/20 hover:shadow-lg hover:-translate-y-0.5 transition-all flex-1 sm:flex-none flex items-center justify-center">
-                          {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : "Finish & Create Project"}
-                        </button>
-                      )}
-                      {selectedProject && (
-                        <button onClick={handleSaveProject} disabled={isSaving} className="bg-gradient-to-r from-blue-900 to-indigo-800 text-white rounded-xl h-10 sm:h-12 px-6 sm:px-10 font-bold text-[12px] sm:text-sm shadow-md shadow-blue-900/20 hover:shadow-lg hover:-translate-y-0.5 transition-all flex-1 sm:flex-none flex items-center justify-center">
-                          {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : "Save Changes"}
+                      {selectedCourse && (
+                        <button onClick={handleSaveCourse} disabled={isSaving} className="bg-purple-900 text-white hover:bg-purple-800 rounded-xl h-11 px-8 font-bold text-[13px] shadow-md transition-colors flex items-center justify-center flex-1 sm:flex-none">
+                          {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Changes"}
                         </button>
                       )}
                     </>
