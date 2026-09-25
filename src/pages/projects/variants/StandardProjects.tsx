@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Search, FolderKanban, CheckCircle2, AlertCircle, X, Check, User, Trash2, Clock, Download, Loader2, ChevronDown, ExternalLink, UploadCloud, Calendar, Info, Layers, FileText, Edit2, ThumbsUp, ThumbsDown, Eye, MessageCircle, CornerDownRight, Lock } from "lucide-react";
+import { Plus, Search, FolderKanban, CheckCircle2, AlertCircle, X, Check, User, Trash2, Clock, Download, Loader2, ChevronDown, ExternalLink, UploadCloud, Calendar, Info, Layers, FileText, Edit2, ThumbsUp, ThumbsDown, Eye, MessageCircle, CornerDownRight, Lock, BookOpen } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../../../store/authStore";
 import { useDataStore } from "../../../store/dataStore";
 import { supabase } from "../../../supabase";
@@ -14,7 +15,9 @@ const DEFAULT_MILESTONES = {
   completed: { client_approved: false, final_handover: false }
 };
 
-export default function StandardProjects() {
+// MODIFIED: Accept autoOpenProjectId as a prop
+export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjectId?: number | null }) {
+  const navigate = useNavigate();
   const { role, employeeId, activeWorkspace, companyId } = useAuthStore();
   const store = useDataStore();
   const { projects, tasks, reports, employees, companies, customers, salaryPayments, projectAllocations, fetchAllData } = store;
@@ -83,17 +86,6 @@ export default function StandardProjects() {
   const adminTimelineReport = (selectedProject && timelineModalEmpId) ? reports.find(r => r.project_id === selectedProject.id && r.employee_id === timelineModalEmpId) : null;
   const adminTimelineEntries = Array.isArray(adminTimelineReport?.entries) ? adminTimelineReport.entries : [];
 
-  // DYNAMIC TERMINOLOGY: Adapts the layout text if the project belongs to an Academy
-  const projCompId = selectedProject ? selectedProject.company_id?.toString() : formData.company_id;
-  const projComp = companies.find((c: any) => c.id?.toString() === projCompId);
-  const isAcademy = projComp?.business_type === 'academy' || ['Course', 'Workshop', 'Internship'].includes(selectedProject?.metadata?.type);
-
-  const t_project = isAcademy ? "Program" : "Project";
-  const t_client = isAcademy ? "Student" : "Client";
-  const t_tasks = isAcademy ? "Curriculum Modules" : "Action Items";
-  const t_task = isAcademy ? "Module" : "Task";
-
-  // MODIFIED: Removed the 'Course/Workshop' exclusion filter so Admins and Heads can see Academy projects here
   const visibleProjects = projects.filter(p => {
     if (!p.name) return false;
 
@@ -122,7 +114,26 @@ export default function StandardProjects() {
     return assignments.some((cr: any) => cr.company_id?.toString() === formData.company_id?.toString());
   });
 
+  // MODIFIED: Auto-open the project modal if autoOpenProjectId is passed
+  useEffect(() => {
+    if (autoOpenProjectId && projects.length > 0) {
+      const projToOpen = projects.find((p: any) => p.id === autoOpenProjectId);
+      if (projToOpen) {
+        openProjectDetails(projToOpen, role === 'user' ? 'user' : 'admin');
+      }
+    }
+  }, [autoOpenProjectId, projects, role]);
+
   const handleProjectClick = (project: any) => {
+    // MODIFIED: Intercept Academy Projects and route them to AcademyCourses
+    const projComp = companies.find((c: any) => c.id === project.company_id);
+    const isAcademyProj = projComp?.business_type === 'academy' || ['Course', 'Workshop', 'Internship'].includes(project.metadata?.type);
+
+    if (isGlobalAdmin && isAcademyProj) {
+      navigate('/projects', { state: { openProjectId: project.id, targetCompanyId: project.company_id } });
+      return;
+    }
+
     if ((role === 'admin' || role === 'head') && (Array.isArray(project.assignee_ids) ? project.assignee_ids : []).includes(employeeId)) {
       setRoleSelectProject(project);
     } else {
@@ -200,8 +211,8 @@ export default function StandardProjects() {
   };
 
   const handleSaveProject = async () => {
-    if (!formData.name.trim()) { setModalTab('details'); return alert(`${t_project} name is required.`); }
-    if (!formData.company_id) { setModalTab('details'); return alert(`Please select an Owning Subsidiary for this ${t_project.toLowerCase()}.`); }
+    if (!formData.name.trim()) { setModalTab('details'); return alert(`Project name is required.`); }
+    if (!formData.company_id) { setModalTab('details'); return alert(`Please select an Owning Subsidiary for this project.`); }
 
     let finalCustomerId: number | null = formData.customer_id ? parseInt(formData.customer_id) : null;
     let finalInternalId: number | null = null;
@@ -209,7 +220,7 @@ export default function StandardProjects() {
     setIsSaving(true);
     try {
       if (customerType === 'new') {
-        if (!newCustomer.name.trim()) { setModalTab('details'); throw new Error(`New ${t_client} Name is required.`); }
+        if (!newCustomer.name.trim()) { setModalTab('details'); throw new Error(`New Client Name is required.`); }
         const { data: cData, error: cError } = await supabase.from('customers').insert([{ company_id: parseInt(formData.company_id), name: newCustomer.name, phone: newCustomer.phone }]).select().single();
         if (cError) throw cError;
         finalCustomerId = cData.id;
@@ -240,7 +251,7 @@ export default function StandardProjects() {
 
       await fetchAllData(); 
       if(modalTab === 'details' || modalTab === 'tasks') setIsModalOpen(false); 
-      else alert(`${t_project} updated successfully.`);
+      else alert(`Project updated successfully.`);
     } catch (error: any) { alert(error.message); } finally { setIsSaving(false); }
   };
 
@@ -257,7 +268,7 @@ export default function StandardProjects() {
 
       if (checkError) throw checkError;
       if (existingInvoices && existingInvoices.length > 0) {
-        return alert(`An invoice has already been generated for this ${t_project.toLowerCase()}.`);
+        return alert(`An invoice has already been generated for this project.`);
       }
 
       const invPayload = {
@@ -278,7 +289,7 @@ export default function StandardProjects() {
       if (invData) {
         const { error: itemError } = await supabase.from('invoice_items').insert([{ 
           invoice_id: invData.id, 
-          description: `${t_project}: ${selectedProject.name}`, 
+          description: `Project: ${selectedProject.name}`, 
           quantity: 1, 
           rate: formData.expected_amount, 
           total: formData.expected_amount 
@@ -449,7 +460,7 @@ export default function StandardProjects() {
   const handleAddTask = async () => {
     if (!newTaskTitle.trim() || !newTaskAssignee || !newTaskDeadline) return;
     if (formData.due_date && new Date(newTaskDeadline) > new Date(formData.due_date)) {
-      alert(`${t_task} deadline cannot exceed the ${t_project.toLowerCase()}'s main due date (${formData.due_date}).`);
+      alert(`Task deadline cannot exceed the project's main due date (${formData.due_date}).`);
       return;
     }
 
@@ -464,7 +475,7 @@ export default function StandardProjects() {
 
   const handleUpdateTaskDeadline = async (task: any, index: number, newDeadline: string) => {
     if (formData.due_date && new Date(newDeadline) > new Date(formData.due_date)) {
-      alert(`${t_task} deadline cannot exceed the ${t_project.toLowerCase()}'s main due date (${formData.due_date}).`);
+      alert(`Task deadline cannot exceed the project's main due date (${formData.due_date}).`);
       return;
     }
     if (selectedProject) {
@@ -582,13 +593,11 @@ export default function StandardProjects() {
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 sm:gap-6 print:hidden">
           <div>
             <p className="text-[9px] sm:text-[11px] font-bold text-blue-600 uppercase tracking-[0.2em] mb-1.5 sm:mb-2 bg-blue-50 inline-block px-3 py-1 rounded-full">Workflows & Tasks</p>
-            <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-slate-900 mt-1 sm:mt-2">
-              {currentCompany?.business_type === 'academy' ? 'Programs & Courses.' : 'Projects.'}
-            </h1>
+            <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-slate-900 mt-1 sm:mt-2">Projects.</h1>
           </div>
           {(role === 'admin' || role === 'head') && (
             <button onClick={openNewProject} className="bg-gradient-to-r from-blue-900 to-indigo-800 text-white shadow-lg shadow-blue-900/20 hover:shadow-xl hover:-translate-y-0.5 px-4 sm:px-6 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl text-[11px] sm:text-[13px] font-bold transition-all flex items-center shrink-0">
-              <Plus className="h-4 w-4 mr-1.5 sm:mr-2" /> New {currentCompany?.business_type === 'academy' ? 'Program' : 'Project'}
+              <Plus className="h-4 w-4 mr-1.5 sm:mr-2" /> New Project
             </button>
           )}
         </div>
@@ -596,7 +605,7 @@ export default function StandardProjects() {
         <div className="bg-white p-2 rounded-xl sm:rounded-2xl border border-slate-100 shadow-sm flex flex-col sm:flex-row gap-2 print:hidden">
           <div className="relative flex-1">
             <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 h-3.5 sm:h-4 w-3.5 sm:w-4 text-slate-400" />
-            <input type="text" placeholder="Search by name..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full h-10 sm:h-11 pl-9 sm:pl-11 pr-4 rounded-lg sm:rounded-xl border-none text-[13px] sm:text-sm font-medium outline-none bg-transparent focus:ring-0 placeholder:text-slate-400" />
+            <input type="text" placeholder="Search projects by name..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full h-10 sm:h-11 pl-9 sm:pl-11 pr-4 rounded-lg sm:rounded-xl border-none text-[13px] sm:text-sm font-medium outline-none bg-transparent focus:ring-0 placeholder:text-slate-400" />
           </div>
 
           {role === 'admin' && !activeWorkspace && (
@@ -639,10 +648,18 @@ export default function StandardProjects() {
                 const radius = 18; const circumference = 2 * Math.PI * radius; const progressOffset = circumference - (progressPct / 100) * circumference;
 
                 const dueStatus = project.status !== 'Completed' ? getDueDateStatus(project.due_date) : null;
-                const owningCompanyName = companies.find(c => c.id === project.company_id)?.name;
+                
+                // MODIFIED: Logic for Academy Visuals
+                const projComp = companies.find(c => c.id === project.company_id);
+                const isAcademyProj = projComp?.business_type === 'academy' || ['Course', 'Workshop', 'Internship'].includes(project.metadata?.type);
+                const owningCompanyName = projComp?.name;
 
                 return (
-                  <div key={project.id} className="bg-white rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all flex flex-col relative overflow-hidden group">
+                  <div 
+                     key={project.id} 
+                     // MODIFIED: Change the border and shadow style if it is an Academy project
+                     className={`bg-white rounded-2xl sm:rounded-3xl border shadow-sm hover:shadow-md transition-all flex flex-col relative overflow-hidden group ${isAcademyProj ? 'border-purple-100 hover:border-purple-300 shadow-purple-900/5' : 'border-slate-100 hover:border-blue-200'}`}
+                  >
                     <div className={`absolute top-0 left-0 bottom-0 w-1.5 ${project.priority === 'High' ? 'bg-rose-500' : project.priority === 'Medium' ? 'bg-amber-500' : 'bg-slate-300'}`} />
 
                     {dueStatus && (
@@ -654,7 +671,12 @@ export default function StandardProjects() {
                     <div className="ml-1.5 p-4 sm:p-7 flex flex-col gap-4 sm:gap-6">
                       <div className="flex justify-between items-start gap-4">
                         <div className="flex-1 min-w-0">
-                          <h3 onClick={() => handleProjectClick(project)} className="text-[15px] sm:text-lg font-bold text-slate-900 tracking-tight cursor-pointer hover:text-blue-900 transition-colors inline-block w-full truncate">
+                          {/* MODIFIED: If Academy, show purple icons and text */}
+                          <div className="flex items-center gap-2 mb-1.5">
+                             {isAcademyProj && <span className="inline-flex items-center gap-1 bg-purple-50 text-purple-600 border border-purple-100 text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md"><BookOpen className="h-2.5 w-2.5" /> Academy Program</span>}
+                          </div>
+                          
+                          <h3 onClick={() => handleProjectClick(project)} className={`text-[15px] sm:text-lg font-bold tracking-tight cursor-pointer transition-colors inline-block w-full truncate ${isAcademyProj ? 'text-purple-950 hover:text-purple-700' : 'text-slate-900 hover:text-blue-900'}`}>
                             {project.name}
                             {isGlobalAdmin && owningCompanyName && (
                                 <span className="ml-2 inline-block text-[9px] font-bold uppercase tracking-widest bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md border border-slate-200 align-middle">
@@ -681,12 +703,12 @@ export default function StandardProjects() {
                            <div className="relative h-10 w-10 sm:h-12 sm:w-12 flex items-center justify-center shrink-0">
                              <svg className="h-10 w-10 sm:h-12 sm:w-12 transform -rotate-90">
                                <circle cx="50%" cy="50%" r="18" stroke="currentColor" strokeWidth="3.5" fill="transparent" className="text-slate-100" />
-                               <circle cx="50%" cy="50%" r="18" stroke="currentColor" strokeWidth="3.5" fill="transparent" strokeDasharray={circumference} strokeDashoffset={progressOffset} strokeLinecap="round" className={`${progressPct === 100 ? 'text-emerald-500' : 'text-blue-900'} transition-all duration-1000 ease-out`} />
+                               <circle cx="50%" cy="50%" r="18" stroke="currentColor" strokeWidth="3.5" fill="transparent" strokeDasharray={circumference} strokeDashoffset={progressOffset} strokeLinecap="round" className={`${progressPct === 100 ? 'text-emerald-500' : (isAcademyProj ? 'text-purple-600' : 'text-blue-900')} transition-all duration-1000 ease-out`} />
                              </svg>
                              <div className="absolute inset-0 flex items-center justify-center text-[9px] sm:text-[11px] font-bold text-slate-800">{progressPct}%</div>
                            </div>
                            <div className="hidden sm:block">
-                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Tasks</p>
+                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{isAcademyProj ? 'Modules' : 'Tasks'}</p>
                              <p className="text-sm font-bold text-slate-800">{completedTasks} / {totalTasks}</p>
                            </div>
                            <div className="flex -space-x-2 pl-2 border-l border-slate-100 sm:border-none sm:pl-0">
@@ -705,7 +727,7 @@ export default function StandardProjects() {
 
                         {showFinance && (
                           <div className="flex flex-col items-end">
-                            <span className="text-[8px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Value</span>
+                            <span className="text-[8px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{isAcademyProj ? 'Batch Value' : 'Value'}</span>
                             <span className="text-[12px] sm:text-sm font-black text-emerald-600">₹{(project.expected_amount || 0).toLocaleString()}</span>
                           </div>
                         )}
@@ -719,6 +741,7 @@ export default function StandardProjects() {
           )}
         </div>
 
+        {/* ... (Rest of modal portals untouched) ... */}
         {isPrintingPayslip && selectedProject && isUserView && (
           <div className="absolute inset-0 bg-white z-[100] p-10 print:block hidden">
             <div className="text-center mb-10 pb-6 border-b border-slate-200">
@@ -1728,3 +1751,4 @@ export default function StandardProjects() {
     </>
   );
 }
+all codes ended now analyze carefully what code needs to be modified and why.and give me the fully completed and modified code back
