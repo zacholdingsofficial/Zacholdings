@@ -1751,4 +1751,3 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
     </>
   );
 }
-all codes ended now analyze carefully what code needs to be modified and why.and give me the fully completed and modified code back
