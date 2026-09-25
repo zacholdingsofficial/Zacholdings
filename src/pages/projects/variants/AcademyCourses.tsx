@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Search, BookOpen, X, Check, User, Trash2, Loader2, GraduationCap, Users, Library, CheckCircle2, ChevronDown, ExternalLink, Download, FileText, Eye, ThumbsUp, ThumbsDown, MessageCircle, Edit2, CornerDownRight, Info, Building2 } from "lucide-react";
@@ -6,11 +6,10 @@ import { useAuthStore } from "../../../store/authStore";
 import { useDataStore } from "../../../store/dataStore";
 import { supabase } from "../../../supabase";
 
-// Expanded to include hold/postponed statuses
 const ACADEMY_STATUSES = ['Enrollment', 'Ongoing', 'Graduated', 'Postponed', 'On Hold'];
 const ACADEMY_TYPES = ['Course', 'Workshop', 'Internship'];
 
-export default function AcademyCourses() {
+export default function AcademyCourses({ autoOpenProjectId }: { autoOpenProjectId?: number | null }) {
   const { role, employeeId, activeWorkspace, companyId } = useAuthStore();
   const store = useDataStore() || {};
   
@@ -51,7 +50,6 @@ export default function AcademyCourses() {
   const [newModuleTitle, setNewModuleTitle] = useState("");
   const [newModuleTutor, setNewModuleTutor] = useState<number | "">("");
 
-  // Faculty Class Report States
   const [classReportText, setClassReportText] = useState("");
   const [needsUpload, setNeedsUpload] = useState<boolean | null>(null);
   const [confirmedUpload, setConfirmedUpload] = useState(false);
@@ -59,12 +57,10 @@ export default function AcademyCourses() {
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [editingEntryText, setEditingEntryText] = useState("");
 
-  // Admin Timeline / Review States
   const [timelineModalEmpId, setTimelineModalEmpId] = useState<number | null>(null);
   const [reactionFormId, setReactionFormId] = useState<string | null>(null);
   const [reactionText, setReactionText] = useState("");
 
-  // Faculty Payout & Allocation states
   const [allocationsForm, setAllocationsForm] = useState<{[empId: number]: {allocated: number, incentive: number}}>({});
   const [expandedFinanceEmpId, setExpandedFinanceEmpId] = useState<number | null>(null);
   const [showPayoutForm, setShowPayoutForm] = useState(false);
@@ -78,7 +74,6 @@ export default function AcademyCourses() {
   const visibleCourses = projects.filter(p => {
     if (!p.name || p.company_id?.toString() !== currentCompanyId?.toString()) return false;
     
-    // FIX: Only show Academy records (Course, Workshop, Internship) and filter out Standard Projects completely
     const pType = p.metadata?.type || 'Course';
     if (!ACADEMY_TYPES.includes(pType)) return false;
 
@@ -93,10 +88,26 @@ export default function AcademyCourses() {
 
   const availableStudents = customers.filter(c => c.company_id === parseInt(currentCompanyId || '0'));
   
-  // FIX: System Admins are now strictly excluded from faculty assignments
-  const availableTutors = employees.filter(emp => 
-    emp.role !== 'admin' && emp.access_level !== 'admin' && emp.company_id === parseInt(currentCompanyId || '0')
-  );
+  const availableTutors = employees.filter(emp => {
+    const assignments = emp.company_roles && emp.company_roles.length > 0 
+      ? emp.company_roles 
+      : [{ company_id: emp.company_id, access_level: emp.access_level }];
+      
+    const hasGlobalAdmin = assignments.some((cr: any) => cr.access_level === 'admin');
+    if (hasGlobalAdmin) return false;
+
+    return assignments.some((cr: any) => cr.company_id?.toString() === formData.company_id?.toString());
+  });
+
+  // Automatically open the course modal if triggered by the router intercept
+  useEffect(() => {
+    if (autoOpenProjectId && projects.length > 0) {
+      const projToOpen = projects.find((p: any) => p.id === autoOpenProjectId);
+      if (projToOpen) {
+        openCourseDetails(projToOpen);
+      }
+    }
+  }, [autoOpenProjectId, projects]);
 
   const openNewCourse = () => {
     setSelectedCourse(null);
@@ -635,7 +646,6 @@ export default function AcademyCourses() {
                     <button onClick={() => setIsModalOpen(false)} className="h-8 w-8 bg-white border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm transition-colors"><X className="h-4 w-4" /></button>
                   </div>
                   
-                  {/* FIX: Dynamic Wizard Tabs for Academy Creation */}
                   <div className="flex gap-4 sm:gap-8 overflow-x-auto max-sm:[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                     {!selectedCourse ? (
                       <>
@@ -650,8 +660,8 @@ export default function AcademyCourses() {
                         <button onClick={() => setModalTab('syllabus')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'syllabus' ? 'border-purple-900 text-purple-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>3. Syllabus</button>
                         <button onClick={() => setModalTab('summary')} disabled={!selectedCourse} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedCourse ? 'opacity-30 cursor-not-allowed' : modalTab === 'summary' ? 'border-purple-900 text-purple-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>4. Students</button>
                         
-                        {isHeadView && <button onClick={() => setModalTab('finances')} disabled={!selectedCourse} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedCourse ? 'opacity-30 cursor-not-allowed' : modalTab === 'finances' ? 'border-purple-900 text-purple-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>5. Fee Ledger</button>}
-                        {isHeadView && <button onClick={() => setModalTab('faculty')} disabled={!selectedCourse} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedCourse ? 'opacity-30 cursor-not-allowed' : modalTab === 'faculty' ? 'border-purple-900 text-purple-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>6. Payroll</button>}
+                        {isAdminView && <button onClick={() => setModalTab('finances')} disabled={!selectedCourse} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedCourse ? 'opacity-30 cursor-not-allowed' : modalTab === 'finances' ? 'border-purple-900 text-purple-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>5. Fee Ledger</button>}
+                        {isAdminView && <button onClick={() => setModalTab('faculty')} disabled={!selectedCourse} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedCourse ? 'opacity-30 cursor-not-allowed' : modalTab === 'faculty' ? 'border-purple-900 text-purple-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>6. Payroll</button>}
                         {isUserView && <button onClick={() => setModalTab('reports')} disabled={!selectedCourse} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedCourse ? 'opacity-30 cursor-not-allowed' : modalTab === 'reports' ? 'border-purple-900 text-purple-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>5. Class Reports</button>}
                         {isUserView && <button onClick={() => setModalTab('my_payouts')} disabled={!selectedCourse} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedCourse ? 'opacity-30 cursor-not-allowed' : modalTab === 'my_payouts' ? 'border-purple-900 text-purple-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>6. My Payouts</button>}
                       </>
@@ -668,7 +678,7 @@ export default function AcademyCourses() {
                           <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2 px-1">Batch / Course Name</label>
                           <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} disabled={isUserView} className="w-full h-12 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium outline-none focus:border-purple-500 shadow-sm disabled:bg-slate-50" />
                         </div>
-                        {isHeadView && (
+                        {isAdminView && (
                           <div>
                             <label className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest block mb-2 px-1">Fee Per Head (₹)</label>
                             <input type="number" value={formData.expected_amount} onChange={(e) => setFormData({...formData, expected_amount: parseFloat(e.target.value) || 0})} className="w-full h-12 rounded-xl border border-emerald-200 bg-emerald-50 px-4 text-sm font-bold text-emerald-700 outline-none shadow-sm" />
@@ -726,7 +736,7 @@ export default function AcademyCourses() {
                   </div>
                 )}
 
-                {/* NEW TAB: FACULTY ASSIGNMENT WIZARD */}
+                {/* TAB 2: FACULTY ASSIGNMENT WIZARD */}
                 {modalTab === 'details_faculty' && (
                   <div className="flex-1 overflow-y-auto p-5 sm:p-8 flex flex-col">
                     <div className="pt-2">
@@ -764,6 +774,7 @@ export default function AcademyCourses() {
                   </div>
                 )}
 
+                {/* TAB 3: SYLLABUS */}
                 {modalTab === 'syllabus' && (
                   <div className="flex-1 overflow-y-auto p-5 sm:p-8 flex flex-col">
                     <div className="w-full flex flex-col h-full gap-6">
@@ -806,6 +817,7 @@ export default function AcademyCourses() {
                   </div>
                 )}
 
+                {/* TAB 4: SUMMARY / STUDENTS */}
                 {modalTab === 'summary' && (
                   <div className="flex-1 overflow-y-auto p-5 sm:p-8 space-y-6">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -876,7 +888,7 @@ export default function AcademyCourses() {
                                      </div>
                                   </div>
                                   
-                                  {isHeadView && (
+                                  {isAdminView && (
                                      <div className="text-right flex flex-col items-end">
                                         <p className="text-sm font-black text-slate-900">₹{total.toLocaleString()}</p>
                                         <p className="text-[10px] font-bold text-emerald-600 mt-0.5">Paid: ₹{paid.toLocaleString()}</p>
@@ -893,7 +905,8 @@ export default function AcademyCourses() {
                   </div>
                 )}
 
-                {isHeadView && modalTab === 'finances' && (
+                {/* TAB 5: FINANCES (ADMIN ONLY) */}
+                {isAdminView && modalTab === 'finances' && (
                   <div className="flex-1 overflow-y-auto p-5 sm:p-8 space-y-6">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                        <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl shadow-sm text-center">
@@ -941,156 +954,8 @@ export default function AcademyCourses() {
                   </div>
                 )}
 
-                {/* FACULTY CLASS REPORTS TAB (USER VIEW WITH DRIVE LINK & UPLOAD TOGGLE) */}
-                {isUserView && modalTab === 'reports' && (
-                  <div className="flex-1 overflow-y-auto p-5 sm:p-8 space-y-6">
-                    <div className="bg-purple-50/50 border border-purple-100 rounded-2xl p-5 space-y-4">
-                       <h4 className="text-xs font-bold text-purple-900 uppercase tracking-wider mb-2">Submit Class Report / Notes</h4>
-
-                       <textarea value={classReportText} onChange={e => setClassReportText(e.target.value)} placeholder="Type today's class summary or updates here..." className="w-full h-24 rounded-xl border border-purple-200 bg-white p-3 text-xs outline-none focus:border-purple-500 resize-none shadow-sm" />
-
-                       {/* DRIVE LINK & UPLOAD REQUIREMENT TOGGLE */}
-                       {formData.drive_folder_url && (
-                          <div className="space-y-3 pt-2 border-t border-purple-100">
-                             <div className="flex items-center justify-between bg-white p-3.5 rounded-xl border border-purple-200 shadow-sm">
-                                <div>
-                                   <p className="text-xs font-bold text-purple-900">Do you have files to upload for this class?</p>
-                                   <p className="text-[10px] text-slate-500 mt-0.5">e.g., Assignments, Media, Class Notes</p>
-                                </div>
-                                <div className="flex gap-2">
-                                   <button type="button" onClick={() => { setNeedsUpload(true); setShowDriveHelpModal(true); }} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${needsUpload === true ? 'bg-purple-900 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>Yes</button>
-                                   <button type="button" onClick={() => { setNeedsUpload(false); setConfirmedUpload(false); }} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${needsUpload === false ? 'bg-slate-900 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>No</button>
-                                </div>
-                             </div>
-
-                             <AnimatePresence>
-                                {needsUpload === true && (
-                                   <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                                      <div className="p-4 bg-white rounded-xl border border-purple-200 shadow-sm mt-3 space-y-4">
-                                         <div className="flex items-center justify-between">
-                                            <div>
-                                               <p className="text-xs font-bold text-purple-900">Upload to Drive</p>
-                                               <p className="text-[10px] text-slate-500 mt-0.5">Click to open the shared workspace</p>
-                                            </div>
-                                            <div className="flex gap-2">
-                                               <button type="button" onClick={() => setShowDriveHelpModal(true)} className="px-3 py-1.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-lg text-[10px] font-bold shadow-sm hover:bg-purple-100 transition-colors">Instructions</button>
-                                               <a href={formData.drive_folder_url} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-purple-900 text-white rounded-lg text-[10px] font-bold flex items-center gap-1.5 shadow-sm hover:bg-purple-800 transition-colors">
-                                                  <ExternalLink className="h-3 w-3" /> Open Drive
-                                               </a>
-                                            </div>
-                                         </div>
-
-                                         <div className="flex items-center gap-3 pt-4 border-t border-purple-50">
-                                            <input type="checkbox" id="confirmUpload" checked={confirmedUpload} onChange={e => setConfirmedUpload(e.target.checked)} className="h-4 w-4 rounded border-purple-300 text-purple-900 focus:ring-purple-500 cursor-pointer" />
-                                            <label htmlFor="confirmUpload" className="text-xs font-bold text-slate-700 cursor-pointer select-none">
-                                               I confirm I have uploaded the required files to the Drive workspace.
-                                            </label>
-                                         </div>
-                                      </div>
-                                   </motion.div>
-                                )}
-                             </AnimatePresence>
-                          </div>
-                       )}
-
-                       <div className="flex justify-end pt-2">
-                          <button onClick={handleSaveClassReport} disabled={isSaving || !classReportText.trim() || (needsUpload === true && !confirmedUpload) || (formData.drive_folder_url && needsUpload === null)} className="px-6 py-2.5 bg-purple-900 text-white rounded-xl text-xs font-bold shadow-md hover:bg-purple-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                             {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit Class Report"}
-                          </button>
-                       </div>
-                    </div>
-
-                    <div>
-                       <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">My Submitted Class Reports</h4>
-                       <div className="space-y-4">
-                          {reports.find(r => r.project_id === selectedCourse?.id && r.employee_id === employeeId)?.entries?.length === 0 || !reports.find(r => r.project_id === selectedCourse?.id && r.employee_id === employeeId)?.entries ? (
-                             <p className="text-xs italic text-slate-400">No class reports submitted yet.</p>
-                          ) : (
-                             reports.find(r => r.project_id === selectedCourse?.id && r.employee_id === employeeId)?.entries.map((entry: any) => {
-                                const isEditing = editingEntryId === entry.id;
-                                const hasReaction = !!entry.reaction;
-                                const visual = getReactionVisuals(entry.reaction?.status);
-                                const StatusIcon = visual.icon;
-
-                                return (
-                                   <div key={entry.id} className="space-y-2">
-                                      <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm relative group">
-                                         {!isEditing && (
-                                            <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                               <button onClick={() => { setEditingEntryId(entry.id); setEditingEntryText(entry.text); }} className="p-1.5 text-slate-400 hover:text-purple-600 bg-slate-50 rounded-md"><Edit2 className="h-3.5 w-3.5" /></button>
-                                               <button onClick={() => handleDeleteEntry(employeeId, entry.id)} className="p-1.5 text-slate-400 hover:text-rose-600 bg-slate-50 rounded-md"><Trash2 className="h-3.5 w-3.5" /></button>
-                                            </div>
-                                         )}
-
-                                         {entry.type === 'upload' && (
-                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-purple-50 text-purple-700 border border-purple-100 text-[9px] font-bold uppercase tracking-wider rounded-lg mb-3">
-                                               <FileText className="h-3 w-3" /> Attached File Confirmation Provided
-                                            </span>
-                                         )}
-
-                                         {isEditing ? (
-                                            <div className="space-y-2">
-                                               <textarea value={editingEntryText} onChange={e => setEditingEntryText(e.target.value)} className="w-full h-20 rounded-xl border border-purple-200 bg-purple-50/30 p-3 text-xs outline-none resize-none" />
-                                               <div className="flex justify-end gap-2">
-                                                  <button onClick={() => setEditingEntryId(null)} className="px-3 py-1 text-[10px] font-bold text-slate-500 uppercase">Cancel</button>
-                                                  <button onClick={() => handleEditUserEntry(entry.id)} disabled={isSaving} className="px-4 py-1 bg-purple-900 text-white rounded-lg text-[10px] font-bold uppercase">Save</button>
-                                               </div>
-                                            </div>
-                                         ) : (
-                                            <p className="text-xs text-slate-800 whitespace-pre-wrap pr-16 leading-relaxed">{entry.text}</p>
-                                         )}
-
-                                         <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mt-3">{new Date(entry.timestamp).toLocaleString()}</span>
-                                      </div>
-
-                                      {hasReaction && (
-                                         <div className="ml-6 sm:ml-10 relative">
-                                            <CornerDownRight className="absolute -left-5 top-3 h-4 w-4 text-slate-300" />
-                                            <div className={`p-3.5 rounded-xl border ${visual.bg} ${visual.border}`}>
-                                               <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest ${visual.text} mb-1`}>
-                                                  <StatusIcon className="h-3.5 w-3.5" /> Admin Feedback: {entry.reaction.status}
-                                               </span>
-                                               {entry.reaction.text && <p className={`text-xs ${visual.text} opacity-90`}>{entry.reaction.text}</p>}
-                                            </div>
-                                         </div>
-                                      )}
-                                   </div>
-                                );
-                             })
-                          )}
-                       </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* MY PAYOUTS TAB (FACULTY / USER VIEW) */}
-                {isUserView && modalTab === 'my_payouts' && (
-                  <div className="flex-1 overflow-y-auto p-5 sm:p-8 space-y-6 text-center sm:text-left">
-                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-                        <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl shadow-sm text-center">
-                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Allocated</p>
-                           <p className="text-2xl font-black text-purple-900">₹{facultyTotalAllocated.toLocaleString()}</p>
-                        </div>
-                        <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl shadow-sm text-center">
-                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Received Payouts</p>
-                           <p className="text-2xl font-black text-emerald-600">₹{facultyTotalEarned.toLocaleString()}</p>
-                        </div>
-                        <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl shadow-sm text-center">
-                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Balance Due</p>
-                           <p className="text-2xl font-black text-rose-500">₹{facultyBalanceDue.toLocaleString()}</p>
-                        </div>
-                     </div>
-
-                     <div className="flex justify-center sm:justify-end mb-6">
-                        <button onClick={handlePrintPayslip} disabled={isPrintingPayslip} className="bg-purple-900 text-white rounded-xl h-12 px-8 text-xs font-bold shadow-md hover:bg-purple-800 transition-colors flex items-center gap-2">
-                           <Download className="h-4 w-4" /> Download Payout Statement PDF
-                        </button>
-                     </div>
-                  </div>
-                )}
-
-                {/* ADMIN FACULTY REVIEW & PAYROLL DIRECTORY */}
-                {isHeadView && modalTab === 'faculty' && (
+                {/* TAB 6: FACULTY PAYROLL (ADMIN ONLY) */}
+                {isAdminView && modalTab === 'faculty' && (
                   <div className="flex-1 overflow-y-auto p-5 sm:p-8 space-y-6">
                     <div className="flex justify-between items-center">
                        <div>
@@ -1102,7 +967,6 @@ export default function AcademyCourses() {
                        </button>
                     </div>
 
-                    {/* FACULTY CARDS DIRECTORY */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                        {(formData.assignee_ids || []).length === 0 ? <p className="text-xs italic text-slate-400 col-span-full">No faculty assigned to this batch.</p> : (formData.assignee_ids || []).map(empId => {
                           const emp = getAvatar(empId);
@@ -1132,35 +996,28 @@ export default function AcademyCourses() {
 
                     <AnimatePresence>
                        {showPayoutForm && (
-                          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                             <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-5 space-y-4">
-                                <h5 className="text-xs font-bold text-emerald-800 uppercase tracking-widest">Disburse Payout to Faculty</h5>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                                   <div>
-                                      <label className="text-[10px] font-bold text-emerald-700 uppercase block mb-1">Faculty Member</label>
-                                      <select value={paymentForm.employee_id} onChange={e => setPaymentForm({...paymentForm, employee_id: e.target.value})} className="w-full h-11 rounded-xl border border-emerald-200 bg-white px-3 text-xs font-bold text-slate-800 outline-none">
-                                         <option value="">-- Select Tutor --</option>
-                                         {(formData.assignee_ids || []).map(id => <option key={id} value={id}>{getAvatar(id)?.name}</option>)}
-                                      </select>
+                          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden shrink-0">
+                             <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl sm:rounded-3xl p-5 sm:p-6 mb-2">
+                                <h4 className="text-[12px] sm:text-sm font-bold text-emerald-800 uppercase tracking-widest mb-4 sm:mb-5">Issue Payout / Advance</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+                                   <div className="lg:col-span-1">
+                                     <label className="text-[9px] sm:text-[10px] font-bold text-emerald-600 uppercase block mb-1.5 px-1">Employee</label>
+                                     <select value={paymentForm.employee_id} onChange={e => setPaymentForm({...paymentForm, employee_id: e.target.value})} className="w-full h-11 rounded-xl border border-emerald-200 bg-white px-3 text-xs font-bold text-slate-800 outline-none focus:border-emerald-500 shadow-sm cursor-pointer"><option value="">-- Select --</option>{(formData.assignee_ids || []).map(id => <option key={id} value={id}>{getAvatar(id)?.name}</option>)}</select>
                                    </div>
-                                   <div>
-                                      <label className="text-[10px] font-bold text-emerald-700 uppercase block mb-1">Amount (₹)</label>
-                                      <input type="number" value={paymentForm.amount} onChange={e => setPaymentForm({...paymentForm, amount: parseFloat(e.target.value)||0})} className="w-full h-11 rounded-xl border border-emerald-200 bg-white px-3 text-xs font-black text-emerald-700 outline-none" />
+                                   <div className="lg:col-span-1">
+                                     <label className="text-[9px] sm:text-[10px] font-bold text-emerald-600 uppercase block mb-1.5 px-1">Amount (₹)</label>
+                                     <input type="number" value={paymentForm.amount} onChange={e => setPaymentForm({...paymentForm, amount: parseFloat(e.target.value)||0})} className="w-full h-11 rounded-xl border border-emerald-200 bg-white px-3 text-xs font-black text-emerald-700 outline-none focus:border-emerald-500 shadow-sm min-w-0" />
                                    </div>
-                                   <div>
-                                      <label className="text-[10px] font-bold text-emerald-700 uppercase block mb-1">Type</label>
-                                      <select value={paymentForm.payment_type} onChange={e => setPaymentForm({...paymentForm, payment_type: e.target.value})} className="w-full h-11 rounded-xl border border-emerald-200 bg-white px-3 text-xs font-bold text-slate-800 outline-none">
-                                         <option>Advance</option>
-                                         <option>Final Payout</option>
-                                         <option>Bonus / Incentive</option>
-                                      </select>
+                                   <div className="lg:col-span-1">
+                                     <label className="text-[9px] sm:text-[10px] font-bold text-emerald-600 uppercase block mb-1.5 px-1">Type</label>
+                                     <select value={paymentForm.payment_type} onChange={e => setPaymentForm({...paymentForm, payment_type: e.target.value})} className="w-full h-11 rounded-xl border border-emerald-200 bg-white px-3 text-xs font-bold text-slate-800 outline-none focus:border-emerald-500 shadow-sm cursor-pointer"><option>Advance</option><option>Final Payout</option><option>Bonus / Incentive</option></select>
                                    </div>
-                                   <div>
-                                      <label className="text-[10px] font-bold text-emerald-700 uppercase block mb-1">Notes & Confirm</label>
-                                      <div className="flex gap-2">
-                                         <input type="text" placeholder="Details..." value={paymentForm.notes} onChange={e => setPaymentForm({...paymentForm, notes: e.target.value})} className="flex-1 h-11 rounded-xl border border-emerald-200 bg-white px-3 text-xs outline-none min-w-0" />
-                                         <button onClick={handleRecordFacultyPayment} disabled={isSaving} className="h-11 px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md transition-colors shrink-0">Transfer</button>
-                                      </div>
+                                   <div className="lg:col-span-2">
+                                     <label className="text-[9px] sm:text-[10px] font-bold text-emerald-600 uppercase block mb-1.5 px-1">Notes & Confirm</label>
+                                     <div className="flex gap-2">
+                                        <input type="text" placeholder="Details..." value={paymentForm.notes} onChange={e => setPaymentForm({...paymentForm, notes: e.target.value})} className="flex-1 h-11 rounded-xl border border-emerald-200 bg-white px-3 text-xs outline-none min-w-0" />
+                                        <button onClick={handleRecordFacultyPayment} disabled={isSaving} className="h-11 px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md transition-colors shrink-0">Transfer</button>
+                                     </div>
                                    </div>
                                 </div>
                              </div>
@@ -1190,7 +1047,7 @@ export default function AcademyCourses() {
                              <div key={empId} className="flex flex-col border-b border-slate-100 last:border-none">
                                 <div className="grid grid-cols-12 gap-2 items-center px-4 py-3 cursor-pointer hover:bg-slate-50" onClick={() => setExpandedFinanceEmpId(isExpanded ? null : empId)}>
                                    <div className="col-span-3 flex items-center gap-3">
-                                      <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center font-bold text-xs text-slate-600 overflow-hidden">{emp?.profile_image_url ? <img src={emp.profile_image_url} alt="" className="h-full w-full object-cover" /> : (emp?.name || 'U').charAt(0)}</div>
+                                      <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center font-bold text-xs text-slate-600 overflow-hidden shadow-sm">{emp?.profile_image_url ? <img src={emp.profile_image_url} alt="" className="h-full w-full object-cover" /> : (emp?.name || 'U').charAt(0).toUpperCase()}</div>
                                       <span className="text-xs font-bold text-slate-900">{emp?.name}</span>
                                       <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                                    </div>
@@ -1211,14 +1068,14 @@ export default function AcademyCourses() {
                                          {empPaymentsList.length === 0 ? <p className="text-[11px] italic text-slate-500">No payouts disbursed yet.</p> : (
                                             <div className="space-y-1.5">
                                                {empPaymentsList.map(p => (
-                                                  <div key={p.id} className="flex justify-between items-center text-xs bg-white border border-slate-200 p-2 rounded-lg">
+                                                  <div key={p.id} className="flex justify-between items-center text-[10px] bg-white border border-slate-200 p-2 rounded-lg">
                                                      <div className="flex items-center gap-2">
                                                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
                                                         <span className="font-bold text-slate-700">{new Date(p.payment_date).toLocaleDateString()}</span>
                                                         <span className="text-slate-500">({p.payment_type}){p.notes && ` - ${p.notes}`}</span>
                                                      </div>
                                                      <div className="flex items-center gap-3">
-                                                        <span className="font-black text-emerald-600">₹{parseFloat(p.amount).toLocaleString()}</span>
+                                                        <span className="font-black text-emerald-600">+ ₹{parseFloat(p.amount).toLocaleString()}</span>
                                                         <button onClick={() => handleDeleteFacultyPayment(p.id)} className="text-rose-500 hover:text-rose-700 p-1"><Trash2 className="h-3 w-3" /></button>
                                                      </div>
                                                   </div>
@@ -1228,45 +1085,36 @@ export default function AcademyCourses() {
                                       </motion.div>
                                    )}
                                 </AnimatePresence>
-
                              </div>
-                          )
+                          );
                        })}
                     </div>
-
-                    {hasAllocationChanges && (
-                       <div className="flex justify-end pt-2">
-                          <button onClick={handleSaveAllocations} disabled={isSaving} className="px-6 py-2.5 bg-purple-900 text-white rounded-xl text-xs font-bold shadow-md hover:bg-purple-800 transition-colors">
-                             {isSaving ? 'Saving...' : 'Save Faculty Allocations'}
-                          </button>
-                       </div>
-                    )}
                   </div>
                 )}
 
-                {/* FIX: Wizard dynamic footer for next/back/submit */}
-                <div className="p-4 sm:p-6 border-t border-slate-100 bg-[#FAFCFF] flex justify-end items-center gap-4 shrink-0 mt-auto">
+                {/* MODIFIED: Modal Footer - Fixed Cancel Button Position */}
+                <div className="p-4 sm:p-6 border-t border-slate-100 bg-[#FAFCFF] flex justify-end items-center gap-3 shrink-0 mt-auto">
                   {selectedCourse && isAdminView && modalTab === 'details' && (
-                    <button onClick={handleDeleteCourse} disabled={isSaving} className="border border-rose-200 text-rose-600 bg-white hover:bg-rose-50 rounded-xl h-11 px-5 flex items-center justify-center shadow-sm mr-auto transition-colors"><Trash2 className="h-4 w-4" /></button>
+                    <button onClick={handleDeleteCourse} disabled={isSaving} className="border border-rose-200 text-rose-600 bg-white hover:bg-rose-50 rounded-xl h-11 px-5 flex items-center justify-center shadow-sm mr-auto transition-colors shrink-0"><Trash2 className="h-4 w-4" /></button>
                   )}
                   
-                  <button onClick={() => setIsModalOpen(false)} className="rounded-xl border border-slate-200 bg-white h-11 px-6 font-bold text-[13px] text-slate-600 hover:bg-slate-50 shadow-sm transition-colors mr-auto">Cancel</button>
+                  <button onClick={() => setIsModalOpen(false)} className="rounded-xl border border-slate-200 bg-white h-11 px-6 font-bold text-[13px] text-slate-600 hover:bg-slate-50 shadow-sm transition-colors flex-1 sm:flex-none">Cancel</button>
 
                   {isAdminView && (
                     <>
                       {!selectedCourse && modalTab === 'details' && (
-                        <button onClick={() => setModalTab('details_faculty')} className="bg-slate-900 text-white hover:bg-slate-800 rounded-xl h-11 px-8 font-bold text-[13px] shadow-md transition-colors flex items-center justify-center">Next: Assign Faculty</button>
+                        <button onClick={() => setModalTab('details_faculty')} className="bg-slate-900 text-white hover:bg-slate-800 rounded-xl h-11 px-8 font-bold text-[13px] shadow-md transition-colors flex items-center justify-center flex-1 sm:flex-none">Next: Assign Faculty</button>
                       )}
                       {!selectedCourse && modalTab === 'details_faculty' && (
-                        <button onClick={() => setModalTab('syllabus')} className="bg-slate-900 text-white hover:bg-slate-800 rounded-xl h-11 px-8 font-bold text-[13px] shadow-md transition-colors flex items-center justify-center">Next: Build Syllabus</button>
+                        <button onClick={() => setModalTab('syllabus')} className="bg-slate-900 text-white hover:bg-slate-800 rounded-xl h-11 px-8 font-bold text-[13px] shadow-md transition-colors flex items-center justify-center flex-1 sm:flex-none">Next: Build Syllabus</button>
                       )}
                       {!selectedCourse && modalTab === 'syllabus' && (
-                        <button onClick={handleSaveCourse} disabled={isSaving} className="bg-purple-900 text-white hover:bg-purple-800 rounded-xl h-11 px-8 font-bold text-[13px] shadow-md transition-colors flex items-center justify-center">
+                        <button onClick={handleSaveCourse} disabled={isSaving} className="bg-purple-900 text-white hover:bg-purple-800 rounded-xl h-11 px-8 font-bold text-[13px] shadow-md transition-colors flex items-center justify-center flex-1 sm:flex-none">
                           {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Finish & Create Batch"}
                         </button>
                       )}
                       {selectedCourse && (
-                        <button onClick={handleSaveCourse} disabled={isSaving} className="bg-purple-900 text-white hover:bg-purple-800 rounded-xl h-11 px-8 font-bold text-[13px] shadow-md transition-colors flex items-center justify-center">
+                        <button onClick={handleSaveCourse} disabled={isSaving} className="bg-purple-900 text-white hover:bg-purple-800 rounded-xl h-11 px-8 font-bold text-[13px] shadow-md transition-colors flex items-center justify-center flex-1 sm:flex-none">
                           {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Changes"}
                         </button>
                       )}
