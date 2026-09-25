@@ -12,7 +12,6 @@ interface AuthState {
   permissions: { canViewFinancials: boolean } | null; 
   
   checkSession: () => Promise<void>;
-  // MODIFIED: Accepts string or number to safely handle HTML select inputs
   signIn: (email: string, password: string, selectedRole?: 'admin' | 'head' | 'user' | null, selectedCompanyId?: number | string | null) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   setActiveWorkspace: (id: number | null) => Promise<void>;
@@ -40,18 +39,24 @@ export const useAuthStore = create<AuthState>()(
           const currentCompanyId = get().companyId;
           const currentWorkspace = get().activeWorkspace;
           
+          const targetWorkspace = currentWorkspace || currentCompanyId || emp?.company_id || null;
+
+          // MODIFIED: We set the base data but KEEP isLoading: true
           set({ 
             user: session.user, 
             employeeId: emp?.id || null, 
             role: currentRole || emp?.access_level || 'user', 
             companyId: currentCompanyId || emp?.company_id || null, 
-            activeWorkspace: currentWorkspace || currentCompanyId || emp?.company_id || null,
-            isLoading: false 
+            activeWorkspace: targetWorkspace
           }); 
 
-          if (get().activeWorkspace) {
-            await get().setActiveWorkspace(get().activeWorkspace);
+          // Wait for the workspace permissions and specific role to be fully hydrated
+          if (targetWorkspace) {
+            await get().setActiveWorkspace(targetWorkspace);
           }
+          
+          // MODIFIED: NOW we stop the loading spinner, preventing the UI flash
+          set({ isLoading: false });
         } else {
           set({ user: null, role: null, companyId: null, employeeId: null, activeWorkspace: null, permissions: null, isLoading: false });
         }
@@ -68,24 +73,26 @@ export const useAuthStore = create<AuthState>()(
         
         const { data: emp } = await supabase.from('employees').select('access_level, company_id, id').eq('email', email).single();
         
-        // MODIFIED: Force selectedCompanyId to be a clean Number to prevent strict-equality layout crashes
         const parsedCompanyId = selectedCompanyId ? Number(selectedCompanyId) : null;
         const initialCompanyId = parsedCompanyId || emp?.company_id || null;
         const initialRole = selectedRole || emp?.access_level || 'user';
 
+        // MODIFIED: We set the base data but KEEP isLoading: true
         set({ 
           user: auth.user, 
           employeeId: emp?.id || null, 
           role: initialRole, 
           companyId: initialCompanyId, 
-          activeWorkspace: initialCompanyId,
-          isLoading: false 
+          activeWorkspace: initialCompanyId
         });
 
+        // Wait for the workspace permissions and specific role to be fully hydrated
         if (initialCompanyId) {
             await get().setActiveWorkspace(initialCompanyId);
         }
         
+        // MODIFIED: NOW we stop the loading spinner, preventing the UI flash
+        set({ isLoading: false });
         return { error: null };
       },
 
