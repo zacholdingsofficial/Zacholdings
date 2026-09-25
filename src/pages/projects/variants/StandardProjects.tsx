@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Search, FolderKanban, CheckCircle2, AlertCircle, X, Check, User, Trash2, Clock, Download, Loader2, ChevronDown, ExternalLink, UploadCloud, Calendar, Info, Layers, FileText, Edit2, ThumbsUp, ThumbsDown, Eye, MessageCircle, CornerDownRight, Library, Users, GraduationCap } from "lucide-react";
+import { Plus, Search, FolderKanban, CheckCircle2, AlertCircle, X, Check, User, Trash2, Clock, Download, Loader2, ChevronDown, ExternalLink, UploadCloud, Calendar, Info, Layers, FileText, Edit2, ThumbsUp, ThumbsDown, Eye, MessageCircle, CornerDownRight, Lock } from "lucide-react";
 import { useAuthStore } from "../../../store/authStore";
 import { useDataStore } from "../../../store/dataStore";
 import { supabase } from "../../../supabase";
@@ -15,10 +15,9 @@ const DEFAULT_MILESTONES = {
 };
 
 export default function StandardProjects() {
-  const authStore = useAuthStore();
-  const { role, employeeId, activeWorkspace, companyId } = authStore;
+  const { role, employeeId, activeWorkspace, companyId } = useAuthStore();
   const store = useDataStore();
-  const { projects, tasks, reports, employees, companies, customers, salaryPayments, projectAllocations, invoices, fetchAllData } = store;
+  const { projects, tasks, reports, employees, companies, customers, salaryPayments, projectAllocations, fetchAllData } = store;
 
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
@@ -31,12 +30,13 @@ export default function StandardProjects() {
 
   const [viewMode, setViewMode] = useState<'admin' | 'user'>('admin');
   const [roleSelectProject, setRoleSelectProject] = useState<any>(null);
-  
-  // NEW: Interceptor for routing to Academy Workspace
-  const [academyIntercept, setAcademyIntercept] = useState<any>(null);
 
+  const isImpersonating = role === 'admin' && activeWorkspace !== null;
+  const isGlobalAdmin = role === 'admin' && !isImpersonating;
+  const isHead = role === 'head' || isImpersonating;
   const isUserView = role === 'user' || viewMode === 'user';
-  const isAdminView = (role === 'admin' || role === 'head') && viewMode === 'admin';
+  const isAdminView = (isGlobalAdmin || isHead) && viewMode === 'admin';
+  const currentCompanyId = isGlobalAdmin ? "" : (activeWorkspace || companyId);
 
   const [expandedFinanceEmpId, setExpandedFinanceEmpId] = useState<number | null>(null);
   const [showPayoutForm, setShowPayoutForm] = useState(false);
@@ -74,7 +74,8 @@ export default function StandardProjects() {
   const [allocationsForm, setAllocationsForm] = useState<{[empId: number]: {allocated: number, incentive: number}}>({});
   const [paymentForm, setPaymentForm] = useState({ employee_id: "", amount: 0, payment_type: "Advance", notes: "" });
 
-  const currentCompanyId = role === 'admin' ? (activeWorkspace || "") : companyId;
+  const currentCompany = companies.find((c: any) => c.id?.toString() === currentCompanyId?.toString());
+  const showFinance = role === 'admin' || (role === 'head' && currentCompany?.allow_head_finance !== false);
 
   const myReport = selectedProject ? reports.find(r => r.project_id === selectedProject.id && r.employee_id === employeeId) : null;
   const myEntries = Array.isArray(myReport?.entries) ? myReport.entries : [];
@@ -82,27 +83,44 @@ export default function StandardProjects() {
   const adminTimelineReport = (selectedProject && timelineModalEmpId) ? reports.find(r => r.project_id === selectedProject.id && r.employee_id === timelineModalEmpId) : null;
   const adminTimelineEntries = Array.isArray(adminTimelineReport?.entries) ? adminTimelineReport.entries : [];
 
+  // DYNAMIC TERMINOLOGY: Adapts the layout text if the project belongs to an Academy
+  const projCompId = selectedProject ? selectedProject.company_id?.toString() : formData.company_id;
+  const projComp = companies.find((c: any) => c.id?.toString() === projCompId);
+  const isAcademy = projComp?.business_type === 'academy' || ['Course', 'Workshop', 'Internship'].includes(selectedProject?.metadata?.type);
+
+  const t_project = isAcademy ? "Program" : "Project";
+  const t_client = isAcademy ? "Student" : "Client";
+  const t_tasks = isAcademy ? "Curriculum Modules" : "Action Items";
+  const t_task = isAcademy ? "Module" : "Task";
+
+  // MODIFIED: Removed the 'Course/Workshop' exclusion filter so Admins and Heads can see Academy projects here
   const visibleProjects = projects.filter(p => {
     if (!p.name) return false;
 
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = filterStatus === "All" || p.status === filterStatus;
-    const isAssigned = (role === 'admin' || role === 'head') || (Array.isArray(p.assignee_ids) ? p.assignee_ids : []).includes(employeeId);
 
-    if (role === 'admin' && !activeWorkspace) {
+    if (isGlobalAdmin) {
       const matchesCompany = filterCompanyId === "all" || p.company_id?.toString() === filterCompanyId;
-      return matchesSearch && matchesStatus && isAssigned && matchesCompany;
+      return matchesSearch && matchesStatus && matchesCompany;
     }
 
-    return matchesSearch && matchesStatus && isAssigned && p.company_id === currentCompanyId;
+    const isAssigned = isHead || (Array.isArray(p.assignee_ids) ? p.assignee_ids : []).includes(employeeId);
+    return matchesSearch && matchesStatus && isAssigned && p.company_id?.toString() === currentCompanyId?.toString();
   }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   const availableCustomers = customers.filter(c => c.company_id === parseInt(formData.company_id || '0'));
   
-  // FIX: System Admins are now strictly excluded from task assignments
-  const availableEmployees = employees.filter(emp => 
-    emp.role !== 'admin' && emp.access_level !== 'admin' && emp.company_id === parseInt(formData.company_id || '0')
-  );
+  const availableEmployees = employees.filter(emp => {
+    const assignments = emp.company_roles && emp.company_roles.length > 0 
+      ? emp.company_roles 
+      : [{ company_id: emp.company_id, access_level: emp.access_level }];
+      
+    const hasGlobalAdmin = assignments.some((cr: any) => cr.access_level === 'admin');
+    if (hasGlobalAdmin) return false;
+
+    return assignments.some((cr: any) => cr.company_id?.toString() === formData.company_id?.toString());
+  });
 
   const handleProjectClick = (project: any) => {
     if ((role === 'admin' || role === 'head') && (Array.isArray(project.assignee_ids) ? project.assignee_ids : []).includes(employeeId)) {
@@ -152,7 +170,9 @@ export default function StandardProjects() {
         currentAlloc[id] = { allocated: a?.allocated_amount || 0, incentive: a?.incentive_amount || 0 };
       });
     }
-    setAllocationsForm(currentAlloc); setModalTab("details"); setIsModalOpen(true);
+    setAllocationsForm(currentAlloc); 
+    setModalTab("details"); 
+    setIsModalOpen(true);
   };
 
   const handleMilestoneToggle = (phase: keyof typeof DEFAULT_MILESTONES, key: string) => {
@@ -180,8 +200,8 @@ export default function StandardProjects() {
   };
 
   const handleSaveProject = async () => {
-    if (!formData.name.trim()) { setModalTab('details'); return alert("Project name is required."); }
-    if (!formData.company_id) { setModalTab('details'); return alert("Please select a Company for this project."); }
+    if (!formData.name.trim()) { setModalTab('details'); return alert(`${t_project} name is required.`); }
+    if (!formData.company_id) { setModalTab('details'); return alert(`Please select an Owning Subsidiary for this ${t_project.toLowerCase()}.`); }
 
     let finalCustomerId: number | null = formData.customer_id ? parseInt(formData.customer_id) : null;
     let finalInternalId: number | null = null;
@@ -189,7 +209,7 @@ export default function StandardProjects() {
     setIsSaving(true);
     try {
       if (customerType === 'new') {
-        if (!newCustomer.name.trim()) { setModalTab('details'); throw new Error("New Customer Name is required."); }
+        if (!newCustomer.name.trim()) { setModalTab('details'); throw new Error(`New ${t_client} Name is required.`); }
         const { data: cData, error: cError } = await supabase.from('customers').insert([{ company_id: parseInt(formData.company_id), name: newCustomer.name, phone: newCustomer.phone }]).select().single();
         if (cError) throw cError;
         finalCustomerId = cData.id;
@@ -206,7 +226,7 @@ export default function StandardProjects() {
 
       if (!selectedProject) {
         const { data, error } = await supabase.from('projects').insert([payload]).select().single();
-        if (error) throw new Error(`Project Error: ${error.message}`);
+        if (error) throw new Error(`Database Error: ${error.message}`);
 
         if (pendingTasks.length > 0) {
           const tasksToInsert = pendingTasks.map(t => ({ project_id: data.id, title: t.title, assignee_id: t.assignee_id, is_completed: t.is_completed, deadline: t.deadline }));
@@ -215,12 +235,12 @@ export default function StandardProjects() {
 
       } else {
         const { error } = await supabase.from('projects').update(payload).eq('id', selectedProject.id);
-        if (error) throw new Error(`Project Update Error: ${error.message}`);
+        if (error) throw new Error(`Update Error: ${error.message}`);
       }
 
       await fetchAllData(); 
       if(modalTab === 'details' || modalTab === 'tasks') setIsModalOpen(false); 
-      else alert('Project updated successfully.');
+      else alert(`${t_project} updated successfully.`);
     } catch (error: any) { alert(error.message); } finally { setIsSaving(false); }
   };
 
@@ -237,7 +257,7 @@ export default function StandardProjects() {
 
       if (checkError) throw checkError;
       if (existingInvoices && existingInvoices.length > 0) {
-        return alert("An invoice has already been generated for this project.");
+        return alert(`An invoice has already been generated for this ${t_project.toLowerCase()}.`);
       }
 
       const invPayload = {
@@ -258,7 +278,7 @@ export default function StandardProjects() {
       if (invData) {
         const { error: itemError } = await supabase.from('invoice_items').insert([{ 
           invoice_id: invData.id, 
-          description: `Project: ${selectedProject.name}`, 
+          description: `${t_project}: ${selectedProject.name}`, 
           quantity: 1, 
           rate: formData.expected_amount, 
           total: formData.expected_amount 
@@ -429,7 +449,7 @@ export default function StandardProjects() {
   const handleAddTask = async () => {
     if (!newTaskTitle.trim() || !newTaskAssignee || !newTaskDeadline) return;
     if (formData.due_date && new Date(newTaskDeadline) > new Date(formData.due_date)) {
-      alert(`Task deadline cannot exceed the project's main due date (${formData.due_date}).`);
+      alert(`${t_task} deadline cannot exceed the ${t_project.toLowerCase()}'s main due date (${formData.due_date}).`);
       return;
     }
 
@@ -444,7 +464,7 @@ export default function StandardProjects() {
 
   const handleUpdateTaskDeadline = async (task: any, index: number, newDeadline: string) => {
     if (formData.due_date && new Date(newDeadline) > new Date(formData.due_date)) {
-      alert(`Task deadline cannot exceed the project's main due date (${formData.due_date}).`);
+      alert(`${t_task} deadline cannot exceed the ${t_project.toLowerCase()}'s main due date (${formData.due_date}).`);
       return;
     }
     if (selectedProject) {
@@ -562,11 +582,13 @@ export default function StandardProjects() {
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 sm:gap-6 print:hidden">
           <div>
             <p className="text-[9px] sm:text-[11px] font-bold text-blue-600 uppercase tracking-[0.2em] mb-1.5 sm:mb-2 bg-blue-50 inline-block px-3 py-1 rounded-full">Workflows & Tasks</p>
-            <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-slate-900 mt-1 sm:mt-2">Projects.</h1>
+            <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-slate-900 mt-1 sm:mt-2">
+              {currentCompany?.business_type === 'academy' ? 'Programs & Courses.' : 'Projects.'}
+            </h1>
           </div>
           {(role === 'admin' || role === 'head') && (
             <button onClick={openNewProject} className="bg-gradient-to-r from-blue-900 to-indigo-800 text-white shadow-lg shadow-blue-900/20 hover:shadow-xl hover:-translate-y-0.5 px-4 sm:px-6 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl text-[11px] sm:text-[13px] font-bold transition-all flex items-center shrink-0">
-              <Plus className="h-4 w-4 mr-1.5 sm:mr-2" /> New Project
+              <Plus className="h-4 w-4 mr-1.5 sm:mr-2" /> New {currentCompany?.business_type === 'academy' ? 'Program' : 'Project'}
             </button>
           )}
         </div>
@@ -574,7 +596,7 @@ export default function StandardProjects() {
         <div className="bg-white p-2 rounded-xl sm:rounded-2xl border border-slate-100 shadow-sm flex flex-col sm:flex-row gap-2 print:hidden">
           <div className="relative flex-1">
             <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 h-3.5 sm:h-4 w-3.5 sm:w-4 text-slate-400" />
-            <input type="text" placeholder="Search projects by name..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full h-10 sm:h-11 pl-9 sm:pl-11 pr-4 rounded-lg sm:rounded-xl border-none text-[13px] sm:text-sm font-medium outline-none bg-transparent focus:ring-0 placeholder:text-slate-400" />
+            <input type="text" placeholder="Search by name..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full h-10 sm:h-11 pl-9 sm:pl-11 pr-4 rounded-lg sm:rounded-xl border-none text-[13px] sm:text-sm font-medium outline-none bg-transparent focus:ring-0 placeholder:text-slate-400" />
           </div>
 
           {role === 'admin' && !activeWorkspace && (
@@ -605,69 +627,11 @@ export default function StandardProjects() {
           {visibleProjects.length === 0 ? (
              <div className="h-48 sm:h-64 border border-slate-200 border-dashed rounded-2xl sm:rounded-3xl flex flex-col items-center justify-center text-slate-400 bg-slate-50/50">
                 <FolderKanban className="h-8 w-8 sm:h-10 sm:w-10 mb-2 sm:mb-3 text-slate-300" />
-                <p className="text-[11px] sm:text-sm font-bold uppercase tracking-wider">No Projects Found</p>
+                <p className="text-[11px] sm:text-sm font-bold uppercase tracking-wider">No Records Found</p>
              </div>
           ) : (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-5">
               {visibleProjects.map(project => {
-                const pType = project.metadata?.type;
-                const isAcademy = pType === 'Course' || pType === 'Workshop' || pType === 'Internship';
-
-                // ==========================================
-                // ACADEMY CARD RENDER
-                // ==========================================
-                if (isAcademy) {
-                  const courseModules = tasks.filter(t => t.project_id === project.id);
-                  const completedModules = courseModules.filter(t => t.is_completed).length;
-                  const totalModules = courseModules.length;
-                  const progressPct = totalModules === 0 ? 0 : Math.round((completedModules / totalModules) * 100);
-                  const enrolledCount = invoices ? invoices.filter((i: any) => i.project_id === project.id).length : 0;
-                  const actualType = pType || 'Course';
-
-                  return (
-                    <div key={project.id} onClick={() => setAcademyIntercept(project)} className="bg-white rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm hover:shadow-md hover:border-purple-200 transition-all flex flex-col overflow-hidden cursor-pointer group">
-                      <div className="p-5 sm:p-7 flex flex-col gap-5">
-                        <div className="flex justify-between items-start gap-4">
-                          <div className="flex-1 min-w-0 flex items-start gap-4">
-                            <div className="h-12 w-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0 border border-purple-100 group-hover:scale-105 transition-transform"><Library className="h-5 w-5" /></div>
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest bg-slate-100 px-2 py-0.5 rounded-md">{actualType}</span>
-                              </div>
-                              <h3 className="text-[15px] sm:text-lg font-bold text-slate-900 tracking-tight group-hover:text-purple-900 transition-colors truncate">{project.name}</h3>
-                              <p className="text-[10px] sm:text-[11px] text-slate-500 font-bold uppercase tracking-wider mt-1 truncate flex items-center gap-2">
-                                <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {enrolledCount} Students</span>
-                                {role === 'head' && <><span>•</span><span>Fee: ₹{(project.expected_amount || 0).toLocaleString()}</span></>}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="shrink-0">
-                            <div className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider border 
-                              ${project.status === 'Graduated' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
-                                project.status === 'On Hold' || project.status === 'Postponed' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                                'bg-purple-50 text-purple-700 border-purple-200'}`}>
-                               {project.status || 'Enrollment'}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between pt-4 border-t border-slate-50">
-                          <div className="flex items-center gap-4">
-                             <div className="w-32 sm:w-48 bg-slate-100 h-2 rounded-full overflow-hidden">
-                               <div className="h-full bg-gradient-to-r from-purple-600 to-indigo-500 transition-all duration-1000" style={{ width: `${progressPct}%` }} />
-                             </div>
-                             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{progressPct}% Syllabus</span>
-                          </div>
-                          <span className="text-[11px] font-bold text-purple-700 bg-purple-50 px-3 py-1 rounded-lg border border-purple-100">View Details →</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                }
-
-                // ==========================================
-                // STANDARD CARD RENDER
-                // ==========================================
                 const projectTasks = tasks.filter(t => t.project_id === project.id);
                 const completedTasks = projectTasks.filter(t => t.is_completed).length;
                 const totalTasks = projectTasks.length;
@@ -675,6 +639,7 @@ export default function StandardProjects() {
                 const radius = 18; const circumference = 2 * Math.PI * radius; const progressOffset = circumference - (progressPct / 100) * circumference;
 
                 const dueStatus = project.status !== 'Completed' ? getDueDateStatus(project.due_date) : null;
+                const owningCompanyName = companies.find(c => c.id === project.company_id)?.name;
 
                 return (
                   <div key={project.id} className="bg-white rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all flex flex-col relative overflow-hidden group">
@@ -689,9 +654,16 @@ export default function StandardProjects() {
                     <div className="ml-1.5 p-4 sm:p-7 flex flex-col gap-4 sm:gap-6">
                       <div className="flex justify-between items-start gap-4">
                         <div className="flex-1 min-w-0">
-                          <h3 onClick={() => handleProjectClick(project)} className="text-[15px] sm:text-lg font-bold text-slate-900 tracking-tight cursor-pointer hover:text-blue-900 transition-colors inline-block truncate w-full">{project.name}</h3>
+                          <h3 onClick={() => handleProjectClick(project)} className="text-[15px] sm:text-lg font-bold text-slate-900 tracking-tight cursor-pointer hover:text-blue-900 transition-colors inline-block w-full truncate">
+                            {project.name}
+                            {isGlobalAdmin && owningCompanyName && (
+                                <span className="ml-2 inline-block text-[9px] font-bold uppercase tracking-widest bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md border border-slate-200 align-middle">
+                                  {owningCompanyName}
+                                </span>
+                            )}
+                          </h3>
                           <p className="text-[9px] sm:text-[11px] text-slate-400 font-bold uppercase tracking-wider mt-0.5 sm:mt-1 truncate w-full">
-                            {companies.find(c => c.id === project.company_id)?.name || 'Network'} 
+                            {!isGlobalAdmin && (owningCompanyName || 'Network')} 
                             {project.customer_id && ` • ${customers.find(c => c.id === project.customer_id)?.name}`}
                             {project.internal_company_id && ` • Internal`}
                           </p>
@@ -731,7 +703,7 @@ export default function StandardProjects() {
                            </div>
                         </div>
 
-                        {role === 'admin' && (
+                        {showFinance && (
                           <div className="flex flex-col items-end">
                             <span className="text-[8px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Value</span>
                             <span className="text-[12px] sm:text-sm font-black text-emerald-600">₹{(project.expected_amount || 0).toLocaleString()}</span>
@@ -821,7 +793,7 @@ export default function StandardProjects() {
 
                   <div className="space-y-3">
                     <button onClick={() => openProjectDetails(roleSelectProject, 'admin')} className="w-full bg-slate-900 hover:bg-slate-800 text-white rounded-xl py-3.5 text-sm font-bold shadow-md transition-all flex items-center justify-center gap-2">
-                       Manage Project (Admin)
+                       Manage Workspace (Admin)
                     </button>
                     <button onClick={() => openProjectDetails(roleSelectProject, 'user')} className="w-full bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl py-3.5 text-sm font-bold shadow-sm transition-all flex items-center justify-center gap-2">
                        My Tasks (User)
@@ -829,40 +801,6 @@ export default function StandardProjects() {
                   </div>
 
                   <button onClick={() => setRoleSelectProject(null)} className="mt-5 w-full text-slate-400 hover:text-slate-600 font-bold text-xs uppercase tracking-wider transition-colors">Cancel</button>
-               </motion.div>
-             </motion.div>
-          )}
-        </AnimatePresence>,
-        document.body
-      )}
-
-      {/* NEW: ACADEMY ROUTING INTERCEPTOR MODAL */}
-      {typeof document !== 'undefined' && createPortal(
-        <AnimatePresence>
-          {academyIntercept && (
-             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[10000] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-               <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-sm shadow-2xl flex flex-col text-center">
-                  <div className="h-16 w-16 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center mb-5 mx-auto"><GraduationCap className="h-8 w-8" /></div>
-                  <h3 className="text-xl font-black text-slate-900 tracking-tight mb-2">Switch Workspace</h3>
-                  <p className="text-xs font-medium text-slate-500 mb-6 leading-relaxed">
-                    <strong className="text-slate-800">{academyIntercept.name}</strong> uses the dedicated educational layout. To manage its syllabus, faculty, and student roster, please switch your workspace to its managing subsidiary.
-                  </p>
-
-                  <div className="space-y-3">
-                    <button onClick={() => {
-                       // @ts-ignore
-                       if (authStore.setActiveWorkspace) {
-                          // @ts-ignore
-                          authStore.setActiveWorkspace(academyIntercept.company_id.toString());
-                          setAcademyIntercept(null);
-                       } else {
-                          alert(`Please use the top-left dropdown to switch to the "${companies.find(c => c.id === academyIntercept.company_id)?.name}" workspace.`);
-                       }
-                    }} className="w-full bg-purple-900 hover:bg-purple-800 text-white rounded-xl py-3.5 text-sm font-bold shadow-md transition-all">
-                       Open Academy Workspace
-                    </button>
-                    <button onClick={() => setAcademyIntercept(null)} className="w-full text-slate-400 hover:text-slate-600 font-bold text-xs uppercase tracking-wider transition-colors py-2">Cancel</button>
-                  </div>
                </motion.div>
              </motion.div>
           )}
@@ -1046,7 +984,7 @@ export default function StandardProjects() {
                   <div className="flex items-center justify-between mb-4 sm:mb-5">
                     <div className="pr-4">
                       <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-blue-600 bg-blue-50 px-2 sm:px-2.5 py-1 rounded-full">{isAdminView ? 'Admin Workspace' : 'User Workspace'}</span>
-                      <h3 className="text-lg sm:text-2xl font-bold text-slate-900 tracking-tight mt-1.5 truncate">{selectedProject ? selectedProject.name : 'Create New Project'}</h3>
+                      <h3 className="text-lg sm:text-2xl font-bold text-slate-900 tracking-tight mt-1.5 truncate">{selectedProject ? selectedProject.name : `Create New ${t_project}`}</h3>
                     </div>
                     <button onClick={() => setIsModalOpen(false)} className="h-8 w-8 sm:h-9 sm:w-9 bg-white border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm transition-colors shrink-0"><X className="h-3.5 w-3.5 sm:h-4 sm:w-4" /></button>
                   </div>
@@ -1054,17 +992,20 @@ export default function StandardProjects() {
                   <div className="flex gap-4 sm:gap-8 overflow-x-auto max-sm:[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                     {!selectedProject ? (
                       <>
-                        <div className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'details' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400'}`}>Step 1: Details</div>
-                        <div className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'team' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400'}`}>Step 2: Assign Team</div>
-                        <div className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'tasks' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400'}`}>Step 3: Action Items</div>
+                        <div className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'details' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400'}`}>1. Details</div>
+                        <div className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'team' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400'}`}>2. Assign Team</div>
+                        <div className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'tasks' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400'}`}>3. {t_tasks}</div>
                       </>
                     ) : (
                       <>
                         <button onClick={() => setModalTab('details')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'details' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>1. Details</button>
                         <button onClick={() => setModalTab('team')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'team' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>2. Team</button>
-                        <button onClick={() => setModalTab('tasks')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'tasks' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>3. Action Items</button>
+                        <button onClick={() => setModalTab('tasks')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'tasks' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>3. {t_tasks}</button>
                         <button onClick={() => setModalTab('progress')} disabled={!selectedProject} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedProject ? 'opacity-30 cursor-not-allowed' : modalTab === 'progress' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>4. Timeline</button>
-                        <button onClick={() => setModalTab('finance')} disabled={!selectedProject} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedProject ? 'opacity-30 cursor-not-allowed' : modalTab === 'finance' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>5. Budget & Finances</button>
+                        
+                        {showFinance && (
+                          <button onClick={() => setModalTab('finance')} disabled={!selectedProject} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedProject ? 'opacity-30 cursor-not-allowed' : modalTab === 'finance' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>5. Budget & Finances</button>
+                        )}
                       </>
                     )}
                   </div>
@@ -1079,12 +1020,12 @@ export default function StandardProjects() {
                         <div className="bg-slate-50 border border-slate-100 rounded-3xl p-6 sm:p-8 space-y-8">
                           <div>
                             <h2 className="text-2xl font-black text-slate-900 tracking-tight">{formData.name}</h2>
-                            <p className="text-sm font-medium text-slate-600 mt-3 leading-relaxed">{formData.description || 'No detailed description provided for this project.'}</p>
+                            <p className="text-sm font-medium text-slate-600 mt-3 leading-relaxed">{formData.description || `No detailed description provided for this ${t_project.toLowerCase()}.`}</p>
                           </div>
 
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 pt-6 border-t border-slate-200">
                             <div>
-                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Client</p>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">{t_client}</p>
                               <p className="text-[13px] font-bold text-slate-800">{customerType === 'existing' ? customers.find(c => c.id.toString() === formData.customer_id)?.name : 'Internal Node'}</p>
                             </div>
                             <div>
@@ -1116,8 +1057,8 @@ export default function StandardProjects() {
                         <div className="bg-slate-50 border border-slate-100 rounded-2xl sm:rounded-3xl p-4 sm:p-6 space-y-4 sm:space-y-6">
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                             <div>
-                               <h4 className="text-[12px] sm:text-[13px] font-bold text-slate-800 uppercase tracking-wider">Client Details</h4>
-                               <p className="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 font-medium">Link project to a customer or internal node.</p>
+                               <h4 className="text-[12px] sm:text-[13px] font-bold text-slate-800 uppercase tracking-wider">{t_client} Details</h4>
+                               <p className="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 font-medium">Link {t_project.toLowerCase()} to a {t_client.toLowerCase()} or internal node.</p>
                             </div>
                             <div className="flex bg-white rounded-lg sm:rounded-xl border border-slate-200 p-1 shadow-sm w-full sm:w-auto">
                               <button type="button" onClick={() => setCustomerType('existing')} className={`flex-1 sm:flex-none whitespace-nowrap px-3 sm:px-4 py-1.5 rounded-md sm:rounded-lg text-[9px] sm:text-[10px] font-bold uppercase tracking-wider transition-all ${customerType === 'existing' ? 'bg-gradient-to-r from-blue-900 to-indigo-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>Existing</button>
@@ -1129,7 +1070,7 @@ export default function StandardProjects() {
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
                             <div>
                               <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1">Owning Subsidiary</label>
-                              <select value={formData.company_id} onChange={(e) => setFormData({...formData, company_id: e.target.value, customer_id: "", internal_company_id: "", assignee_ids: []})} disabled={activeWorkspace !== null} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 text-[12px] sm:text-[13px] font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 shadow-sm cursor-pointer disabled:bg-slate-100 disabled:text-slate-400">
+                              <select value={formData.company_id} onChange={(e) => setFormData({...formData, company_id: e.target.value, customer_id: "", internal_company_id: "", assignee_ids: []})} disabled={!isGlobalAdmin} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 text-[12px] sm:text-[13px] font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 shadow-sm cursor-pointer disabled:bg-slate-100 disabled:text-slate-400">
                                 <option value="" disabled>Select Company...</option>
                                 {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                               </select>
@@ -1137,16 +1078,16 @@ export default function StandardProjects() {
 
                             <div>
                               {customerType === 'existing' && (
-                                <><label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1">Customer / Client *</label>
+                                <><label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1">{t_client} *</label>
                                 <select value={formData.customer_id} onChange={(e) => setFormData({...formData, customer_id: e.target.value, internal_company_id: ""})} disabled={!formData.company_id} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 text-[12px] sm:text-[13px] font-medium outline-none focus:border-blue-500 shadow-sm disabled:bg-slate-100 disabled:text-slate-400">
-                                  <option value="">-- Select Client --</option>
+                                  <option value="">-- Select {t_client} --</option>
                                   {availableCustomers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                 </select></>
                               )}
                               {customerType === 'new' && (
-                                <><label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1">New Client *</label>
+                                <><label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1">New {t_client} *</label>
                                 <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                                  <input type="text" placeholder="Client Name *" value={newCustomer.name} onChange={e => setNewCustomer({...newCustomer, name: e.target.value})} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 text-[12px] sm:text-[13px] font-medium outline-none focus:border-blue-500 shadow-sm disabled:bg-slate-100" />
+                                  <input type="text" placeholder={`${t_client} Name *`} value={newCustomer.name} onChange={e => setNewCustomer({...newCustomer, name: e.target.value})} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 text-[12px] sm:text-[13px] font-medium outline-none focus:border-blue-500 shadow-sm disabled:bg-slate-100" />
                                   <input type="text" placeholder="Phone (Optional)" value={newCustomer.phone} onChange={e => setNewCustomer({...newCustomer, phone: e.target.value})} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 text-[12px] sm:text-[13px] font-medium outline-none focus:border-blue-500 shadow-sm disabled:bg-slate-100" />
                                 </div></>
                               )}
@@ -1171,7 +1112,7 @@ export default function StandardProjects() {
                               {showDriveHelp && (
                                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
                                   <div className="mt-3 p-4 bg-white rounded-xl border border-blue-100 shadow-sm space-y-2 text-[11px] sm:text-xs text-slate-600 font-medium">
-                                    <p><strong className="text-slate-800">Step 1:</strong> Create a new folder in your Google Drive named after this project.</p>
+                                    <p><strong className="text-slate-800">Step 1:</strong> Create a new folder in your Google Drive named after this {t_project.toLowerCase()}.</p>
                                     <p><strong className="text-slate-800">Step 2:</strong> Right-click the folder → Share → General Access → Change to <strong>'Anyone with the link'</strong> (Set as Editor if they need to upload).</p>
                                     <p><strong className="text-slate-800">Step 3:</strong> Copy the link and paste it into the field above.</p>
                                   </div>
@@ -1182,18 +1123,19 @@ export default function StandardProjects() {
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 sm:gap-5">
-                          <div className={role === 'admin' ? "md:col-span-3" : "md:col-span-4"}>
-                            <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1 whitespace-nowrap truncate">Project Name</label>
+                          <div className={showFinance && role === 'admin' ? "md:col-span-3" : "md:col-span-4"}>
+                            <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1 whitespace-nowrap truncate">{t_project} Name</label>
                             <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 text-[12px] sm:text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 shadow-sm disabled:bg-slate-50" />
                           </div>
-                          {role === 'admin' && (
+                          
+                          {showFinance && role === 'admin' && (
                             <div className="flex flex-col">
                               <label className="text-[9px] sm:text-[10px] font-bold text-emerald-600 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1 whitespace-nowrap truncate">Expected Value (₹)</label>
                               <div className="flex gap-2 items-center">
                                 <input type="number" value={formData.expected_amount} onChange={(e) => setFormData({...formData, expected_amount: parseFloat(e.target.value) || 0})} className="w-full h-10 sm:h-12 rounded-xl border border-emerald-200 bg-emerald-50 px-3 sm:px-4 text-[12px] sm:text-sm font-bold text-emerald-700 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 shadow-sm disabled:bg-slate-50 disabled:text-slate-400 disabled:border-slate-200" />
                                 {selectedProject && (
                                   <button type="button" onClick={handleGenerateInvoice} disabled={isSaving} className="shrink-0 h-10 sm:h-12 px-4 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl text-[11px] font-bold shadow-md transition-all">
-                                     Approve Invoice
+                                      Approve Invoice
                                   </button>
                                 )}
                               </div>
@@ -1201,11 +1143,10 @@ export default function StandardProjects() {
                           )}
                         </div>
 
-                        {/* NEW: Project Description Toggle */}
                         <div>
                           {!showDescription && !formData.description ? (
                             <button type="button" onClick={() => setShowDescription(true)} className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-bold text-blue-600 hover:text-blue-800 uppercase tracking-wider transition-colors px-1">
-                              <Plus className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Add Project Description
+                              <Plus className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Add {t_project} Description
                             </button>
                           ) : (
                             <div className="animate-in fade-in slide-in-from-top-2">
@@ -1215,7 +1156,7 @@ export default function StandardProjects() {
                                   <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                 </button>
                               </div>
-                              <textarea value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} className="w-full h-20 sm:h-24 rounded-xl border border-slate-200 bg-white p-3 sm:p-4 text-[12px] sm:text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 shadow-sm resize-none disabled:bg-slate-50" placeholder="Briefly describe the project goals or scope..." />
+                              <textarea value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} className="w-full h-20 sm:h-24 rounded-xl border border-slate-200 bg-white p-3 sm:p-4 text-[12px] sm:text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 shadow-sm resize-none disabled:bg-slate-50" placeholder={`Briefly describe the ${t_project.toLowerCase()} goals or scope...`} />
                             </div>
                           )}
                         </div>
@@ -1230,11 +1171,11 @@ export default function StandardProjects() {
                   </div>
                 )}
 
-                {/* NEW TAB: TEAM ASSIGNMENT WIZARD */}
+                {/* TAB 2: TEAM ASSIGNMENT WIZARD */}
                 {modalTab === 'team' && (
                   <div className="flex-1 overflow-y-auto min-h-0 overscroll-contain p-5 sm:p-8 flex flex-col sm:[&::-webkit-scrollbar]:w-1.5 sm:[&::-webkit-scrollbar-thumb]:bg-slate-300 sm:[&::-webkit-scrollbar-thumb]:rounded-full sm:[&::-webkit-scrollbar-track]:bg-transparent max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none] max-sm:[scrollbar-width:none]">
                      <div className="pt-2">
-                        <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2 sm:mb-3 px-1">Assign Team Members to Project</label>
+                        <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2 sm:mb-3 px-1">Assign Team Members to {t_project}</label>
                         <div className="flex flex-wrap gap-2 sm:gap-2.5">
                           {availableEmployees.length === 0 ? <p className="text-xs text-slate-400 italic">No available employees to assign.</p> : null}
                           {availableEmployees.map(emp => {
@@ -1248,10 +1189,9 @@ export default function StandardProjects() {
                         </div>
                       </div>
 
-                      {/* Display Roster */}
                       {isUserView && (
                         <div className="pt-6 border-t border-slate-200 mt-6">
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Project Team Members</p>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">{t_project} Team Members</p>
                           <div className="flex flex-wrap gap-2.5">
                             {formData.assignee_ids.length === 0 ? <p className="text-xs text-slate-400 italic">No assigned team members.</p> : null}
                             {formData.assignee_ids.map(id => {
@@ -1282,7 +1222,7 @@ export default function StandardProjects() {
                         <div className="flex flex-col xl:flex-row gap-3 shrink-0">
                           <input 
                             type="text" 
-                            placeholder="New task title..." 
+                            placeholder={`New ${t_task.toLowerCase()} title...`} 
                             value={newTaskTitle} 
                             onChange={(e) => setNewTaskTitle(e.target.value)} 
                             onKeyDown={(e) => {
@@ -1296,12 +1236,12 @@ export default function StandardProjects() {
                           <div className="flex gap-2 sm:gap-3 w-full xl:w-auto">
                             <input 
                               type="date" 
-                              title="Task Deadline" 
+                              title={`${t_task} Deadline`} 
                               value={newTaskDeadline} 
                               max={formData.due_date || undefined}
                               onChange={(e) => {
                                 if (formData.due_date && new Date(e.target.value) > new Date(formData.due_date)) {
-                                  alert(`Task deadline cannot exceed the project's main due date (${formData.due_date}).`);
+                                  alert(`${t_task} deadline cannot exceed the ${t_project.toLowerCase()}'s main due date (${formData.due_date}).`);
                                   return;
                                 }
                                 setNewTaskDeadline(e.target.value);
@@ -1338,7 +1278,7 @@ export default function StandardProjects() {
                       <div className="flex-1 overflow-y-auto space-y-2 sm:space-y-3 pr-2 min-h-0 sm:[&::-webkit-scrollbar]:w-1.5 sm:[&::-webkit-scrollbar-thumb]:bg-slate-300 sm:[&::-webkit-scrollbar-thumb]:rounded-full sm:[&::-webkit-scrollbar-track]:bg-transparent max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none] max-sm:[scrollbar-width:none]">
                         {displayTasks.length === 0 ? (
                           <div className="h-32 sm:h-40 flex flex-col items-center justify-center text-slate-400 bg-slate-50/50 rounded-2xl sm:rounded-3xl border border-dashed border-slate-200">
-                            <p className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider">No tasks added</p>
+                            <p className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider">No {t_tasks.toLowerCase()} added</p>
                           </div>
                         ) : (
                           displayTasks.map((task, index) => {
@@ -1399,8 +1339,8 @@ export default function StandardProjects() {
                       <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 sm:p-6 mb-6 shadow-sm">
                         <div className="flex justify-between items-center mb-4">
                           <div>
-                            <h4 className="text-sm font-bold text-slate-800 uppercase tracking-widest">Project Milestones</h4>
-                            <p className="text-[11px] text-slate-500 mt-1">Check prerequisites to automatically level up project status.</p>
+                            <h4 className="text-sm font-bold text-slate-800 uppercase tracking-widest">{t_project} Milestones</h4>
+                            <p className="text-[11px] text-slate-500 mt-1">Check prerequisites to automatically level up {t_project.toLowerCase()} status.</p>
                           </div>
                           <div className={`px-4 py-1.5 rounded-xl text-xs font-bold shadow-sm uppercase tracking-wider border ${getStatusStyle(formData.status)}`}>
                             {formData.status}
@@ -1425,7 +1365,7 @@ export default function StandardProjects() {
                           <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm opacity-90 hover:opacity-100 transition-opacity">
                             <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 border-b pb-2">To "Review"</h5>
                             <div className="space-y-2">
-                              {Object.entries({ all_tasks_done: "All Tasks Completed", internal_qa: "Internal QA Passed" }).map(([key, label]) => (
+                              {Object.entries({ all_tasks_done: `All ${t_tasks} Completed`, internal_qa: "Internal QA Passed" }).map(([key, label]) => (
                                 <label key={key} className="flex items-center gap-3 cursor-pointer group">
                                   <div className={`h-5 w-5 rounded-md border flex items-center justify-center transition-colors ${formData.milestones?.review?.[key as keyof typeof formData.milestones.review] ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-slate-300 group-hover:border-blue-400'}`}>
                                     {formData.milestones?.review?.[key as keyof typeof formData.milestones.review] && <Check className="h-3.5 w-3.5 text-white" />}
@@ -1439,7 +1379,7 @@ export default function StandardProjects() {
                           <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm opacity-90 hover:opacity-100 transition-opacity">
                             <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 border-b pb-2">To "Completed"</h5>
                             <div className="space-y-2">
-                              {Object.entries({ client_approved: "Client Approved", final_handover: "Final Handover" }).map(([key, label]) => (
+                              {Object.entries({ client_approved: `${t_client} Approved`, final_handover: "Final Handover" }).map(([key, label]) => (
                                 <label key={key} className="flex items-center gap-3 cursor-pointer group">
                                   <div className={`h-5 w-5 rounded-md border flex items-center justify-center transition-colors ${formData.milestones?.completed?.[key as keyof typeof formData.milestones.completed] ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-slate-300 group-hover:border-blue-400'}`}>
                                     {formData.milestones?.completed?.[key as keyof typeof formData.milestones.completed] && <Check className="h-3.5 w-3.5 text-white" />}
@@ -1457,7 +1397,6 @@ export default function StandardProjects() {
                     <div className="w-full flex flex-col h-full gap-6">
                        {isUserView ? (
                          <>
-                           {/* Add New Entry Box */}
                            <div className="flex flex-col shrink-0">
                              <p className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 sm:mb-3">Add New Log Entry</p>
                              <textarea value={myReportText} onChange={e => setMyReportText(e.target.value)} placeholder="Type your latest progress update here..." className="w-full h-20 sm:h-24 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 text-[12px] sm:text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all resize-none mb-3 sm:mb-4 shadow-sm" />
@@ -1507,7 +1446,6 @@ export default function StandardProjects() {
                                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-3 block">{new Date(entry.timestamp).toLocaleString()}</span>
                                       </div>
 
-                                      {/* Reaction from Admin */}
                                       {hasReaction && (
                                          <div className="ml-6 sm:ml-10 mt-2 relative">
                                             <CornerDownRight className="absolute -left-5 top-3 h-4 w-4 text-slate-300" />
@@ -1523,7 +1461,6 @@ export default function StandardProjects() {
                                  )
                                })}
 
-                               {/* Legacy text support */}
                                {myReport?.report_text && myEntries.length === 0 && (
                                  <pre className="text-[12px] sm:text-[13px] text-slate-700 whitespace-pre-wrap font-sans leading-relaxed bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm">
                                    {myReport.report_text}
@@ -1544,7 +1481,6 @@ export default function StandardProjects() {
                              const emp = getAvatar(empId);
                              const empReport = reports.find(r => r.project_id === selectedProject?.id && r.employee_id === empId);
                              
-                             // Safe extraction of entries length
                              const noteCount = Array.isArray(empReport?.entries) ? empReport.entries.length : 0;
 
                              return (
@@ -1567,8 +1503,8 @@ export default function StandardProjects() {
                   </div>
                 )}
 
-                {/* TAB 5: FINANCIALS */}
-                {modalTab === 'finance' && (
+                {/* TAB 5: FINANCIALS (STRICTLY LOCKED) */}
+                {modalTab === 'finance' && showFinance && (
                   <div className="flex-1 overflow-y-auto min-h-0 overscroll-contain p-5 sm:p-8 flex flex-col sm:[&::-webkit-scrollbar]:w-1.5 sm:[&::-webkit-scrollbar-thumb]:bg-slate-300 sm:[&::-webkit-scrollbar-thumb]:rounded-full sm:[&::-webkit-scrollbar-track]:bg-transparent max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none] max-sm:[scrollbar-width:none]">
                     <div className="w-full flex flex-col h-full gap-4 sm:gap-5">
 
@@ -1642,7 +1578,7 @@ export default function StandardProjects() {
                             </AnimatePresence>
 
                             <div className="bg-white border border-slate-100 shadow-sm rounded-2xl sm:rounded-3xl overflow-hidden flex flex-col flex-1 min-h-0 relative">
-                               <div className="w-full h-full overflow-y-auto sm:[&::-webkit-scrollbar]:w-1.5 sm:[&::-webkit-scrollbar-thumb]:bg-slate-300 sm:[&::-webkit-scrollbar-thumb]:rounded-full sm:[&::-webkit-scrollbar-track]:bg-transparent max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none] max-sm:[scrollbar-width:none]">
+                               <div className="w-full h-full overflow-y-auto sm:[&::-webkit-scrollbar]:w-1.5 sm:[&::-webkit-scrollbar-thumb]:bg-slate-300 sm:[&::-webkit-scrollbar-thumb]:rounded-full sm:[&::-webkit-scrollbar-track]:bg-transparent max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none max-sm:[scrollbar-width:none]">
                                  <div className="grid grid-cols-12 gap-2 sm:gap-4 bg-slate-50 px-3 sm:px-6 py-3 border-b border-slate-100 text-[8px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center sticky top-0 z-10">
                                     <div className="col-span-2 text-left">Team Member</div>
                                     <div className="col-span-2 text-emerald-600">Paid (₹)</div>
@@ -1716,8 +1652,10 @@ export default function StandardProjects() {
                                                                       </div>
                                                                    </div>
                                                                    <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-                                                                      <span className="font-black text-emerald-600">₹{parseFloat(p.amount).toLocaleString()}</span>
-                                                                      <button onClick={(e) => { e.stopPropagation(); handleDeleteProjectPayment(p.id); }} className="text-rose-400 hover:text-rose-600 p-1 bg-rose-50 rounded-md transition-colors"><Trash2 className="h-3 w-3 sm:h-3.5 w-3.5" /></button>
+                                                                      <span className="font-black text-emerald-600">+ ₹{parseFloat(p.amount).toLocaleString()}</span>
+                                                                      {(role === 'admin' || role === 'head') && (
+                                                                         <button onClick={(e) => { e.stopPropagation(); handleDeleteProjectPayment(p.id); }} className="text-rose-400 hover:text-rose-600 p-1 bg-rose-50 rounded-md transition-colors"><Trash2 className="h-3 w-3 sm:h-3.5 w-3.5" /></button>
+                                                                      )}
                                                                    </div>
                                                                 </div>
                                                              ))}
@@ -1748,7 +1686,6 @@ export default function StandardProjects() {
                   </div>
                 )}
 
-                {/* FIX: Wizard dynamic footer for next/back/submit */}
                 <div className="p-4 sm:p-6 border-t border-slate-100 bg-[#FAFCFF] flex justify-end items-center gap-2 sm:gap-4 shrink-0 mt-auto">
                   {selectedProject && isAdminView && modalTab === 'details' && (
                     <button onClick={handleDeleteProject} disabled={isSaving} className="border border-rose-200 text-rose-600 bg-white hover:bg-rose-50 rounded-xl h-10 sm:h-12 px-3 sm:px-5 flex items-center justify-center shadow-sm mr-auto transition-colors shrink-0"><Trash2 className="h-4 w-4" /></button>
@@ -1765,12 +1702,12 @@ export default function StandardProjects() {
                       )}
                       {!selectedProject && modalTab === 'team' && (
                         <button onClick={() => setModalTab('tasks')} className="bg-slate-900 text-white hover:bg-slate-800 rounded-xl h-10 sm:h-12 px-6 sm:px-10 font-bold text-[12px] sm:text-sm shadow-md transition-all flex-1 sm:flex-none flex items-center justify-center">
-                          Next: Action Items
+                          Next: {t_tasks}
                         </button>
                       )}
                       {!selectedProject && modalTab === 'tasks' && (
                         <button onClick={handleSaveProject} disabled={isSaving} className="bg-gradient-to-r from-blue-900 to-indigo-800 text-white rounded-xl h-10 sm:h-12 px-6 sm:px-10 font-bold text-[12px] sm:text-sm shadow-md shadow-blue-900/20 hover:shadow-lg hover:-translate-y-0.5 transition-all flex-1 sm:flex-none flex items-center justify-center">
-                          {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : "Finish & Create Project"}
+                          {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : `Finish & Create ${t_project}`}
                         </button>
                       )}
                       {selectedProject && (

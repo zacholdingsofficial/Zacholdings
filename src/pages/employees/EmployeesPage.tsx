@@ -80,14 +80,21 @@ export default function EmployeesPage() {
     company_roles: [{ company_id: currentCompanyId?.toString() || "", role: "", access_level: "user" }]
   });
 
+  // MODIFIED: Accurately fetches the role for the exact company context Anupama is viewing
   const getPrimaryRoleAssignment = (emp: any) => {
     if (!emp.company_roles || emp.company_roles.length === 0) {
       return { company_id: emp.company_id, role: emp.role, access_level: emp.access_level };
     }
-    if (activeWorkspace) {
-      return emp.company_roles.find((cr: any) => cr.company_id.toString() === activeWorkspace.toString()) || emp.company_roles[0];
+    
+    // First, look for the exact company ID of the active workspace or Anupama's current login
+    if (currentCompanyId) {
+      const roleInCompany = emp.company_roles.find((cr: any) => cr.company_id?.toString() === currentCompanyId.toString());
+      if (roleInCompany) return roleInCompany;
     }
-    return emp.company_roles[0];
+    
+    // Fallback logic for Global Admins viewing the "All Companies" dashboard
+    const adminRole = emp.company_roles.find((cr: any) => cr.access_level === 'admin');
+    return adminRole || emp.company_roles[0];
   };
 
   const visibleEmployees = employees.filter(emp => {
@@ -438,7 +445,8 @@ export default function EmployeesPage() {
                     : primaryAssignment?.access_level === 'head' ? <span className="bg-blue-50 text-blue-700 border border-blue-100 text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-2 sm:px-2.5 py-1 rounded-lg">Director</span>
                     : <span className="bg-slate-50 text-slate-500 border border-slate-100 text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-2 sm:px-2.5 py-1 rounded-lg">Operator</span>}
                     
-                    {emp.company_roles && emp.company_roles.length > 1 && (
+                    {/* MODIFIED: The "+X Roles" badge is now restricted to only appear for Global Admins */}
+                    {(role === 'admin' && !activeWorkspace) && emp.company_roles && emp.company_roles.length > 1 && (
                       <span className="bg-indigo-50 text-indigo-600 border border-indigo-100 text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-lg flex items-center gap-1">
                          <Briefcase className="h-2.5 w-2.5" /> +{emp.company_roles.length - 1} Roles
                       </span>
@@ -523,7 +531,9 @@ export default function EmployeesPage() {
                             <span className={`px-2 sm:px-2.5 py-1 rounded-lg text-[8px] sm:text-[9px] font-bold uppercase tracking-widest whitespace-nowrap ${primaryAssignment?.access_level === 'admin' ? 'bg-slate-900 text-white' : primaryAssignment?.access_level === 'head' ? 'bg-blue-50 text-blue-700' : 'bg-slate-50 text-slate-500 border border-slate-100'}`}>
                               {primaryAssignment?.access_level === 'head' ? 'Director' : primaryAssignment?.access_level === 'admin' ? 'Admin' : 'Operator'}
                             </span>
-                            {emp.company_roles && emp.company_roles.length > 1 && (
+                            
+                            {/* MODIFIED: The "+X Roles" badge is now restricted to only appear for Global Admins */}
+                            {(role === 'admin' && !activeWorkspace) && emp.company_roles && emp.company_roles.length > 1 && (
                               <span className="text-[9px] font-bold text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">+{emp.company_roles.length - 1}</span>
                             )}
                           </div>

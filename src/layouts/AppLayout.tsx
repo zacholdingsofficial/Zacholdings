@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, Users, Briefcase, FileText, Settings, LogOut, ArrowLeft, Banknote, UserSquare2, Menu, X, MessageSquare, Send, ChevronLeft, Layers, Lock, Loader2, Building2 } from "lucide-react";
+import { LayoutDashboard, Users, Briefcase, FileText, Settings, LogOut, ArrowLeft, Banknote, UserSquare2, Menu, X, MessageSquare, Send, ChevronLeft, Loader2, Building2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuthStore } from "../store/authStore";
 import { useDataStore } from "../store/dataStore";
@@ -8,7 +8,7 @@ import { supabase } from "../supabase";
 
 export default function AppLayout() {
   const { role, user, employeeId, companyId, signOut, activeWorkspace, setActiveWorkspace } = useAuthStore();
-  const { companies, employees, messages, fetchAllData } = useDataStore();
+  const { companies, employees, messages, fetchAllData, isLoading: isDataLoading } = useDataStore();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -23,16 +23,19 @@ export default function AppLayout() {
   
   const prevMessageCount = useRef(messages.length);
 
+  useEffect(() => {
+    fetchAllData();
+  }, [activeWorkspace, role, companyId, fetchAllData]);
+
   const masterAdmin = employees.find(e => e.access_level === 'admin');
 
-  const activeCompany = activeWorkspace ? companies.find(c => c.id === activeWorkspace) : null;
-  const currentDisplayCompany = (role !== 'admin' || activeWorkspace) ? companies.find(c => c.id === (activeWorkspace || companyId)) : null;
+  // MODIFIED: Added `.toString()` to gracefully handle URL strings or Database numbers
+  const targetWorkspaceId = activeWorkspace || companyId;
+  const activeCompany = activeWorkspace ? companies.find(c => c.id?.toString() === activeWorkspace?.toString()) : null;
+  const currentDisplayCompany = (role !== 'admin' || activeWorkspace) ? companies.find(c => c.id?.toString() === targetWorkspaceId?.toString()) : null;
+  
   const brandName = currentDisplayCompany?.name || "Zac Holdings";
-  
-  // Raw logo handling
   const brandLogo = currentDisplayCompany?.logo_url || masterAdmin?.profile_image_url || null;
-  
-  // --- DYNAMIC WORKSPACE TYPE CHECK ---
   const isAcademy = currentDisplayCompany?.business_type === 'academy' || currentDisplayCompany?.business_type?.includes('education');
 
   const handleExitWorkspace = async () => { 
@@ -47,15 +50,13 @@ export default function AppLayout() {
     navigate("/login"); 
   };
 
-  // Close mobile drawer when route changes
   useEffect(() => {
     setIsMobileDrawerOpen(false);
   }, [location.pathname]);
 
-  // --- DYNAMIC NAVIGATION LABELS (DESKTOP) ---
   const allNavLinks = [
     { path: "/dashboard", icon: LayoutDashboard, label: "Dashboard", allowedRoles: ['admin', 'head', 'user'] },
-    { path: "/projects", icon: Briefcase, label: isAcademy ? "Courses" : "Projects", allowedRoles: ['admin', 'head', 'user'] },
+    { path: "/projects", icon: Briefcase, label: isAcademy ? "Programs" : "Projects", allowedRoles: ['admin', 'head', 'user'] },
     { path: "/customers", icon: UserSquare2, label: isAcademy ? "Students" : "Customers", allowedRoles: ['admin', 'head'] },
     { path: "/finance", icon: Banknote, label: "Finance", allowedRoles: ['admin', 'head'] },
     { path: "/invoices", icon: FileText, label: "Invoices", allowedRoles: ['admin', 'head'] },
@@ -70,12 +71,12 @@ export default function AppLayout() {
     const currentRole = role?.toLowerCase() || 'user';
     
     if (currentRole === 'admin') {
-      if (activeWorkspace) return emp.company_id === activeWorkspace || emp.access_level === 'admin';
+      if (activeWorkspace) return emp.company_id?.toString() === activeWorkspace?.toString() || emp.access_level === 'admin';
       if (chatCompanyFilter !== "all") return emp.company_id?.toString() === chatCompanyFilter || emp.access_level === 'admin';
       return true;
     }
     
-    if (currentRole === 'head' || currentRole === 'user') return emp.access_level === 'admin' || emp.company_id == companyId;
+    if (currentRole === 'head' || currentRole === 'user') return emp.access_level === 'admin' || emp.company_id?.toString() === companyId?.toString();
     return false;
   });
 
@@ -115,9 +116,6 @@ export default function AppLayout() {
   const displayInitial = currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : displayEmail.charAt(0).toUpperCase();
   const displayName = currentUser?.name || displayEmail.split('@')[0];
 
-  // ============================================================================
-  // POLYMORPHIC ERP INTERCEPTOR LOGIC
-  // ============================================================================
   const unclassifiedCompanies = companies.filter(c => c.business_type === null || c.business_type === undefined);
   const [classifications, setClassifications] = useState<Record<number, string>>({});
   const [isInitializing, setIsInitializing] = useState(false);
@@ -146,7 +144,6 @@ export default function AppLayout() {
     }
   };
 
-  // ADMIN WIZARD
   if (role === 'admin' && unclassifiedCompanies.length > 0) {
     return (
       <div className="fixed inset-0 z-[10000] bg-slate-900/60 backdrop-blur-2xl flex items-center justify-center p-4">
@@ -191,7 +188,6 @@ export default function AppLayout() {
     );
   }
 
-  // USER LOCKOUT
   const isUserLockedOut = role !== 'admin' && currentDisplayCompany && !currentDisplayCompany.business_type;
   if (isUserLockedOut) {
     return (
@@ -206,13 +202,10 @@ export default function AppLayout() {
       </div>
     );
   }
-  // ============================================================================
-
 
   return (
     <div className="flex h-[100dvh] w-full bg-[#F8F9FC] text-slate-800 overflow-hidden font-sans sm:p-4 lg:p-6 selection:bg-blue-900 selection:text-white relative print:p-0 print:bg-white print:block print:h-auto">
       
-      {/* --- DESKTOP SIDEBAR --- */}
       <AnimatePresence mode="wait">
         {isSidebarOpen && (
           <motion.aside initial={{ width: 0, opacity: 0 }} animate={{ width: 280, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }} 
@@ -267,10 +260,8 @@ export default function AppLayout() {
         )}
       </AnimatePresence>
 
-      {/* --- MAIN CONTENT AREA --- */}
       <div className="flex-1 flex flex-col min-w-0 relative bg-[#FAFCFF] sm:rounded-r-[2.5rem] sm:border-y sm:border-r border-slate-100 sm:shadow-[0_8px_40px_rgb(0,0,0,0.04)] print:bg-white print:block overflow-hidden">
         
-        {/* --- DESKTOP HEADER --- */}
         <header className="absolute top-6 left-0 right-0 hidden sm:flex items-start justify-between px-6 lg:px-10 z-20 pointer-events-none print:hidden">
           <div className="pointer-events-auto">
             {!isSidebarOpen && (
@@ -293,10 +284,8 @@ export default function AppLayout() {
           </div>
         </header>
 
-        {/* --- MOBILE APP BAR (Notch Style with Solid Background to block scrolling) --- */}
         <div className="sm:hidden fixed top-0 left-0 right-0 h-[72px] bg-[#FAFCFF] z-40 print:hidden flex items-center justify-between px-4 border-b border-slate-100/50 shadow-sm">
            
-           {/* Left Menu Button */}
            <div className="flex gap-2 items-center">
              {activeWorkspace && role === 'admin' && (
                <button onClick={handleExitWorkspace} className="h-10 w-10 text-rose-500 flex items-center justify-center transition-all active:scale-95"><ArrowLeft className="h-5 w-5" /></button>
@@ -306,12 +295,11 @@ export default function AppLayout() {
              </button>
            </div>
 
-           {/* Center "Notch" Logo Pill */}
            <div className="bg-white border border-slate-200/60 rounded-[1.5rem] px-4 py-2 shadow-sm flex items-center justify-center gap-2 cursor-pointer transition-transform active:scale-95">
               {brandLogo ? (
                  <img src={brandLogo} alt="Logo" className="h-5 w-auto max-w-[80px] object-contain shrink-0" />
               ) : (
-                 <div className="h-5 w-5 rounded-md bg-slate-900 flex items-center justify-center text-white text-[9px] font-black shrink-0">
+                 <div className="h-5 w-5 rounded-md bg-slate-900 flex items-center justify-center text-white text-[9px] font-bold shrink-0">
                    {brandName.charAt(0).toUpperCase()}
                  </div>
               )}
@@ -329,7 +317,6 @@ export default function AppLayout() {
               </div>
            </div>
 
-           {/* Right Chat Button */}
            <div className="flex items-center">
              <button onClick={() => setIsChatOpen(true)} className="relative h-10 w-10 text-slate-500 hover:text-blue-900 flex items-center justify-center transition-all active:scale-95">
                 <MessageSquare className="h-5 w-5" />
@@ -338,7 +325,6 @@ export default function AppLayout() {
            </div>
         </div>
 
-        {/* --- MOBILE SIDE DRAWER (HAMBURGER MENU) --- */}
         <AnimatePresence>
            {isMobileDrawerOpen && (
               <>
@@ -390,11 +376,18 @@ export default function AppLayout() {
            ${!isSidebarOpen ? 'sm:pl-20 lg:pl-28' : 'sm:pl-6 lg:pl-10'} 
            ${activeWorkspace && role === 'admin' ? 'sm:pr-6 lg:pr-64' : 'sm:pr-6 lg:pr-10'}
            [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full`}>
-          <Outlet />
+          
+          {isDataLoading ? (
+            <div className="flex h-full w-full items-center justify-center">
+              <Loader2 className="h-10 w-10 animate-spin text-blue-900" />
+            </div>
+          ) : (
+            <Outlet />
+          )}
+
         </main>
       </div>
 
-      {/* --- CHAT DRAWER --- */}
       <AnimatePresence>
         {isChatOpen && (
           <>

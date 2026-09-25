@@ -9,12 +9,13 @@ interface AuthState {
   employeeId: number | null;
   activeWorkspace: number | null;
   isLoading: boolean;
+  permissions: { canViewFinancials: boolean } | null; 
   
   checkSession: () => Promise<void>;
-  // MODIFIED: signIn now accepts the explicitly selected role and company context
-  signIn: (email: string, password: string, selectedRole?: 'admin' | 'head' | 'user' | null, selectedCompanyId?: number | null) => Promise<{ error: string | null }>;
+  // MODIFIED: Accepts string or number to safely handle HTML select inputs
+  signIn: (email: string, password: string, selectedRole?: 'admin' | 'head' | 'user' | null, selectedCompanyId?: number | string | null) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
-  setActiveWorkspace: (id: number | null) => void;
+  setActiveWorkspace: (id: number | null) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -26,6 +27,7 @@ export const useAuthStore = create<AuthState>()(
       employeeId: null, 
       activeWorkspace: null, 
       isLoading: false,
+      permissions: null,
 
       checkSession: async () => {
         set({ isLoading: true });
@@ -34,20 +36,24 @@ export const useAuthStore = create<AuthState>()(
         if (session?.user) {
           const { data: emp } = await supabase.from('employees').select('access_level, company_id, id').eq('email', session.user.email).single();
           
-          // MODIFIED: Fetch the currently persisted session context first
           const currentRole = get().role;
           const currentCompanyId = get().companyId;
+          const currentWorkspace = get().activeWorkspace;
           
           set({ 
             user: session.user, 
             employeeId: emp?.id || null, 
-            // Fallback to primary DB profile ONLY if the persisted state is somehow missing
             role: currentRole || emp?.access_level || 'user', 
             companyId: currentCompanyId || emp?.company_id || null, 
+            activeWorkspace: currentWorkspace || currentCompanyId || emp?.company_id || null,
             isLoading: false 
           }); 
+
+          if (get().activeWorkspace) {
+            await get().setActiveWorkspace(get().activeWorkspace);
+          }
         } else {
-          set({ user: null, role: null, companyId: null, employeeId: null, activeWorkspace: null, isLoading: false });
+          set({ user: null, role: null, companyId: null, employeeId: null, activeWorkspace: null, permissions: null, isLoading: false });
         }
       },
 
@@ -62,25 +68,76 @@ export const useAuthStore = create<AuthState>()(
         
         const { data: emp } = await supabase.from('employees').select('access_level, company_id, id').eq('email', email).single();
         
+        // MODIFIED: Force selectedCompanyId to be a clean Number to prevent strict-equality layout crashes
+        const parsedCompanyId = selectedCompanyId ? Number(selectedCompanyId) : null;
+        const initialCompanyId = parsedCompanyId || emp?.company_id || null;
+        const initialRole = selectedRole || emp?.access_level || 'user';
+
         set({ 
           user: auth.user, 
           employeeId: emp?.id || null, 
-          // MODIFIED: Inject the explicitly selected UI context, otherwise default to DB primary
-          role: selectedRole || emp?.access_level || 'user', 
-          companyId: selectedCompanyId || emp?.company_id || null, 
-          activeWorkspace: selectedCompanyId || null,
+          role: initialRole, 
+          companyId: initialCompanyId, 
+          activeWorkspace: initialCompanyId,
           isLoading: false 
         });
+
+        if (initialCompanyId) {
+            await get().setActiveWorkspace(initialCompanyId);
+        }
         
         return { error: null };
       },
 
       signOut: async () => {
         await supabase.auth.signOut();
-        set({ user: null, role: null, companyId: null, employeeId: null, activeWorkspace: null });
+        set({ user: null, role: null, companyId: null, employeeId: null, activeWorkspace: null, permissions: null });
       },
 
-      setActiveWorkspace: (id) => set({ activeWorkspace: id })
+      setActiveWorkspace: async (id) => {
+        if (!id) {
+            set({ activeWorkspace: null, permissions: null });
+            return;
+        }
+
+        const employeeId = get().employeeId;
+        let newRole = get().role; 
+        let canViewFinancials = true; 
+
+        try {
+            const { data: companyData } = await supabase
+                .from('companies')
+                .select('allow_head_finance') 
+                .eq('id', id)
+                .single();
+            
+            if (companyData && companyData.allow_head_finance === false) {
+                canViewFinancials = false;
+            }
+
+            if (employeeId) {
+                const { data: roleData } = await supabase
+                    .from('employee_company_roles')
+                    .select('access_level') 
+                    .eq('employee_id', employeeId)
+                    .eq('company_id', id)
+                    .single();
+
+                if (roleData && roleData.access_level) {
+                    newRole = roleData.access_level;
+                }
+            }
+        } catch (error) {
+            console.error("Error fetching workspace context:", error);
+        }
+
+        set({ 
+            activeWorkspace: id, 
+            companyId: id, 
+            role: newRole, 
+            permissions: { canViewFinancials }
+        });
+      }
     }),
     {
       name: 'auth-storage',
