@@ -15,7 +15,6 @@ const DEFAULT_MILESTONES = {
   completed: { client_approved: false, final_handover: false }
 };
 
-// MODIFIED: Accept autoOpenProjectId as a prop
 export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjectId?: number | null }) {
   const navigate = useNavigate();
   const { role, employeeId, activeWorkspace, companyId } = useAuthStore();
@@ -114,7 +113,6 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
     return assignments.some((cr: any) => cr.company_id?.toString() === formData.company_id?.toString());
   });
 
-  // MODIFIED: Auto-open the project modal if autoOpenProjectId is passed
   useEffect(() => {
     if (autoOpenProjectId && projects.length > 0) {
       const projToOpen = projects.find((p: any) => p.id === autoOpenProjectId);
@@ -125,7 +123,6 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
   }, [autoOpenProjectId, projects, role]);
 
   const handleProjectClick = (project: any) => {
-    // MODIFIED: Intercept Academy Projects and route them to AcademyCourses
     const projComp = companies.find((c: any) => c.id === project.company_id);
     const isAcademyProj = projComp?.business_type === 'academy' || ['Course', 'Workshop', 'Internship'].includes(project.metadata?.type);
 
@@ -649,7 +646,7 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
 
                 const dueStatus = project.status !== 'Completed' ? getDueDateStatus(project.due_date) : null;
                 
-                // MODIFIED: Logic for Academy Visuals
+                // Academy Project Check
                 const projComp = companies.find(c => c.id === project.company_id);
                 const isAcademyProj = projComp?.business_type === 'academy' || ['Course', 'Workshop', 'Internship'].includes(project.metadata?.type);
                 const owningCompanyName = projComp?.name;
@@ -657,7 +654,6 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
                 return (
                   <div 
                      key={project.id} 
-                     // MODIFIED: Change the border and shadow style if it is an Academy project
                      className={`bg-white rounded-2xl sm:rounded-3xl border shadow-sm hover:shadow-md transition-all flex flex-col relative overflow-hidden group ${isAcademyProj ? 'border-purple-100 hover:border-purple-300 shadow-purple-900/5' : 'border-slate-100 hover:border-blue-200'}`}
                   >
                     <div className={`absolute top-0 left-0 bottom-0 w-1.5 ${project.priority === 'High' ? 'bg-rose-500' : project.priority === 'Medium' ? 'bg-amber-500' : 'bg-slate-300'}`} />
@@ -671,7 +667,6 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
                     <div className="ml-1.5 p-4 sm:p-7 flex flex-col gap-4 sm:gap-6">
                       <div className="flex justify-between items-start gap-4">
                         <div className="flex-1 min-w-0">
-                          {/* MODIFIED: If Academy, show purple icons and text */}
                           <div className="flex items-center gap-2 mb-1.5">
                              {isAcademyProj && <span className="inline-flex items-center gap-1 bg-purple-50 text-purple-600 border border-purple-100 text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md"><BookOpen className="h-2.5 w-2.5" /> Academy Program</span>}
                           </div>
@@ -741,7 +736,6 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
           )}
         </div>
 
-        {/* ... (Rest of modal portals untouched) ... */}
         {isPrintingPayslip && selectedProject && isUserView && (
           <div className="absolute inset-0 bg-white z-[100] p-10 print:block hidden">
             <div className="text-center mb-10 pb-6 border-b border-slate-200">
@@ -1007,7 +1001,7 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
                   <div className="flex items-center justify-between mb-4 sm:mb-5">
                     <div className="pr-4">
                       <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-blue-600 bg-blue-50 px-2 sm:px-2.5 py-1 rounded-full">{isAdminView ? 'Admin Workspace' : 'User Workspace'}</span>
-                      <h3 className="text-lg sm:text-2xl font-bold text-slate-900 tracking-tight mt-1.5 truncate">{selectedProject ? selectedProject.name : `Create New ${t_project}`}</h3>
+                      <h3 className="text-lg sm:text-2xl font-bold text-slate-900 tracking-tight mt-1.5 truncate">{selectedProject ? selectedProject.name : 'Create New Project'}</h3>
                     </div>
                     <button onClick={() => setIsModalOpen(false)} className="h-8 w-8 sm:h-9 sm:w-9 bg-white border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm transition-colors shrink-0"><X className="h-3.5 w-3.5 sm:h-4 sm:w-4" /></button>
                   </div>
@@ -1015,17 +1009,18 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
                   <div className="flex gap-4 sm:gap-8 overflow-x-auto max-sm:[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                     {!selectedProject ? (
                       <>
-                        <div className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'details' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400'}`}>1. Details</div>
-                        <div className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'team' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400'}`}>2. Assign Team</div>
-                        <div className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'tasks' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400'}`}>3. {t_tasks}</div>
+                        <div className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'details' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400'}`}>Step 1: Details</div>
+                        <div className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'team' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400'}`}>Step 2: Assign Team</div>
+                        <div className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'tasks' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400'}`}>Step 3: Action Items</div>
                       </>
                     ) : (
                       <>
                         <button onClick={() => setModalTab('details')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'details' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>1. Details</button>
                         <button onClick={() => setModalTab('team')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'team' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>2. Team</button>
-                        <button onClick={() => setModalTab('tasks')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'tasks' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>3. {t_tasks}</button>
+                        <button onClick={() => setModalTab('tasks')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'tasks' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>3. Action Items</button>
                         <button onClick={() => setModalTab('progress')} disabled={!selectedProject} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedProject ? 'opacity-30 cursor-not-allowed' : modalTab === 'progress' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>4. Timeline</button>
                         
+                        {/* STRICT FINANCE ACCESS LOCK ON TABS */}
                         {showFinance && (
                           <button onClick={() => setModalTab('finance')} disabled={!selectedProject} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedProject ? 'opacity-30 cursor-not-allowed' : modalTab === 'finance' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>5. Budget & Finances</button>
                         )}
@@ -1043,12 +1038,12 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
                         <div className="bg-slate-50 border border-slate-100 rounded-3xl p-6 sm:p-8 space-y-8">
                           <div>
                             <h2 className="text-2xl font-black text-slate-900 tracking-tight">{formData.name}</h2>
-                            <p className="text-sm font-medium text-slate-600 mt-3 leading-relaxed">{formData.description || `No detailed description provided for this ${t_project.toLowerCase()}.`}</p>
+                            <p className="text-sm font-medium text-slate-600 mt-3 leading-relaxed">{formData.description || 'No detailed description provided for this project.'}</p>
                           </div>
 
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 pt-6 border-t border-slate-200">
                             <div>
-                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">{t_client}</p>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Client</p>
                               <p className="text-[13px] font-bold text-slate-800">{customerType === 'existing' ? customers.find(c => c.id.toString() === formData.customer_id)?.name : 'Internal Node'}</p>
                             </div>
                             <div>
@@ -1080,8 +1075,8 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
                         <div className="bg-slate-50 border border-slate-100 rounded-2xl sm:rounded-3xl p-4 sm:p-6 space-y-4 sm:space-y-6">
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                             <div>
-                               <h4 className="text-[12px] sm:text-[13px] font-bold text-slate-800 uppercase tracking-wider">{t_client} Details</h4>
-                               <p className="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 font-medium">Link {t_project.toLowerCase()} to a {t_client.toLowerCase()} or internal node.</p>
+                               <h4 className="text-[12px] sm:text-[13px] font-bold text-slate-800 uppercase tracking-wider">Client Details</h4>
+                               <p className="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 font-medium">Link project to a customer or internal node.</p>
                             </div>
                             <div className="flex bg-white rounded-lg sm:rounded-xl border border-slate-200 p-1 shadow-sm w-full sm:w-auto">
                               <button type="button" onClick={() => setCustomerType('existing')} className={`flex-1 sm:flex-none whitespace-nowrap px-3 sm:px-4 py-1.5 rounded-md sm:rounded-lg text-[9px] sm:text-[10px] font-bold uppercase tracking-wider transition-all ${customerType === 'existing' ? 'bg-gradient-to-r from-blue-900 to-indigo-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>Existing</button>
@@ -1093,6 +1088,7 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
                             <div>
                               <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1">Owning Subsidiary</label>
+                              {/* MODIFIED: This dropdown is firmly locked unless you are the Global Admin, forcing regular users to stay in their lane */}
                               <select value={formData.company_id} onChange={(e) => setFormData({...formData, company_id: e.target.value, customer_id: "", internal_company_id: "", assignee_ids: []})} disabled={!isGlobalAdmin} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 text-[12px] sm:text-[13px] font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 shadow-sm cursor-pointer disabled:bg-slate-100 disabled:text-slate-400">
                                 <option value="" disabled>Select Company...</option>
                                 {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -1101,16 +1097,16 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
 
                             <div>
                               {customerType === 'existing' && (
-                                <><label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1">{t_client} *</label>
+                                <><label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1">Customer / Client *</label>
                                 <select value={formData.customer_id} onChange={(e) => setFormData({...formData, customer_id: e.target.value, internal_company_id: ""})} disabled={!formData.company_id} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 text-[12px] sm:text-[13px] font-medium outline-none focus:border-blue-500 shadow-sm disabled:bg-slate-100 disabled:text-slate-400">
-                                  <option value="">-- Select {t_client} --</option>
+                                  <option value="">-- Select Client --</option>
                                   {availableCustomers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                 </select></>
                               )}
                               {customerType === 'new' && (
-                                <><label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1">New {t_client} *</label>
+                                <><label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1">New Client *</label>
                                 <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                                  <input type="text" placeholder={`${t_client} Name *`} value={newCustomer.name} onChange={e => setNewCustomer({...newCustomer, name: e.target.value})} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 text-[12px] sm:text-[13px] font-medium outline-none focus:border-blue-500 shadow-sm disabled:bg-slate-100" />
+                                  <input type="text" placeholder="Client Name *" value={newCustomer.name} onChange={e => setNewCustomer({...newCustomer, name: e.target.value})} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 text-[12px] sm:text-[13px] font-medium outline-none focus:border-blue-500 shadow-sm disabled:bg-slate-100" />
                                   <input type="text" placeholder="Phone (Optional)" value={newCustomer.phone} onChange={e => setNewCustomer({...newCustomer, phone: e.target.value})} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 text-[12px] sm:text-[13px] font-medium outline-none focus:border-blue-500 shadow-sm disabled:bg-slate-100" />
                                 </div></>
                               )}
@@ -1135,7 +1131,7 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
                               {showDriveHelp && (
                                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
                                   <div className="mt-3 p-4 bg-white rounded-xl border border-blue-100 shadow-sm space-y-2 text-[11px] sm:text-xs text-slate-600 font-medium">
-                                    <p><strong className="text-slate-800">Step 1:</strong> Create a new folder in your Google Drive named after this {t_project.toLowerCase()}.</p>
+                                    <p><strong className="text-slate-800">Step 1:</strong> Create a new folder in your Google Drive named after this project.</p>
                                     <p><strong className="text-slate-800">Step 2:</strong> Right-click the folder → Share → General Access → Change to <strong>'Anyone with the link'</strong> (Set as Editor if they need to upload).</p>
                                     <p><strong className="text-slate-800">Step 3:</strong> Copy the link and paste it into the field above.</p>
                                   </div>
@@ -1147,10 +1143,11 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
 
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 sm:gap-5">
                           <div className={showFinance && role === 'admin' ? "md:col-span-3" : "md:col-span-4"}>
-                            <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1 whitespace-nowrap truncate">{t_project} Name</label>
+                            <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1 whitespace-nowrap truncate">Project Name</label>
                             <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 text-[12px] sm:text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 shadow-sm disabled:bg-slate-50" />
                           </div>
                           
+                          {/* STRICT FINANCE ACCESS LOCK */}
                           {showFinance && role === 'admin' && (
                             <div className="flex flex-col">
                               <label className="text-[9px] sm:text-[10px] font-bold text-emerald-600 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1 whitespace-nowrap truncate">Expected Value (₹)</label>
@@ -1169,7 +1166,7 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
                         <div>
                           {!showDescription && !formData.description ? (
                             <button type="button" onClick={() => setShowDescription(true)} className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-bold text-blue-600 hover:text-blue-800 uppercase tracking-wider transition-colors px-1">
-                              <Plus className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Add {t_project} Description
+                              <Plus className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Add Project Description
                             </button>
                           ) : (
                             <div className="animate-in fade-in slide-in-from-top-2">
@@ -1179,7 +1176,7 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
                                   <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                 </button>
                               </div>
-                              <textarea value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} className="w-full h-20 sm:h-24 rounded-xl border border-slate-200 bg-white p-3 sm:p-4 text-[12px] sm:text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 shadow-sm resize-none disabled:bg-slate-50" placeholder={`Briefly describe the ${t_project.toLowerCase()} goals or scope...`} />
+                              <textarea value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} className="w-full h-20 sm:h-24 rounded-xl border border-slate-200 bg-white p-3 sm:p-4 text-[12px] sm:text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 shadow-sm resize-none disabled:bg-slate-50" placeholder="Briefly describe the project goals or scope..." />
                             </div>
                           )}
                         </div>
@@ -1198,7 +1195,7 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
                 {modalTab === 'team' && (
                   <div className="flex-1 overflow-y-auto min-h-0 overscroll-contain p-5 sm:p-8 flex flex-col sm:[&::-webkit-scrollbar]:w-1.5 sm:[&::-webkit-scrollbar-thumb]:bg-slate-300 sm:[&::-webkit-scrollbar-thumb]:rounded-full sm:[&::-webkit-scrollbar-track]:bg-transparent max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none] max-sm:[scrollbar-width:none]">
                      <div className="pt-2">
-                        <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2 sm:mb-3 px-1">Assign Team Members to {t_project}</label>
+                        <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2 sm:mb-3 px-1">Assign Team Members to Project</label>
                         <div className="flex flex-wrap gap-2 sm:gap-2.5">
                           {availableEmployees.length === 0 ? <p className="text-xs text-slate-400 italic">No available employees to assign.</p> : null}
                           {availableEmployees.map(emp => {
@@ -1214,7 +1211,7 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
 
                       {isUserView && (
                         <div className="pt-6 border-t border-slate-200 mt-6">
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">{t_project} Team Members</p>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Project Team Members</p>
                           <div className="flex flex-wrap gap-2.5">
                             {formData.assignee_ids.length === 0 ? <p className="text-xs text-slate-400 italic">No assigned team members.</p> : null}
                             {formData.assignee_ids.map(id => {
@@ -1245,7 +1242,7 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
                         <div className="flex flex-col xl:flex-row gap-3 shrink-0">
                           <input 
                             type="text" 
-                            placeholder={`New ${t_task.toLowerCase()} title...`} 
+                            placeholder="New task title..." 
                             value={newTaskTitle} 
                             onChange={(e) => setNewTaskTitle(e.target.value)} 
                             onKeyDown={(e) => {
@@ -1259,12 +1256,12 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
                           <div className="flex gap-2 sm:gap-3 w-full xl:w-auto">
                             <input 
                               type="date" 
-                              title={`${t_task} Deadline`} 
+                              title="Task Deadline" 
                               value={newTaskDeadline} 
                               max={formData.due_date || undefined}
                               onChange={(e) => {
                                 if (formData.due_date && new Date(e.target.value) > new Date(formData.due_date)) {
-                                  alert(`${t_task} deadline cannot exceed the ${t_project.toLowerCase()}'s main due date (${formData.due_date}).`);
+                                  alert(`Task deadline cannot exceed the project's main due date (${formData.due_date}).`);
                                   return;
                                 }
                                 setNewTaskDeadline(e.target.value);
@@ -1301,7 +1298,7 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
                       <div className="flex-1 overflow-y-auto space-y-2 sm:space-y-3 pr-2 min-h-0 sm:[&::-webkit-scrollbar]:w-1.5 sm:[&::-webkit-scrollbar-thumb]:bg-slate-300 sm:[&::-webkit-scrollbar-thumb]:rounded-full sm:[&::-webkit-scrollbar-track]:bg-transparent max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none] max-sm:[scrollbar-width:none]">
                         {displayTasks.length === 0 ? (
                           <div className="h-32 sm:h-40 flex flex-col items-center justify-center text-slate-400 bg-slate-50/50 rounded-2xl sm:rounded-3xl border border-dashed border-slate-200">
-                            <p className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider">No {t_tasks.toLowerCase()} added</p>
+                            <p className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider">No tasks added</p>
                           </div>
                         ) : (
                           displayTasks.map((task, index) => {
@@ -1362,8 +1359,8 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
                       <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 sm:p-6 mb-6 shadow-sm">
                         <div className="flex justify-between items-center mb-4">
                           <div>
-                            <h4 className="text-sm font-bold text-slate-800 uppercase tracking-widest">{t_project} Milestones</h4>
-                            <p className="text-[11px] text-slate-500 mt-1">Check prerequisites to automatically level up {t_project.toLowerCase()} status.</p>
+                            <h4 className="text-sm font-bold text-slate-800 uppercase tracking-widest">Project Milestones</h4>
+                            <p className="text-[11px] text-slate-500 mt-1">Check prerequisites to automatically level up project status.</p>
                           </div>
                           <div className={`px-4 py-1.5 rounded-xl text-xs font-bold shadow-sm uppercase tracking-wider border ${getStatusStyle(formData.status)}`}>
                             {formData.status}
@@ -1388,7 +1385,7 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
                           <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm opacity-90 hover:opacity-100 transition-opacity">
                             <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 border-b pb-2">To "Review"</h5>
                             <div className="space-y-2">
-                              {Object.entries({ all_tasks_done: `All ${t_tasks} Completed`, internal_qa: "Internal QA Passed" }).map(([key, label]) => (
+                              {Object.entries({ all_tasks_done: "All Tasks Completed", internal_qa: "Internal QA Passed" }).map(([key, label]) => (
                                 <label key={key} className="flex items-center gap-3 cursor-pointer group">
                                   <div className={`h-5 w-5 rounded-md border flex items-center justify-center transition-colors ${formData.milestones?.review?.[key as keyof typeof formData.milestones.review] ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-slate-300 group-hover:border-blue-400'}`}>
                                     {formData.milestones?.review?.[key as keyof typeof formData.milestones.review] && <Check className="h-3.5 w-3.5 text-white" />}
@@ -1402,7 +1399,7 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
                           <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm opacity-90 hover:opacity-100 transition-opacity">
                             <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 border-b pb-2">To "Completed"</h5>
                             <div className="space-y-2">
-                              {Object.entries({ client_approved: `${t_client} Approved`, final_handover: "Final Handover" }).map(([key, label]) => (
+                              {Object.entries({ client_approved: "Client Approved", final_handover: "Final Handover" }).map(([key, label]) => (
                                 <label key={key} className="flex items-center gap-3 cursor-pointer group">
                                   <div className={`h-5 w-5 rounded-md border flex items-center justify-center transition-colors ${formData.milestones?.completed?.[key as keyof typeof formData.milestones.completed] ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-slate-300 group-hover:border-blue-400'}`}>
                                     {formData.milestones?.completed?.[key as keyof typeof formData.milestones.completed] && <Check className="h-3.5 w-3.5 text-white" />}
@@ -1709,12 +1706,13 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
                   </div>
                 )}
 
-                <div className="p-4 sm:p-6 border-t border-slate-100 bg-[#FAFCFF] flex justify-end items-center gap-2 sm:gap-4 shrink-0 mt-auto">
+                {/* MODIFIED: Modal Footer - Fixed Cancel Button Position next to Save */}
+                <div className="p-4 sm:p-6 border-t border-slate-100 bg-[#FAFCFF] flex justify-end items-center gap-3 shrink-0 mt-auto">
                   {selectedProject && isAdminView && modalTab === 'details' && (
                     <button onClick={handleDeleteProject} disabled={isSaving} className="border border-rose-200 text-rose-600 bg-white hover:bg-rose-50 rounded-xl h-10 sm:h-12 px-3 sm:px-5 flex items-center justify-center shadow-sm mr-auto transition-colors shrink-0"><Trash2 className="h-4 w-4" /></button>
                   )}
 
-                  <button onClick={() => setIsModalOpen(false)} className="rounded-xl border border-slate-200 bg-white h-10 sm:h-12 px-4 sm:px-8 font-bold text-[12px] sm:text-sm text-slate-600 hover:bg-slate-50 shadow-sm transition-colors mr-auto flex-1 sm:flex-none">Cancel</button>
+                  <button onClick={() => setIsModalOpen(false)} className="rounded-xl border border-slate-200 bg-white h-10 sm:h-12 px-4 sm:px-8 font-bold text-[12px] sm:text-sm text-slate-600 hover:bg-slate-50 shadow-sm transition-colors flex-1 sm:flex-none">Cancel</button>
 
                   {isAdminView && (
                     <>
@@ -1725,12 +1723,12 @@ export default function StandardProjects({ autoOpenProjectId }: { autoOpenProjec
                       )}
                       {!selectedProject && modalTab === 'team' && (
                         <button onClick={() => setModalTab('tasks')} className="bg-slate-900 text-white hover:bg-slate-800 rounded-xl h-10 sm:h-12 px-6 sm:px-10 font-bold text-[12px] sm:text-sm shadow-md transition-all flex-1 sm:flex-none flex items-center justify-center">
-                          Next: {t_tasks}
+                          Next: Action Items
                         </button>
                       )}
                       {!selectedProject && modalTab === 'tasks' && (
                         <button onClick={handleSaveProject} disabled={isSaving} className="bg-gradient-to-r from-blue-900 to-indigo-800 text-white rounded-xl h-10 sm:h-12 px-6 sm:px-10 font-bold text-[12px] sm:text-sm shadow-md shadow-blue-900/20 hover:shadow-lg hover:-translate-y-0.5 transition-all flex-1 sm:flex-none flex items-center justify-center">
-                          {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : `Finish & Create ${t_project}`}
+                          {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : "Finish & Create Project"}
                         </button>
                       )}
                       {selectedProject && (
