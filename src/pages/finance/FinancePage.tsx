@@ -289,14 +289,17 @@ export default function FinancePage() {
 
   const reportStats = useMemo(() => generateReportData(), [reportConfig, isReportModalOpen]);
 
-  // --- REPORT LOGOS DATA ---
+  // --- REPORT LOGOS DATA (STRICT PARENT & SUBJECT SEGREGATION) ---
   const masterAdmin = employees.find(e => e.access_level === 'admin');
-  const actualParentCompany = companies.find(c => c.business_type === 'parent') || companies[0];
-  const parentLogoUrl = masterAdmin?.profile_image_url || actualParentCompany?.logo_url;
-  const parentName = actualParentCompany?.name || 'Zac Holdings';
+  const parentCompanyDef = companies.find(c => c.business_type === 'parent');
   
+  // Left Side: Strictly Parent Entity
+  const parentLogoUrl = parentCompanyDef?.logo_url || masterAdmin?.profile_image_url;
+  const parentName = parentCompanyDef?.name || 'Zac Holdings';
+  
+  // Right Side: Selected Subsidiary (Subject Entity)
   const selectedCompany = reportConfig.companyId !== 'all' ? companies.find(c => c.id.toString() === reportConfig.companyId) : null;
-  const showBothLogos = selectedCompany && selectedCompany.id !== actualParentCompany?.id;
+  const showSubjectEntity = selectedCompany && selectedCompany.name !== parentName;
 
   // Polyline Points for SVG Line Chart
   const lineChartIncPoints = reportStats.chartData.map((d, i) => {
@@ -672,61 +675,6 @@ export default function FinancePage() {
         document.body
       )}
 
-      {/* ADD/EDIT EXPENSE MODAL */}
-      {typeof document !== 'undefined' && createPortal(
-        <AnimatePresence>
-          {isExpenseModalOpen && (
-            <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center sm:p-4 bg-slate-900/40 backdrop-blur-sm print:hidden">
-              <motion.div initial={{ opacity: 0, y: 40, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 40, scale: 0.95 }} className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg flex flex-col overflow-hidden border border-slate-100">
-                <div className="px-6 py-5 border-b border-slate-100 bg-[#FAFCFF] flex items-center justify-between">
-                  <div>
-                    <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">{editingExpenseId ? 'Edit Record' : 'New Expense'}</span>
-                    <h3 className="text-lg font-bold text-slate-900 tracking-tight mt-1.5">{editingExpenseId ? 'Edit Expense' : 'Add Expense'}</h3>
-                  </div>
-                  <button onClick={() => setIsExpenseModalOpen(false)} className="h-8 w-8 bg-white border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm"><X className="h-4 w-4" /></button>
-                </div>
-                
-                <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-                   {isAdmin && !activeWorkspace && (
-                     <div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Company</label>
-                     <select value={expenseForm.company_id} onChange={e=>setExpenseForm({...expenseForm, company_id: e.target.value, project_id: ""})} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-bold outline-none"><option value="">-- Select --</option>{companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-                   )}
-                   <div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Description *</label>
-                   <input type="text" value={expenseForm.description} onChange={e=>setExpenseForm({...expenseForm, description: e.target.value})} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none" placeholder="E.g., Server Hosting, Travel..." /></div>
-                   
-                   <div className="grid grid-cols-2 gap-4">
-                     <div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Amount (₹) *</label>
-                     <input type="number" value={expenseForm.amount} onChange={e=>setExpenseForm({...expenseForm, amount: parseFloat(e.target.value)||0})} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-800 outline-none" /></div>
-                     <div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Date</label>
-                     <input type="date" value={expenseForm.expense_date} onChange={e=>setExpenseForm({...expenseForm, expense_date: e.target.value})} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none" /></div>
-                   </div>
-
-                   <div className="grid grid-cols-2 gap-4">
-                     <div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Category</label>
-                     <select value={expenseForm.category} onChange={e=>setExpenseForm({...expenseForm, category: e.target.value})} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none"><option>Software</option><option>Office/Rent</option><option>Marketing</option><option>Travel</option><option>Materials</option><option>Payroll</option><option>Other</option></select></div>
-                     <div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5 truncate">Link Project</label>
-                     <select value={expenseForm.project_id} onChange={e=>setExpenseForm({...expenseForm, project_id: e.target.value})} disabled={!expenseForm.company_id} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none disabled:opacity-50"><option value="">-- General --</option>{globalProjects.filter(p=>p.company_id.toString()===expenseForm.company_id).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
-                   </div>
-
-                   <div className="grid grid-cols-2 gap-4">
-                     <div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Status</label>
-                     <select value={expenseForm.status} onChange={e=>setExpenseForm({...expenseForm, status: e.target.value})} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none"><option value="Completed">Completed</option><option value="Pending">Pending</option><option value="Due">Due</option></select></div>
-                     <div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Due Date (Optional)</label>
-                     <input type="date" value={expenseForm.due_date} onChange={e=>setExpenseForm({...expenseForm, due_date: e.target.value})} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none" /></div>
-                   </div>
-                </div>
-
-                <div className="p-6 border-t border-slate-100 bg-[#FAFCFF] flex justify-end gap-3 shrink-0">
-                   <button onClick={() => setIsExpenseModalOpen(false)} className="rounded-xl border border-slate-200 bg-white h-11 px-6 font-bold text-sm text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
-                   <button onClick={handleSaveExpense} disabled={isSaving} className="bg-slate-900 text-white rounded-xl h-11 px-8 font-bold text-sm shadow-md hover:shadow-lg transition-all">{isSaving ? "Saving..." : (editingExpenseId ? "Update" : "Add")}</button>
-                </div>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>,
-        document.body
-      )}
-
       {/* --- FINANCIAL REPORT GENERATOR MODAL & PRINT VIEW --- */}
       {canViewFinance && typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
@@ -816,7 +764,7 @@ export default function FinancePage() {
 
                       {/* Right: Selected Subsidiary Logo (if different) */}
                       <div className="flex flex-col items-end text-right w-1/3">
-                         {showBothLogos && selectedCompany && (
+                         {showSubjectEntity && selectedCompany && (
                             <>
                                {selectedCompany.logo_url ? (
                                   <img src={selectedCompany.logo_url} alt="Sub Logo" className="h-14 object-contain mb-2 print:h-12 mix-blend-multiply" />

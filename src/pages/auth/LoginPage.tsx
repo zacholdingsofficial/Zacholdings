@@ -65,16 +65,6 @@ const NODES = NODE_ANGLES.map((angle, i) => {
   };
 });
 
-const MeasureDivider = () => (
-  <div className="flex-1 min-h-[20px] flex items-center">
-    <div className="relative w-full h-px bg-black/[0.06]">
-      {Array.from({ length: 9 }).map((_, i) => (
-        <span key={i} className="absolute top-1/2 -translate-y-1/2 w-px h-2 bg-black/10" style={{ left: `${(i / 8) * 100}%` }} />
-      ))}
-    </div>
-  </div>
-);
-
 function CustomSelect({
   icon,
   label,
@@ -477,11 +467,10 @@ export default function LoginPage() {
             >
               <div className="mb-8 relative">
                 {adminLogo ? (
-                  // Removed mix-blend-screen so the white logo background blends naturally into the white layout
                   <img 
                     src={adminLogo} 
                     alt="Company logo" 
-                    className="h-14 md:h-16 w-auto max-w-[200px] object-contain mix-blend-multiply" 
+                    className="h-14 md:h-16 w-auto max-w-[200px] object-contain" 
                   />
                 ) : (
                   <span className="font-display text-5xl text-[#10192B] leading-none">Z</span>
@@ -641,7 +630,7 @@ export default function LoginPage() {
                 >
                   <div className="flex items-center gap-4 mb-5 shrink-0">
                     {selectedRole === 'admin' ? (
-                      adminLogo ? <img src={adminLogo} alt="Admin" className="h-9 w-auto max-w-[100px] object-contain shrink-0 rounded-lg mix-blend-multiply" /> : <Shield className="h-8 w-8 text-[#10192B] shrink-0" strokeWidth={1.5} />
+                      adminLogo ? <img src={adminLogo} alt="Admin" className="h-9 w-auto max-w-[100px] object-contain shrink-0 rounded-lg" /> : <Shield className="h-8 w-8 text-[#10192B] shrink-0" strokeWidth={1.5} />
                     ) : (
                       activeCompanyObj?.logo_url ? <img src={activeCompanyObj.logo_url} alt={activeCompanyObj.name} className="h-9 w-auto max-w-[100px] object-contain shrink-0 rounded-lg" /> : <Building2 className="h-8 w-8 text-[#10192B] shrink-0" strokeWidth={1.5} />
                     )}
