@@ -166,6 +166,18 @@ export default function SettingsPage() {
     } catch (error: any) { alert(`Error updating: ${error.message}`); setSaveStatus("idle"); }
   };
 
+  const handleDiscard = () => {
+    if (currentEmployee) {
+      setFormData({ name: currentEmployee.name || "", newPassword: "" });
+      setImagePreview(currentEmployee.profile_image_url || null);
+    } else {
+      setFormData({ name: "", newPassword: "" });
+      setImagePreview(null);
+    }
+    setImageFile(null);
+    setRemoveImage(false);
+  };
+
   const filterData = (data: any[], dateField: string = 'created_at') => {
     return data.filter(item => {
       if (backupTarget !== "all" && item.company_id?.toString() !== backupTarget) return false;
@@ -251,19 +263,19 @@ export default function SettingsPage() {
       });
     });
 
-    // 6. Intelligent Column Sizing (FIXED STRICT TYPING)
+    // 6. Intelligent Column Sizing 
     headers.forEach((_, index) => {
       const column = sheet.getColumn(index + 1);
       let maxLength = 0;
       
       column.eachCell({ includeEmpty: true }, (cell, rowNumber) => {
-        if (rowNumber > 3) { // Skip title and meta rows
+        if (rowNumber > 3) { 
           const val = cell.value ? cell.value.toString() : '';
           if (val.length > maxLength) maxLength = val.length;
         }
       });
       
-      column.width = Math.min(Math.max(maxLength + 4, 15), 45); // Clamp widths
+      column.width = Math.min(Math.max(maxLength + 4, 15), 45); 
     });
   };
 
@@ -365,7 +377,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="max-w-[1200px] mx-auto space-y-5 sm:space-y-8 animate-in fade-in duration-700 pb-8 relative z-0">
+    <div className="max-w-[1200px] mx-auto space-y-5 sm:space-y-8 animate-in fade-in duration-700 pb-24 sm:pb-32 relative z-0">
       
       <div className="absolute inset-0 pointer-events-none z-[-1] overflow-hidden print:hidden">
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9InJnYmEoMTQ4LCAxNjMsIDE4NCwgMC4wOCkiLz48L3N2Zz4=')] [mask-image:linear-gradient(to_bottom,white,transparent)]" />
@@ -533,39 +545,61 @@ export default function SettingsPage() {
             )}
 
           </div>
-
-          <AnimatePresence>
-            {hasUnsavedChanges && (
-              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="bg-[#FAFCFF] border-t border-slate-100 max-sm:rounded-b-[1.5rem] lg:rounded-br-[2rem] lg:rounded-bl-none overflow-hidden shrink-0 mt-auto">
-                <div className="p-4 sm:p-6 flex justify-end">
-                  <button onClick={handleSaveSettings} disabled={saveStatus !== "idle" || !isPasswordValid} className="relative overflow-hidden w-full sm:w-auto bg-gradient-to-r from-blue-900 to-indigo-800 text-white rounded-xl h-11 sm:h-12 px-8 sm:px-10 text-[13px] sm:text-sm font-bold shadow-lg shadow-blue-900/30 hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center group">
-                    {saveStatus === "idle" && isPasswordValid && <motion.div animate={{ left: ['-100%', '200%'] }} transition={{ repeat: Infinity, duration: 2.5, ease: "linear", repeatDelay: 1.5 }} className="absolute top-0 bottom-0 w-1/2 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12 z-0 pointer-events-none" />}
-                    <span className="relative z-10 flex items-center">
-                      {saveStatus === "compressing" && <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Compressing...</>}
-                      {saveStatus === "uploading" && <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Uploading...</>}
-                      {saveStatus === "saving" && <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</>}
-                      {saveStatus === "idle" && <>Save Changes <Save className="h-3.5 w-3.5 sm:h-4 sm:w-4 ml-1.5 sm:ml-2" /></>}
-                    </span>
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          
-          <AnimatePresence>
-            {isSuccess && !hasUnsavedChanges && (
-              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mt-auto">
-                <div className="p-4 sm:p-6 flex justify-center">
-                  <div className="flex items-center gap-1.5 text-emerald-600 font-bold text-[10px] sm:text-[11px] uppercase tracking-wider bg-emerald-50 border border-emerald-100 px-4 py-2 rounded-lg shadow-sm">
-                    <CheckCircle2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Update Successful
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
         </motion.div>
       </motion.div>
+
+      {/* --- FLOATING SAVE BAR --- */}
+      <AnimatePresence>
+        {hasUnsavedChanges && (
+          <motion.div 
+            initial={{ opacity: 0, y: 50, scale: 0.9 }} 
+            animate={{ opacity: 1, y: 0, scale: 1 }} 
+            exit={{ opacity: 0, y: 50, scale: 0.9 }} 
+            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            className="fixed bottom-6 sm:bottom-10 left-4 right-4 sm:left-1/2 sm:-translate-x-1/2 sm:w-[90%] sm:max-w-[640px] z-[100] bg-slate-900/90 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3)] p-3 sm:p-4 flex items-center justify-between gap-4 print:hidden"
+          >
+            <div className="flex items-center gap-3 pl-2 sm:pl-3 min-w-0">
+              <div className="h-8 w-8 sm:h-10 sm:w-10 bg-amber-500/20 text-amber-400 rounded-full flex items-center justify-center shrink-0">
+                <Edit3 className="h-4 w-4 sm:h-5 sm:w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[12px] sm:text-[14px] font-bold text-white truncate">Unsaved Changes</p>
+                <p className="text-[10px] sm:text-[12px] text-slate-400 font-medium truncate hidden sm:block">Please save to apply modifications</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+               <button onClick={handleDiscard} className="px-3 sm:px-4 py-2 text-[11px] sm:text-[13px] font-bold text-slate-300 hover:text-white transition-colors hidden sm:block">
+                  Discard
+               </button>
+               <button onClick={handleSaveSettings} disabled={saveStatus !== "idle" || !isPasswordValid} className="relative overflow-hidden bg-blue-600 hover:bg-blue-500 text-white rounded-xl h-10 sm:h-11 px-5 sm:px-8 text-[12px] sm:text-sm font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2">
+                  {saveStatus !== "idle" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 sm:h-4.5 sm:w-4.5" />}
+                  {saveStatus === "compressing" ? "Compressing..." : 
+                   saveStatus === "uploading" ? "Uploading..." : 
+                   saveStatus === "saving" ? "Saving..." : 
+                   "Save Changes"}
+               </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* --- FLOATING SUCCESS BAR --- */}
+      <AnimatePresence>
+        {isSuccess && !hasUnsavedChanges && (
+          <motion.div 
+            initial={{ opacity: 0, y: 50, scale: 0.9 }} 
+            animate={{ opacity: 1, y: 0, scale: 1 }} 
+            exit={{ opacity: 0, y: 50, scale: 0.9 }} 
+            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            className="fixed bottom-6 sm:bottom-10 left-1/2 -translate-x-1/2 z-[100] bg-emerald-600/95 backdrop-blur-xl border border-emerald-500 text-white rounded-2xl shadow-2xl px-6 sm:px-8 py-3 sm:py-4 flex items-center gap-3 print:hidden"
+          >
+            <CheckCircle2 className="h-5 w-5 sm:h-6 sm:w-6" />
+            <span className="text-[13px] sm:text-[15px] font-bold tracking-wide">Settings updated successfully!</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }
