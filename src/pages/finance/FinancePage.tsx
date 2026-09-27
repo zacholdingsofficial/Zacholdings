@@ -289,10 +289,14 @@ export default function FinancePage() {
 
   const reportStats = useMemo(() => generateReportData(), [reportConfig, isReportModalOpen]);
 
-  // Report Logos Data
-  const parentCompany = companies.find(c => c.id === companyId); // Based on the admin's core ID
+  // --- REPORT LOGOS DATA ---
+  const masterAdmin = employees.find(e => e.access_level === 'admin');
+  const actualParentCompany = companies.find(c => c.business_type === 'parent') || companies[0];
+  const parentLogoUrl = masterAdmin?.profile_image_url || actualParentCompany?.logo_url;
+  const parentName = actualParentCompany?.name || 'Zac Holdings';
+  
   const selectedCompany = reportConfig.companyId !== 'all' ? companies.find(c => c.id.toString() === reportConfig.companyId) : null;
-  const showBothLogos = selectedCompany && selectedCompany.id !== parentCompany?.id;
+  const showBothLogos = selectedCompany && selectedCompany.id !== actualParentCompany?.id;
 
   // Polyline Points for SVG Line Chart
   const lineChartIncPoints = reportStats.chartData.map((d, i) => {
@@ -788,14 +792,14 @@ export default function FinancePage() {
                    <div className="flex justify-between items-start mb-10 border-b border-slate-200 pb-8">
                       {/* Left: Parent Company Logo */}
                       <div className="flex flex-col items-start w-1/3">
-                         {parentCompany?.logo_url ? (
-                            <img src={parentCompany.logo_url} alt="Parent Logo" className="h-14 object-contain mb-2 print:h-12" />
+                         {parentLogoUrl ? (
+                            <img src={parentLogoUrl} alt="Parent Logo" className="h-14 object-contain mb-2 print:h-12 mix-blend-multiply" />
                          ) : (
                             <div className="h-12 w-12 rounded-xl bg-slate-900 flex items-center justify-center text-white text-xl font-black mb-2 print:h-10 print:w-10" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                              {parentCompany?.name ? parentCompany.name.charAt(0) : 'Z'}
+                              {parentName.charAt(0)}
                             </div>
                          )}
-                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{parentCompany?.name || 'Zac Holdings'}</p>
+                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{parentName}</p>
                          <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest mt-0.5">Parent Entity</p>
                       </div>
 
@@ -815,7 +819,7 @@ export default function FinancePage() {
                          {showBothLogos && selectedCompany && (
                             <>
                                {selectedCompany.logo_url ? (
-                                  <img src={selectedCompany.logo_url} alt="Sub Logo" className="h-14 object-contain mb-2 print:h-12" />
+                                  <img src={selectedCompany.logo_url} alt="Sub Logo" className="h-14 object-contain mb-2 print:h-12 mix-blend-multiply" />
                                ) : (
                                   <div className="h-12 w-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 text-xl font-black mb-2 print:h-10 print:w-10" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
                                     {selectedCompany.name.charAt(0)}
