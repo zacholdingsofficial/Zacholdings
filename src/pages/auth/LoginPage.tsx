@@ -473,15 +473,14 @@ export default function LoginPage() {
               transition={{ duration: 0.7, ease: "easeOut" }}
               className="max-w-md w-full"
             >
-              <div className="mb-11">
+              <div className="mb-11 relative">
                 {adminLogo ? (
-                  /* 
-                    CSS TRICK EXPLANATION: 
-                    1. invert(1) turns white to black and black to white.
-                    2. hue-rotate(180deg) brings inverted gold back to natural gold.
-                    3. mix-blend-screen drops all black, making the original white background transparent while perfectly rendering the logo in white and gold!
-                  */
-                  <img src={adminLogo} alt="Company logo" className="h-11 w-auto max-w-[150px] object-contain mix-blend-screen" style={{ filter: "invert(1) hue-rotate(180deg) brightness(1.2) contrast(1.1)" }} />
+                  // By using mix-blend-screen, any black background on the logo instantly becomes transparent
+                  <img 
+                    src={adminLogo} 
+                    alt="Company logo" 
+                    className="h-14 md:h-16 w-auto max-w-[200px] object-contain mix-blend-screen" 
+                  />
                 ) : (
                   <span className="font-display text-5xl text-white leading-none">Z</span>
                 )}
@@ -642,9 +641,9 @@ export default function LoginPage() {
 
                   <div className="flex items-center gap-4 mb-6 shrink-0">
                     {selectedRole === 'admin' ? (
-                      adminLogo ? <img src={adminLogo} alt="Admin" className="h-12 w-auto max-w-[150px] object-contain shrink-0 mix-blend-multiply" /> : <Shield className="h-9 w-9 text-[#10192B] shrink-0" strokeWidth={1.5} />
+                      adminLogo ? <img src={adminLogo} alt="Admin" className="h-10 w-auto max-w-[120px] object-contain shrink-0 rounded-lg" /> : <Shield className="h-9 w-9 text-[#10192B] shrink-0" strokeWidth={1.5} />
                     ) : (
-                      activeCompanyObj?.logo_url ? <img src={activeCompanyObj.logo_url} alt={activeCompanyObj.name} className="h-12 w-auto max-w-[150px] object-contain shrink-0 mix-blend-multiply" /> : <Building2 className="h-9 w-9 text-[#10192B] shrink-0" strokeWidth={1.5} />
+                      activeCompanyObj?.logo_url ? <img src={activeCompanyObj.logo_url} alt={activeCompanyObj.name} className="h-10 w-auto max-w-[120px] object-contain shrink-0 rounded-lg" /> : <Building2 className="h-9 w-9 text-[#10192B] shrink-0" strokeWidth={1.5} />
                     )}
                     <div className="min-w-0">
                       <h2 className="font-display text-[26px] text-[#171C26] font-normal tracking-tight leading-none truncate">Sign in</h2>
