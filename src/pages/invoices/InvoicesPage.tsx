@@ -61,11 +61,20 @@ export default function InvoicesPage() {
   // --- FULL ACCESS: Standard Client Invoices (Income) ---
   const visibleInvoices = invoices.filter(inv => {
     const proj = projects.find(p => p.id === inv.project_id);
-    const searchStr = searchQuery.toLowerCase();
+    const customer = customers.find(c => c.id === inv.customer_id);
+    const internalCompany = proj?.internal_company_id 
+      ? companies.find(c => c.id === proj.internal_company_id) 
+      : null;
+
+    const searchStr = searchQuery.trim().toLowerCase();
     
-    // Search matches invoice number OR linked project name
-    const matchesSearch = inv.invoice_number.toLowerCase().includes(searchStr) || 
-                          (proj && proj.name.toLowerCase().includes(searchStr));
+    // Search matches invoice ID, customer name, internal company name, or linked project name
+    const matchesSearch = 
+      !searchStr ||
+      (inv.invoice_number && inv.invoice_number.toLowerCase().includes(searchStr)) || 
+      (customer && customer.name && customer.name.toLowerCase().includes(searchStr)) ||
+      (internalCompany && internalCompany.name && internalCompany.name.toLowerCase().includes(searchStr)) ||
+      (proj && proj.name && proj.name.toLowerCase().includes(searchStr));
                           
     const dynamicStatus = getDynamicStatus(inv);
     const matchesStatus = filterStatus === "All" || dynamicStatus === filterStatus;
@@ -77,10 +86,11 @@ export default function InvoicesPage() {
     return matchesSearch && matchesStatus && inv.company_id === currentCompanyId;
   }).sort((a, b) => new Date(b.issue_date).getTime() - new Date(a.issue_date).getTime());
 
-
   // --- RESTRICTED ACCESS: Dynamic Project Expense Reports (Costs + Labor) ---
   const headProjectExpenses = projects.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const searchStr = searchQuery.trim().toLowerCase();
+    const costId = `COST-${p.id.toString().padStart(4, '0')}`.toLowerCase();
+    const matchesSearch = !searchStr || p.name.toLowerCase().includes(searchStr) || costId.includes(searchStr);
     return matchesSearch && p.company_id === currentCompanyId;
   }).map(p => {
     // 1. Calculate Labor Allocations
@@ -103,11 +113,11 @@ export default function InvoicesPage() {
       issue_date: p.approval_date || today,
       due_date: p.due_date || today,
       total_amount: totalAllocated + totalProjectExpenses, // Total Cost = Labor + Expenses
-      amount_paid: totalPaidSalaries + totalProjectExpenses, // We assume external expenses are cleared/paid, so they add to the paid pool
+      amount_paid: totalPaidSalaries + totalProjectExpenses, // We assume external expenses are cleared/paid
       status: p.status || 'Active',
       allocations: pAllocations,
       project_expenses: pExpenses // Passed down for rendering expense line items
-    }
+    };
   });
 
   const displayList = !canViewFinance ? headProjectExpenses : visibleInvoices;
@@ -184,7 +194,7 @@ export default function InvoicesPage() {
   };
 
   const handleSaveInvoice = async () => {
-    if (selectedInvoice?.isExpenseReport) return; // Prevent saving dynamically generated reports
+    if (selectedInvoice?.isExpenseReport) return;
     
     if (!formData.company_id) return alert("Select a company.");
     if (!formData.customer_id && !linkedProject?.internal_company_id) return alert("Select a customer or an internal project.");
@@ -314,7 +324,6 @@ export default function InvoicesPage() {
       case 'Overdue': return 'bg-rose-50 text-rose-600 border-rose-200 shadow-sm';
       case 'Pending': return 'bg-amber-50 text-amber-600 border-amber-200';
       case 'Cancelled': return 'bg-slate-50 text-slate-500 border-slate-200';
-      // Head specific styles
       case 'Active': return 'bg-blue-50 text-blue-600 border-blue-200';
       case 'Completed': return 'bg-emerald-50 text-emerald-600 border-emerald-200';
       default: return 'bg-slate-50 text-slate-500 border-slate-200';
@@ -358,7 +367,7 @@ export default function InvoicesPage() {
             <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 h-3.5 sm:h-4 w-3.5 sm:w-4 text-slate-400" />
             <input 
               type="text" 
-              placeholder={canViewFinance ? "Search invoices or project names..." : "Search expense reports by project name..."}
+              placeholder={canViewFinance ? "Search by invoice ID, client name, or project..." : "Search expense reports by project or ID..."}
               value={searchQuery} 
               onChange={(e) => setSearchQuery(e.target.value)} 
               className="w-full h-10 sm:h-11 pl-9 sm:pl-11 pr-4 rounded-lg sm:rounded-xl border-none text-[13px] sm:text-sm font-medium outline-none bg-transparent focus:ring-0 placeholder:text-slate-400" 
@@ -396,7 +405,11 @@ export default function InvoicesPage() {
 
         {/* INVOICES / REPORTS GRID */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 print:hidden">
-          {displayList.length === 0 && <div className="col-span-full h-32 sm:h-48 border border-slate-200 border-dashed rounded-2xl sm:rounded-3xl flex items-center justify-center text-slate-400 bg-slate-50/50"><p className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest">No matching records found</p></div>}
+          {displayList.length === 0 && (
+            <div className="col-span-full h-32 sm:h-48 border border-slate-200 border-dashed rounded-2xl sm:rounded-3xl flex items-center justify-center text-slate-400 bg-slate-50/50">
+              <p className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest">No matching records found</p>
+            </div>
+          )}
           {displayList.map((inv: any) => {
             const status = canViewFinance ? getDynamicStatus(inv) : inv.status;
             
@@ -410,7 +423,7 @@ export default function InvoicesPage() {
                     : projects.find(p => p.id === inv.project_id)?.internal_company_id 
                       ? `${companies.find(c => c.id === projects.find(p => p.id === inv.project_id)?.internal_company_id)?.name} (Internal)` 
                       : 'Unknown Client')
-                : inv.invoice_number; // Show COST-00XX string as the subtitle for heads
+                : inv.invoice_number;
 
             return (
               <motion.div key={inv.id} layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} onClick={() => openViewInvoice(inv)} className="bg-white rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all flex flex-col relative overflow-hidden group cursor-pointer p-4 sm:p-6">
@@ -436,7 +449,7 @@ export default function InvoicesPage() {
                   </div>
                 </div>
               </motion.div>
-            )
+            );
           })}
         </div>
 
@@ -587,7 +600,6 @@ export default function InvoicesPage() {
                         
                         <div className="space-y-2 mt-2 sm:mt-3 print:mt-2 print:space-y-0 text-slate-800">
                           {selectedInvoice?.isExpenseReport ? (
-                             // Render Dynamic Expense Items
                              <>
                                {(selectedInvoice.allocations.length === 0 && selectedInvoice.project_expenses.length === 0) && (
                                   <p className="text-xs text-slate-400 italic px-2 py-4">No allocations or expenses logged for this project.</p>
@@ -609,7 +621,7 @@ export default function InvoicesPage() {
                                       <div className="col-span-2 text-right text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">{emp?.role || 'Staff'}</div>
                                       <div className="col-span-2 text-right font-black text-[12px] sm:text-[14px]">₹{lineVal.toLocaleString()}</div>
                                    </div>
-                                 )
+                                 );
                                })}
 
                                {/* Additional Project Expenses */}
@@ -625,7 +637,6 @@ export default function InvoicesPage() {
                                ))}
                              </>
                           ) : (
-                             // Render Editable Admin Line Items
                              lineItems.map((item, index) => (
                                <div key={index} className="grid grid-cols-12 gap-2 sm:gap-4 items-center group print:break-inside-avoid print:py-1">
                                  <div className="col-span-6 relative">
