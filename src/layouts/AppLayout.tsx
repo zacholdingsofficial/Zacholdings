@@ -211,18 +211,18 @@ export default function AppLayout() {
           <motion.aside initial={{ width: 0, opacity: 0 }} animate={{ width: 280, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }} 
             className="hidden sm:flex bg-white flex-col shrink-0 z-20 border-r border-slate-100/50 sm:rounded-l-[2.5rem] print:hidden shadow-[0_8px_40px_rgb(0,0,0,0.04)]"
           >
-            <div className="h-28 flex items-center justify-between px-8 shrink-0">
-              <div className="flex items-center">
+            <div className="h-28 flex items-center justify-between px-8 shrink-0 gap-4">
+              <div className="flex items-center min-w-0 flex-1">
                 {brandLogo ? (
-                  <img src={brandLogo} alt="Logo" className="h-10 w-auto max-w-[120px] object-contain mr-3" />
+                  <img src={brandLogo} alt="Logo" className="h-10 w-auto max-w-[120px] object-contain mr-3 shrink-0" />
                 ) : (
-                  <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-slate-900 via-blue-900 to-blue-800 flex items-center justify-center text-white text-[16px] font-black tracking-tighter mr-3 shadow-md z-10">
+                  <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-slate-900 via-blue-900 to-blue-800 flex items-center justify-center text-white text-[16px] font-black tracking-tighter mr-3 shadow-md z-10 shrink-0">
                     {brandName.charAt(0).toUpperCase()}
                   </div>
                 )}
                 <div className="text-[13px] font-bold text-slate-800 tracking-wide mt-0.5 truncate">{brandName}</div>
               </div>
-              <button onClick={() => setIsSidebarOpen(false)} className="h-9 w-9 bg-white border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm transition-all"><X className="h-4 w-4" /></button>
+              <button onClick={() => setIsSidebarOpen(false)} className="h-9 w-9 shrink-0 ml-auto bg-white border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm transition-all"><X className="h-4 w-4" /></button>
             </div>
 
             <nav className="flex-1 overflow-y-auto px-6 space-y-2 [&::-webkit-scrollbar]:hidden pt-2">

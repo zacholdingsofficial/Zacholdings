@@ -36,11 +36,11 @@ const fieldLabelClass = (floated: boolean, focused: boolean) =>
   [
     "absolute left-14 pointer-events-none font-medium transition-all duration-200 origin-left",
     floated ? "top-[15px] text-[11px]" : "top-1/2 -translate-y-1/2 text-[15px]",
-    focused ? "text-[#4F46E5]" : "text-slate-400",
+    focused ? "text-[#D4AF37]" : "text-slate-400",
   ].join(" ");
 
 const fieldInputClass =
-  "peer w-full h-[64px] rounded-2xl bg-[#F5F6FB] border border-black/10 px-5 pl-14 pt-[22px] pb-[6px] text-[15px] font-medium outline-none focus:bg-white focus:border-[#4F46E5] focus:ring-4 focus:ring-[#4F46E5]/[0.09] transition-all text-[#171C26] placeholder-transparent";
+  "peer w-full h-[64px] rounded-2xl bg-[#F7F7F8] border border-black/10 px-5 pl-14 pt-[22px] pb-[6px] text-[15px] font-medium outline-none focus:bg-white focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.15] transition-all text-[#171C26] placeholder-transparent";
 
 // --- FINE GRAIN OVERLAY ---
 const NOISE_SVG = `<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(#n)'/></svg>`;
@@ -112,7 +112,7 @@ function CustomSelect({
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
         className={`w-full h-[64px] rounded-2xl border px-5 pl-14 pt-[22px] pb-[6px] text-[15px] font-medium text-left outline-none transition-all ${
-          open ? "bg-white border-[#4F46E5] ring-4 ring-[#4F46E5]/[0.09]" : "bg-[#F5F6FB] border-black/10"
+          open ? "bg-white border-[#D4AF37] ring-4 ring-[#D4AF37]/[0.15]" : "bg-[#F7F7F8] border-black/10"
         } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
       >
         <span className="block truncate text-[#171C26]">{selected ? selected.label : ""}</span>
@@ -128,7 +128,7 @@ function CustomSelect({
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
             transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
             style={{ transformOrigin: "top" }}
-            className="absolute left-0 right-0 top-[70px] z-30 rounded-2xl border border-black/10 bg-white shadow-[0_20px_45px_-16px_rgba(49,46,129,0.22)] overflow-hidden"
+            className="absolute left-0 right-0 top-[70px] z-30 rounded-2xl border border-black/10 bg-white shadow-[0_20px_45px_-16px_rgba(0,0,0,0.12)] overflow-hidden"
           >
             <div className="max-h-56 overflow-y-auto py-1.5">
               {options.length === 0 && (
@@ -143,11 +143,11 @@ function CustomSelect({
                     setOpen(false);
                   }}
                   className={`w-full flex items-center justify-between gap-3 px-5 py-3 text-[14.5px] text-left transition-colors ${
-                    o.value === value ? "text-[#10192B] font-semibold bg-[#F5F6FB]" : "text-[#171C26] hover:bg-[#F5F6FB]/70"
+                    o.value === value ? "text-[#10192B] font-semibold bg-[#F7F7F8]" : "text-[#171C26] hover:bg-[#F7F7F8]"
                   }`}
                 >
                   <span className="truncate">{o.label}</span>
-                  {o.value === value && <span className="h-[6px] w-[6px] rounded-full bg-[#4F46E5] shrink-0" />}
+                  {o.value === value && <span className="h-[6px] w-[6px] rounded-full bg-[#D4AF37] shrink-0" />}
                 </button>
               ))}
             </div>
@@ -183,7 +183,7 @@ export default function LoginPage() {
   const glowY = useMotionValue(18);
   const springGlowX = useSpring(glowX, { stiffness: 60, damping: 22 });
   const springGlowY = useSpring(glowY, { stiffness: 60, damping: 22 });
-  const spotlightBackground = useMotionTemplate`radial-gradient(560px circle at ${springGlowX}% ${springGlowY}%, rgba(99,102,241,0.28), transparent 62%)`;
+  const spotlightBackground = useMotionTemplate`radial-gradient(560px circle at ${springGlowX}% ${springGlowY}%, rgba(212,175,55,0.20), transparent 62%)`;
 
   const handlePanelMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -261,27 +261,23 @@ export default function LoginPage() {
     } else if (selectedRole === 'head') {
       if (activeCompanyObj) {
         
-        // 1. Fetch from legacy columns (for any employees not yet migrated)
         const { data: legacyData } = await supabase
           .from('employees')
           .select('name, email')
           .eq('company_id', activeCompanyObj.id)
           .eq('access_level', 'head');
           
-        // 2. Fetch from the new junction table (for migrated employees & newly assigned roles)
         const { data: junctionData } = await supabase
           .from('employee_company_roles')
           .select('employees(name, email)')
           .eq('company_id', activeCompanyObj.id)
           .eq('access_level', 'head');
           
-        // Extract inner employee objects from junction payload
         const junctionHeads = (junctionData || [])
           .map((row: any) => row.employees)
           .flat()
           .filter(Boolean);
           
-        // Combine and deduplicate by email address
         const combined = [...(legacyData || []), ...junctionHeads];
         const uniqueHeads = Array.from(new Map(combined.map(item => [item.email, item])).values());
 
@@ -311,19 +307,15 @@ export default function LoginPage() {
       setError("Authentication failed. Please verify your credentials."); 
       setIsLoggingIn(false); 
     } else {
-      // --- MODIFIED: Force the selected context into the Auth Store ---
-      // This explicitly overwrites the default primary role that the store grabs
-      // so the user opens the dashboard in the exact role and company they selected.
       if (selectedRole === 'admin') {
         useAuthStore.setState({ role: 'admin', companyId: null });
       } else if (selectedRole && activeCompanyObj) {
         useAuthStore.setState({ 
           role: selectedRole, 
           companyId: activeCompanyObj.id,
-          activeWorkspace: activeCompanyObj.id // Syncs workspace if your app uses it for heads/users
+          activeWorkspace: activeCompanyObj.id
         });
       }
-      
       navigate("/dashboard");
     }
   };
@@ -354,20 +346,20 @@ export default function LoginPage() {
         .font-sans { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
       `}</style>
 
-      <div className="min-h-screen w-full flex flex-col md:flex-row font-sans bg-white">
+      <div className="min-h-screen w-full flex flex-col md:flex-row font-sans bg-[#FAFAFA]">
 
-        {/* LEFT: BRAND PANEL */}
+        {/* LEFT: BRAND PANEL (BLACK & GOLD THEME) */}
         <div
           onMouseMove={handlePanelMouseMove}
           className="w-full md:w-1/2 relative flex flex-col overflow-hidden px-8 md:pl-24 md:pr-14 lg:pl-32 py-12 md:py-14"
-          style={{ background: "linear-gradient(160deg, #0A0B1F 0%, #14153D 55%, #241C5E 100%)" }}
+          style={{ background: "linear-gradient(160deg, #050505 0%, #141414 55%, #241E14 100%)" }}
         >
           <motion.div
             className="absolute w-[440px] h-[440px] rounded-full pointer-events-none"
             style={{
               top: "-12%",
               left: "-8%",
-              background: "radial-gradient(circle, rgba(99,102,241,0.32), transparent 70%)",
+              background: "radial-gradient(circle, rgba(212,175,55,0.25), transparent 70%)",
               filter: "blur(70px)",
             }}
             animate={reduceMotion ? undefined : { x: [0, 44, -18, 0], y: [0, -28, 22, 0] }}
@@ -378,7 +370,7 @@ export default function LoginPage() {
             style={{
               bottom: "-14%",
               right: "2%",
-              background: "radial-gradient(circle, rgba(129,140,248,0.26), transparent 70%)",
+              background: "radial-gradient(circle, rgba(229,193,88,0.20), transparent 70%)",
               filter: "blur(80px)",
             }}
             animate={reduceMotion ? undefined : { x: [0, -30, 26, 0], y: [0, 24, -16, 0] }}
@@ -415,12 +407,12 @@ export default function LoginPage() {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}
           >
-            <circle cx="260" cy="260" r="120" stroke="#818CF8" strokeOpacity="0.12" strokeWidth="1" strokeDasharray="2 7" />
-            <circle cx="260" cy="260" r="160" stroke="#818CF8" strokeOpacity="0.1" strokeWidth="1" strokeDasharray="2 7" />
+            <circle cx="260" cy="260" r="120" stroke="#D4AF37" strokeOpacity="0.15" strokeWidth="1" strokeDasharray="2 7" />
+            <circle cx="260" cy="260" r="160" stroke="#D4AF37" strokeOpacity="0.12" strokeWidth="1" strokeDasharray="2 7" />
 
             <motion.circle
               cx="260" cy="260" r="204"
-              stroke="#6366F1" strokeWidth="1" strokeOpacity="0.32"
+              stroke="#D4AF37" strokeWidth="1" strokeOpacity="0.32"
               initial={reduceMotion ? false : { pathLength: 0 }}
               animate={{ pathLength: 1 }}
               transition={{ duration: 1.4, ease: [0.65, 0, 0.35, 1], delay: 0.35 }}
@@ -434,7 +426,7 @@ export default function LoginPage() {
                 <g key={i}>
                   <motion.line
                     x1="260" y1="260" x2={cx} y2={cy}
-                    stroke="#818CF8" strokeOpacity="0.4" strokeWidth="1"
+                    stroke="#D4AF37" strokeOpacity="0.4" strokeWidth="1"
                     initial={reduceMotion ? false : { pathLength: 0, opacity: 0 }}
                     animate={{ pathLength: 1, opacity: 1 }}
                     transition={{ duration: 0.6, delay: lineDelay, ease: [0.65, 0, 0.35, 1] }}
@@ -453,8 +445,8 @@ export default function LoginPage() {
                         : { duration: n.floatDuration, repeat: Infinity, ease: "easeInOut", delay: n.floatDelay + 1 },
                     }}
                   >
-                    <circle cx={cx} cy={cy} r={n.size} fill="#4F46E5" />
-                    <circle cx={cx} cy={cy} r={n.size + 3} stroke="#4F46E5" strokeOpacity="0.25" strokeWidth="1" />
+                    <circle cx={cx} cy={cy} r={n.size} fill="#D4AF37" />
+                    <circle cx={cx} cy={cy} r={n.size + 3} stroke="#D4AF37" strokeOpacity="0.25" strokeWidth="1" />
                   </motion.g>
                 </g>
               );
@@ -464,14 +456,14 @@ export default function LoginPage() {
               <motion.circle
                 key={i}
                 cx="260" cy="260" r="9"
-                stroke="#818CF8" strokeWidth="1"
+                stroke="#D4AF37" strokeWidth="1"
                 initial={{ opacity: 0.45, scale: 0.7 }}
                 animate={{ opacity: [0.45, 0], scale: [0.7, 2.6] }}
                 transition={{ duration: 3.2, repeat: Infinity, ease: "easeOut", delay: 1.5 + i * 1.6 }}
               />
             ))}
-            <circle cx="260" cy="260" r="7" fill="#312E81" />
-            <circle cx="260" cy="260" r="7" fill="#4F46E5" fillOpacity="0.35" />
+            <circle cx="260" cy="260" r="7" fill="#996515" />
+            <circle cx="260" cy="260" r="7" fill="#D4AF37" fillOpacity="0.35" />
           </motion.svg>
 
           <div className="relative z-10 flex-1 flex flex-col justify-center">
@@ -483,7 +475,13 @@ export default function LoginPage() {
             >
               <div className="mb-11">
                 {adminLogo ? (
-                  <img src={adminLogo} alt="Company logo" className="h-11 w-auto max-w-[150px] object-contain" />
+                  /* 
+                    CSS TRICK EXPLANATION: 
+                    1. invert(1) turns white to black and black to white.
+                    2. hue-rotate(180deg) brings inverted gold back to natural gold.
+                    3. mix-blend-screen drops all black, making the original white background transparent while perfectly rendering the logo in white and gold!
+                  */
+                  <img src={adminLogo} alt="Company logo" className="h-11 w-auto max-w-[150px] object-contain mix-blend-screen" style={{ filter: "invert(1) hue-rotate(180deg) brightness(1.2) contrast(1.1)" }} />
                 ) : (
                   <span className="font-display text-5xl text-white leading-none">Z</span>
                 )}
@@ -493,7 +491,7 @@ export default function LoginPage() {
                 Welcome to<br />Zac Holdings
               </h1>
 
-              <div className="w-14 h-px bg-[#6366F1]/70 mb-7" />
+              <div className="w-14 h-px bg-[#D4AF37]/60 mb-7" />
 
               <p className="text-[15.5px] text-white/55 font-normal leading-relaxed max-w-xs">
                 Access is invitation-only. For credentials or support, contact your administrator.
@@ -506,7 +504,7 @@ export default function LoginPage() {
               href="https://wa.me/917558957246"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[13px] font-medium text-white/25 hover:text-[#818CF8] transition-colors select-none"
+              className="text-[13px] font-medium text-white/25 hover:text-[#D4AF37] transition-colors select-none"
               title="Developer"
             >
               R.
@@ -515,16 +513,16 @@ export default function LoginPage() {
         </div>
 
         {/* RIGHT: LOGIN CARD */}
-        <div className="w-full md:w-1/2 flex flex-col items-center justify-center bg-[#F5F6FB] p-6 sm:p-12 gap-5">
+        <div className="w-full md:w-1/2 flex flex-col items-center justify-center bg-[#FAFAFA] p-6 sm:p-12 gap-5">
 
           <motion.div
             onMouseMove={handleCardMouseMove}
             onMouseLeave={handleCardMouseLeave}
             style={{ rotateX: springRotateX, rotateY: springRotateY, transformPerspective: 1400 }}
-            className="relative bg-white rounded-[2rem] shadow-[0_30px_80px_-24px_rgba(30,27,75,0.16)] border border-black/[0.06] w-full max-w-[520px] h-[640px] overflow-hidden"
+            className="relative bg-white rounded-[2rem] shadow-[0_30px_80px_-24px_rgba(0,0,0,0.16)] border border-black/[0.06] w-full max-w-[520px] h-[640px] overflow-hidden"
           >
-            <span className="absolute top-4 left-4 w-3 h-3 border-t border-l border-[#4F46E5]/40 pointer-events-none z-20" />
-            <span className="absolute bottom-4 right-4 w-3 h-3 border-b border-r border-[#4F46E5]/40 pointer-events-none z-20" />
+            <span className="absolute top-4 left-4 w-3 h-3 border-t border-l border-[#D4AF37]/50 pointer-events-none z-20" />
+            <span className="absolute bottom-4 right-4 w-3 h-3 border-b border-r border-[#D4AF37]/50 pointer-events-none z-20" />
 
             <div className="absolute top-0 left-9 right-9 h-6 z-20 pointer-events-none">
               <div className="absolute top-[11px] left-0 right-0 h-px bg-black/[0.07]" />
@@ -532,8 +530,8 @@ export default function LoginPage() {
                 <span key={i} className="absolute top-[7px] w-px h-[9px] bg-black/[0.14]" style={{ left: `${i * 50}%` }} />
               ))}
               <motion.span
-                className="absolute top-[6px] h-[11px] w-[11px] -ml-[5.5px] rounded-full bg-[#4F46E5]"
-                style={{ boxShadow: "0 0 0 4px rgba(99,102,241,0.18)" }}
+                className="absolute top-[6px] h-[11px] w-[11px] -ml-[5.5px] rounded-full bg-[#D4AF37]"
+                style={{ boxShadow: "0 0 0 4px rgba(212,175,55,0.18)" }}
                 animate={{ left: markerLeft }}
                 transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
               />
@@ -557,36 +555,36 @@ export default function LoginPage() {
 
                   <div className="flex flex-col">
                     <button onClick={() => handleRoleSelect("admin")} className="w-full flex items-center gap-4 py-5 px-2 -mx-2 rounded-xl border-b border-black/[0.06] group text-left transition-all duration-200 hover:bg-black/[0.015] active:scale-[0.99]">
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-black/[0.04] text-[#171C26]/70 group-hover:bg-gradient-to-br group-hover:from-[#4F46E5] group-hover:to-[#312E81] group-hover:text-white group-hover:rotate-6 transition-all duration-300">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-black/[0.04] text-[#171C26]/70 group-hover:bg-gradient-to-br group-hover:from-[#D4AF37] group-hover:to-[#996515] group-hover:text-[#050505] group-hover:rotate-6 transition-all duration-300">
                         <Shield className="h-5 w-5" strokeWidth={1.75} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <span className="block text-[16.5px] font-semibold text-[#171C26]">System Administrator</span>
                         <span className="block text-[12.5px] text-slate-400 mt-0.5">Full platform oversight</span>
                       </div>
-                      <ChevronRight className="h-[18px] w-[18px] text-slate-300 group-hover:text-[#4F46E5] group-hover:translate-x-0.5 transition-all duration-300 shrink-0" />
+                      <ChevronRight className="h-[18px] w-[18px] text-slate-300 group-hover:text-[#D4AF37] group-hover:translate-x-0.5 transition-all duration-300 shrink-0" />
                     </button>
 
                     <button onClick={() => handleRoleSelect("head")} className="w-full flex items-center gap-4 py-5 px-2 -mx-2 rounded-xl border-b border-black/[0.06] group text-left transition-all duration-200 hover:bg-black/[0.015] active:scale-[0.99]">
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-black/[0.04] text-[#171C26]/70 group-hover:bg-gradient-to-br group-hover:from-[#4F46E5] group-hover:to-[#312E81] group-hover:text-white group-hover:rotate-6 transition-all duration-300">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-black/[0.04] text-[#171C26]/70 group-hover:bg-gradient-to-br group-hover:from-[#D4AF37] group-hover:to-[#996515] group-hover:text-[#050505] group-hover:rotate-6 transition-all duration-300">
                         <Briefcase className="h-5 w-5" strokeWidth={1.75} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <span className="block text-[16.5px] font-semibold text-[#171C26]">Organizational Head</span>
                         <span className="block text-[12.5px] text-slate-400 mt-0.5">Manage your division or parent company</span>
                       </div>
-                      <ChevronRight className="h-[18px] w-[18px] text-slate-300 group-hover:text-[#4F46E5] group-hover:translate-x-0.5 transition-all duration-300 shrink-0" />
+                      <ChevronRight className="h-[18px] w-[18px] text-slate-300 group-hover:text-[#D4AF37] group-hover:translate-x-0.5 transition-all duration-300 shrink-0" />
                     </button>
 
                     <button onClick={() => handleRoleSelect("user")} className="w-full flex items-center gap-4 py-5 px-2 -mx-2 rounded-xl group text-left transition-all duration-200 hover:bg-black/[0.015] active:scale-[0.99]">
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-black/[0.04] text-[#171C26]/70 group-hover:bg-gradient-to-br group-hover:from-[#4F46E5] group-hover:to-[#312E81] group-hover:text-white group-hover:rotate-6 transition-all duration-300">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-black/[0.04] text-[#171C26]/70 group-hover:bg-gradient-to-br group-hover:from-[#D4AF37] group-hover:to-[#996515] group-hover:text-[#050505] group-hover:rotate-6 transition-all duration-300">
                         <UserCircle className="h-5 w-5" strokeWidth={1.75} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <span className="block text-[16.5px] font-semibold text-[#171C26]">Corporate Employee</span>
                         <span className="block text-[12.5px] text-slate-400 mt-0.5">Daily workspace access</span>
                       </div>
-                      <ChevronRight className="h-[18px] w-[18px] text-slate-300 group-hover:text-[#4F46E5] group-hover:translate-x-0.5 transition-all duration-300 shrink-0" />
+                      <ChevronRight className="h-[18px] w-[18px] text-slate-300 group-hover:text-[#D4AF37] group-hover:translate-x-0.5 transition-all duration-300 shrink-0" />
                     </button>
                   </div>
 
@@ -617,7 +615,7 @@ export default function LoginPage() {
                       options={(companiesDb || []).map((c) => ({ value: c.name, label: c.name }))}
                     />
 
-                    <Button type="submit" disabled={!selectedCompany} className="w-full h-[64px] rounded-2xl text-[15px] font-semibold shadow-[0_20px_40px_-18px_rgba(49,46,129,0.38)] transition-all duration-300 bg-gradient-to-br from-[#4F46E5] to-[#312E81] hover:from-[#5B52F0] hover:to-[#3730A3] active:scale-[0.98] text-white disabled:opacity-40 mt-2">
+                    <Button type="submit" disabled={!selectedCompany} className="w-full h-[64px] rounded-2xl text-[15px] font-bold shadow-[0_20px_40px_-18px_rgba(212,175,55,0.35)] transition-all duration-300 bg-gradient-to-br from-[#D4AF37] to-[#996515] hover:from-[#E5C158] hover:to-[#B8860B] active:scale-[0.98] text-[#0A0A0A] disabled:opacity-40 mt-2">
                       Continue
                     </Button>
                   </form>
@@ -644,9 +642,9 @@ export default function LoginPage() {
 
                   <div className="flex items-center gap-4 mb-6 shrink-0">
                     {selectedRole === 'admin' ? (
-                      adminLogo ? <img src={adminLogo} alt="Admin" className="h-12 w-auto max-w-[150px] object-contain shrink-0" /> : <Shield className="h-9 w-9 text-[#10192B] shrink-0" strokeWidth={1.5} />
+                      adminLogo ? <img src={adminLogo} alt="Admin" className="h-12 w-auto max-w-[150px] object-contain shrink-0 mix-blend-multiply" /> : <Shield className="h-9 w-9 text-[#10192B] shrink-0" strokeWidth={1.5} />
                     ) : (
-                      activeCompanyObj?.logo_url ? <img src={activeCompanyObj.logo_url} alt={activeCompanyObj.name} className="h-12 w-auto max-w-[150px] object-contain shrink-0" /> : <Building2 className="h-9 w-9 text-[#10192B] shrink-0" strokeWidth={1.5} />
+                      activeCompanyObj?.logo_url ? <img src={activeCompanyObj.logo_url} alt={activeCompanyObj.name} className="h-12 w-auto max-w-[150px] object-contain shrink-0 mix-blend-multiply" /> : <Building2 className="h-9 w-9 text-[#10192B] shrink-0" strokeWidth={1.5} />
                     )}
                     <div className="min-w-0">
                       <h2 className="font-display text-[26px] text-[#171C26] font-normal tracking-tight leading-none truncate">Sign in</h2>
@@ -676,21 +674,21 @@ export default function LoginPage() {
                       ) : (
                         <div className="relative">
                           <UserCircle className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" strokeWidth={1.75} />
-                          <input type="text" readOnly value={headUsers[0]?.name || email} className="w-full h-[64px] rounded-2xl bg-[#F5F6FB] border border-black/10 px-5 pl-14 pt-[22px] pb-[6px] text-[15px] font-medium outline-none text-slate-500 cursor-not-allowed" />
+                          <input type="text" readOnly value={headUsers[0]?.name || email} className="w-full h-[64px] rounded-2xl bg-[#F7F7F8] border border-black/10 px-5 pl-14 pt-[22px] pb-[6px] text-[15px] font-medium outline-none text-slate-500 cursor-not-allowed" />
                           <label className={fieldLabelClass(true, false)}>Your profile</label>
                         </div>
                       )
                     ) : selectedRole === 'head' && activeCompanyObj?.business_type === 'parent' ? (
                       <div className="relative">
                         <UserCircle className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" strokeWidth={1.75} />
-                        <input type="text" readOnly value="System Admin" className="w-full h-[64px] rounded-2xl bg-[#F5F6FB] border border-black/10 px-5 pl-14 pt-[22px] pb-[6px] text-[15px] font-medium outline-none text-slate-500 cursor-not-allowed" />
+                        <input type="text" readOnly value="System Admin" className="w-full h-[64px] rounded-2xl bg-[#F7F7F8] border border-black/10 px-5 pl-14 pt-[22px] pb-[6px] text-[15px] font-medium outline-none text-slate-500 cursor-not-allowed" />
                         <label className={fieldLabelClass(true, false)}>Your profile</label>
                       </div>
                     ) : (
                       <div className="relative">
                         <Mail className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none z-10" strokeWidth={1.75} />
                         <input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder=" " className={fieldInputClass} />
-                        <label htmlFor="email" className={`${fieldLabelClass(false, false)} peer-focus:top-[15px] peer-focus:text-[11px] peer-focus:text-[#4F46E5] peer-[&:not(:placeholder-shown)]:top-[15px] peer-[&:not(:placeholder-shown)]:text-[11px]`}>
+                        <label htmlFor="email" className={`${fieldLabelClass(false, false)} peer-focus:top-[15px] peer-focus:text-[11px] peer-focus:text-[#D4AF37] peer-[&:not(:placeholder-shown)]:top-[15px] peer-[&:not(:placeholder-shown)]:text-[11px]`}>
                           Email address
                         </label>
                       </div>
@@ -703,7 +701,7 @@ export default function LoginPage() {
                         type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)}
                         placeholder=" " className={`${fieldInputClass} pr-14 [&::-ms-reveal]:hidden [&::-ms-clear]:hidden`}
                       />
-                      <label htmlFor="password" className={`${fieldLabelClass(false, false)} peer-focus:top-[15px] peer-focus:text-[11px] peer-focus:text-[#4F46E5] peer-[&:not(:placeholder-shown)]:top-[15px] peer-[&:not(:placeholder-shown)]:text-[11px]`}>
+                      <label htmlFor="password" className={`${fieldLabelClass(false, false)} peer-focus:top-[15px] peer-focus:text-[11px] peer-focus:text-[#D4AF37] peer-[&:not(:placeholder-shown)]:top-[15px] peer-[&:not(:placeholder-shown)]:text-[11px]`}>
                         Password
                       </label>
                       <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#10192B] transition-colors p-2 rounded-lg z-10">
@@ -716,13 +714,13 @@ export default function LoginPage() {
                         href={forgotHref}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[12.5px] font-medium text-slate-400 hover:text-[#4F46E5] transition-colors"
+                        className="text-[12.5px] font-medium text-slate-400 hover:text-[#D4AF37] transition-colors"
                       >
                         Forgot password?
                       </a>
                     </div>
 
-                    <Button type="submit" disabled={isLoggingIn || headNeedsSelection} className="w-full h-[64px] mt-2 rounded-2xl text-[15px] font-semibold shadow-[0_20px_40px_-18px_rgba(49,46,129,0.38)] transition-all duration-300 bg-gradient-to-br from-[#4F46E5] to-[#312E81] hover:from-[#5B52F0] hover:to-[#3730A3] active:scale-[0.98] text-white disabled:opacity-50">
+                    <Button type="submit" disabled={isLoggingIn || headNeedsSelection} className="w-full h-[64px] mt-2 rounded-2xl text-[15px] font-bold shadow-[0_20px_40px_-18px_rgba(212,175,55,0.35)] transition-all duration-300 bg-gradient-to-br from-[#D4AF37] to-[#996515] hover:from-[#E5C158] hover:to-[#B8860B] active:scale-[0.98] text-[#0A0A0A] disabled:opacity-50">
                       {isLoggingIn ? "Signing in..." : "Sign in"}
                     </Button>
                   </form>
