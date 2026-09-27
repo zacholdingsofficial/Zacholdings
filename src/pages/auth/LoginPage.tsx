@@ -172,7 +172,8 @@ export default function LoginPage() {
   const glowY = useMotionValue(18);
   const springGlowX = useSpring(glowX, { stiffness: 60, damping: 22 });
   const springGlowY = useSpring(glowY, { stiffness: 60, damping: 22 });
-  const spotlightBackground = useMotionTemplate`radial-gradient(560px circle at ${springGlowX}% ${springGlowY}%, rgba(212,175,55,0.20), transparent 62%)`;
+  // Updated opacity for the lighter background
+  const spotlightBackground = useMotionTemplate`radial-gradient(560px circle at ${springGlowX}% ${springGlowY}%, rgba(212,175,55,0.08), transparent 62%)`;
 
   const handlePanelMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -337,18 +338,19 @@ export default function LoginPage() {
       {/* Main Container - Strict h-screen to prevent any scrolling */}
       <div className="h-screen w-full flex flex-col md:flex-row font-sans bg-[#F9F9FB] overflow-hidden">
 
-        {/* LEFT: BRAND PANEL (DARK GOLD THEME RESTORED) */}
+        {/* LEFT: BRAND PANEL (WHITE & GOLD CREAM THEME) */}
         <div
           onMouseMove={handlePanelMouseMove}
           className="w-full md:w-1/2 relative flex flex-col overflow-hidden px-8 md:pl-24 md:pr-14 lg:pl-32 py-10 md:py-12"
-          style={{ background: "linear-gradient(160deg, #050505 0%, #141414 55%, #241E14 100%)" }}
+          style={{ background: "linear-gradient(160deg, #FFFFFF 0%, #FAFAFA 55%, #F0F2F5 100%)" }}
         >
+          {/* Softer background gradients for light theme */}
           <motion.div
             className="absolute w-[440px] h-[440px] rounded-full pointer-events-none"
             style={{
               top: "-12%",
               left: "-8%",
-              background: "radial-gradient(circle, rgba(212,175,55,0.25), transparent 70%)",
+              background: "radial-gradient(circle, rgba(212,175,55,0.08), transparent 70%)",
               filter: "blur(70px)",
             }}
             animate={reduceMotion ? undefined : { x: [0, 44, -18, 0], y: [0, -28, 22, 0] }}
@@ -359,7 +361,7 @@ export default function LoginPage() {
             style={{
               bottom: "-14%",
               right: "2%",
-              background: "radial-gradient(circle, rgba(229,193,88,0.20), transparent 70%)",
+              background: "radial-gradient(circle, rgba(229,193,88,0.06), transparent 70%)",
               filter: "blur(80px)",
             }}
             animate={reduceMotion ? undefined : { x: [0, -30, 26, 0], y: [0, 24, -16, 0] }}
@@ -369,22 +371,22 @@ export default function LoginPage() {
           <motion.div className="absolute inset-0 pointer-events-none" style={{ background: spotlightBackground }} />
 
           <div
-            className="absolute inset-0 pointer-events-none opacity-[0.05]"
+            className="absolute inset-0 pointer-events-none opacity-[0.03]"
             style={{
               backgroundImage:
-                "linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)",
+                "linear-gradient(rgba(0,0,0,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.5) 1px, transparent 1px)",
               backgroundSize: "46px 46px",
             }}
           />
 
           <div
-            className="absolute inset-0 pointer-events-none opacity-[0.045] mix-blend-overlay"
+            className="absolute inset-0 pointer-events-none opacity-[0.02] mix-blend-overlay"
             style={{ backgroundImage: `url("${NOISE_BG}")` }}
           />
 
-          <div className="absolute left-5 md:left-7 top-0 bottom-0 w-px bg-white/[0.06] pointer-events-none hidden sm:block">
+          <div className="absolute left-5 md:left-7 top-0 bottom-0 w-px bg-black/[0.04] pointer-events-none hidden sm:block">
             {Array.from({ length: 40 }).map((_, i) => (
-              <span key={i} className="absolute left-0 w-2 h-px bg-white/10" style={{ top: `${i * 40}px` }} />
+              <span key={i} className="absolute left-0 w-2 h-px bg-black/[0.08]" style={{ top: `${i * 40}px` }} />
             ))}
           </div>
 
@@ -396,12 +398,12 @@ export default function LoginPage() {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}
           >
-            <circle cx="260" cy="260" r="120" stroke="#D4AF37" strokeOpacity="0.15" strokeWidth="1" strokeDasharray="2 7" />
-            <circle cx="260" cy="260" r="160" stroke="#D4AF37" strokeOpacity="0.12" strokeWidth="1" strokeDasharray="2 7" />
+            <circle cx="260" cy="260" r="120" stroke="#D4AF37" strokeOpacity="0.3" strokeWidth="1" strokeDasharray="2 7" />
+            <circle cx="260" cy="260" r="160" stroke="#D4AF37" strokeOpacity="0.2" strokeWidth="1" strokeDasharray="2 7" />
 
             <motion.circle
               cx="260" cy="260" r="204"
-              stroke="#D4AF37" strokeWidth="1" strokeOpacity="0.32"
+              stroke="#D4AF37" strokeWidth="1" strokeOpacity="0.4"
               initial={reduceMotion ? false : { pathLength: 0 }}
               animate={{ pathLength: 1 }}
               transition={{ duration: 1.4, ease: [0.65, 0, 0.35, 1], delay: 0.35 }}
@@ -415,7 +417,7 @@ export default function LoginPage() {
                 <g key={i}>
                   <motion.line
                     x1="260" y1="260" x2={cx} y2={cy}
-                    stroke="#D4AF37" strokeOpacity="0.4" strokeWidth="1"
+                    stroke="#D4AF37" strokeOpacity="0.5" strokeWidth="1"
                     initial={reduceMotion ? false : { pathLength: 0, opacity: 0 }}
                     animate={{ pathLength: 1, opacity: 1 }}
                     transition={{ duration: 0.6, delay: lineDelay, ease: [0.65, 0, 0.35, 1] }}
@@ -435,7 +437,7 @@ export default function LoginPage() {
                     }}
                   >
                     <circle cx={cx} cy={cy} r={n.size} fill="#D4AF37" />
-                    <circle cx={cx} cy={cy} r={n.size + 3} stroke="#D4AF37" strokeOpacity="0.25" strokeWidth="1" />
+                    <circle cx={cx} cy={cy} r={n.size + 3} stroke="#D4AF37" strokeOpacity="0.4" strokeWidth="1" />
                   </motion.g>
                 </g>
               );
@@ -446,13 +448,13 @@ export default function LoginPage() {
                 key={i}
                 cx="260" cy="260" r="9"
                 stroke="#D4AF37" strokeWidth="1"
-                initial={{ opacity: 0.45, scale: 0.7 }}
-                animate={{ opacity: [0.45, 0], scale: [0.7, 2.6] }}
+                initial={{ opacity: 0.5, scale: 0.7 }}
+                animate={{ opacity: [0.5, 0], scale: [0.7, 2.6] }}
                 transition={{ duration: 3.2, repeat: Infinity, ease: "easeOut", delay: 1.5 + i * 1.6 }}
               />
             ))}
             <circle cx="260" cy="260" r="7" fill="#996515" />
-            <circle cx="260" cy="260" r="7" fill="#D4AF37" fillOpacity="0.35" />
+            <circle cx="260" cy="260" r="7" fill="#D4AF37" fillOpacity="0.5" />
           </motion.svg>
 
           <div className="relative z-10 flex-1 flex flex-col justify-center">
@@ -463,7 +465,7 @@ export default function LoginPage() {
               className="max-w-md w-full"
             >
               <div className="mb-8 relative">
-                {/* Referencing the transparent logo directly from public folder */}
+                {/* Directly using logo from public folder without CSS filters */}
                 <img 
                   src="/logo.png" 
                   alt="Zac Holdings Logo" 
@@ -471,25 +473,25 @@ export default function LoginPage() {
                 />
               </div>
 
-              <h1 className="font-display text-[2.7rem] md:text-[3.4rem] leading-[1.06] text-white font-normal tracking-tight mb-6">
+              <h1 className="font-display text-[2.7rem] md:text-[3.4rem] leading-[1.06] text-[#10192B] font-normal tracking-tight mb-6">
                 Welcome to<br />Zac Holdings
               </h1>
 
-              <div className="w-14 h-px bg-[#D4AF37]/60 mb-6" />
+              <div className="w-14 h-px bg-[#D4AF37] mb-6" />
 
-              <p className="text-[15.5px] text-white/55 font-normal leading-relaxed max-w-xs">
+              <p className="text-[15.5px] text-[#171C26]/60 font-normal leading-relaxed max-w-xs">
                 Access is invitation-only. For credentials or support, contact your administrator.
               </p>
             </motion.div>
           </div>
 
           <div className="relative z-10 flex items-center justify-between pt-6">
-            <p className="text-[11.5px] text-white/30 font-medium">© 2026 Zac Holdings Pvt Ltd</p>
+            <p className="text-[11.5px] text-[#171C26]/40 font-medium">© 2026 Zac Holdings Pvt Ltd</p>
             <a
               href="https://wa.me/917558957246"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[13px] font-medium text-white/25 hover:text-[#D4AF37] transition-colors select-none"
+              className="text-[13px] font-medium text-[#171C26]/30 hover:text-[#D4AF37] transition-colors select-none"
               title="Developer"
             >
               R.
