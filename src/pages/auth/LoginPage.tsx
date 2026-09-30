@@ -172,7 +172,6 @@ export default function LoginPage() {
   const glowY = useMotionValue(18);
   const springGlowX = useSpring(glowX, { stiffness: 60, damping: 22 });
   const springGlowY = useSpring(glowY, { stiffness: 60, damping: 22 });
-  // Updated opacity for the lighter background
   const spotlightBackground = useMotionTemplate`radial-gradient(560px circle at ${springGlowX}% ${springGlowY}%, rgba(212,175,55,0.08), transparent 62%)`;
 
   const handlePanelMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -285,6 +284,7 @@ export default function LoginPage() {
     setStep(3);
   };
 
+  // --- UPDATED STRICT SECURITY LOGIC ---
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault(); 
     setError(""); 
@@ -296,15 +296,66 @@ export default function LoginPage() {
       setError("Authentication failed. Please verify your credentials."); 
       setIsLoggingIn(false); 
     } else {
+      // 1. Verify User exists in database
+      const { data: empData, error: empError } = await supabase
+        .from('employees')
+        .select('id, access_level, company_id')
+        .eq('email', email)
+        .single();
+
+      if (empError || !empData) {
+        setError("User profile not found in system.");
+        setIsLoggingIn(false);
+        await supabase.auth.signOut();
+        return;
+      }
+
+      // 2. Validate the correct role & company access before logging them into the local store
       if (selectedRole === 'admin') {
-        useAuthStore.setState({ role: 'admin', companyId: null });
+        if (empData.access_level !== 'admin') {
+          setError("Unauthorized. Administrator privileges required.");
+          setIsLoggingIn(false);
+          await supabase.auth.signOut();
+          return;
+        }
+        // Force activeWorkspace to null so old workspace sessions don't survive refresh
+        useAuthStore.setState({ role: 'admin', companyId: null, activeWorkspace: null });
+        
       } else if (selectedRole && activeCompanyObj) {
+        
+        let hasAccess = false;
+        
+        // Match primary company & role explicitly
+        if (empData.company_id === activeCompanyObj.id && empData.access_level === selectedRole) {
+          hasAccess = true;
+        } else {
+          // Check alternate assigned roles
+          const { data: jData } = await supabase
+            .from('employee_company_roles')
+            .select('id')
+            .eq('employee_id', empData.id)
+            .eq('company_id', activeCompanyObj.id)
+            .eq('access_level', selectedRole)
+            .maybeSingle();
+
+          if (jData) hasAccess = true;
+        }
+
+        // If a User tries to log in as a Head, or logs into the wrong company
+        if (!hasAccess) {
+          setError(`Unauthorized. You do not have ${selectedRole} access to ${activeCompanyObj.name}.`);
+          setIsLoggingIn(false);
+          await supabase.auth.signOut();
+          return;
+        }
+
         useAuthStore.setState({ 
           role: selectedRole, 
           companyId: activeCompanyObj.id,
-          activeWorkspace: activeCompanyObj.id
+          activeWorkspace: null // Prevents dashboard caching overlaps
         });
       }
+      
       navigate("/dashboard");
     }
   };
