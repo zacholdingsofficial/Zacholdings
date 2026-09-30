@@ -31,16 +31,17 @@ const pageVariants = {
   }),
 };
 
-// --- FLOATING LABEL ---
+// --- FLOATING LABEL (Adjusted for mobile) ---
 const fieldLabelClass = (floated: boolean, focused: boolean) =>
   [
     "absolute left-14 pointer-events-none font-medium transition-all duration-200 origin-left",
-    floated ? "top-[12px] text-[11px]" : "top-1/2 -translate-y-1/2 text-[14px]",
+    floated ? "top-[6px] md:top-[12px] text-[10px] md:text-[11px]" : "top-1/2 -translate-y-1/2 text-[13.5px] md:text-[14px]",
     focused ? "text-[#D4AF37]" : "text-slate-400",
   ].join(" ");
 
+// --- INPUT FIELD (Adjusted for mobile) ---
 const fieldInputClass =
-  "peer w-full h-[56px] rounded-2xl bg-[#F7F7F8] border border-black/10 px-5 pl-14 pt-[18px] pb-[4px] text-[14.5px] font-medium outline-none focus:bg-white focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.15] transition-all text-[#171C26] placeholder-transparent";
+  "peer w-full h-[46px] md:h-[56px] rounded-xl md:rounded-2xl bg-[#F7F7F8] border border-black/10 px-5 pl-14 pt-[14px] md:pt-[18px] pb-[2px] md:pb-[4px] text-[13.5px] md:text-[14.5px] font-medium outline-none focus:bg-white focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.15] transition-all text-[#171C26] placeholder-transparent";
 
 // --- FINE GRAIN OVERLAY ---
 const NOISE_SVG = `<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(#n)' opacity='0.4'/></svg>`;
@@ -101,7 +102,7 @@ function CustomSelect({
         type="button"
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
-        className={`w-full h-[56px] rounded-2xl border px-5 pl-14 pt-[18px] pb-[4px] text-[14.5px] font-medium text-left outline-none transition-all ${
+        className={`w-full h-[46px] md:h-[56px] rounded-xl md:rounded-2xl border px-5 pl-14 pt-[14px] md:pt-[18px] pb-[2px] md:pb-[4px] text-[13.5px] md:text-[14.5px] font-medium text-left outline-none transition-all ${
           open ? "bg-white border-[#D4AF37] ring-4 ring-[#D4AF37]/[0.15]" : "bg-[#F7F7F8] border-black/10"
         } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
       >
@@ -118,11 +119,11 @@ function CustomSelect({
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
             transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
             style={{ transformOrigin: "top" }}
-            className="absolute left-0 right-0 top-[62px] z-30 rounded-2xl border border-black/10 bg-white shadow-[0_20px_45px_-16px_rgba(0,0,0,0.12)] overflow-hidden"
+            className="absolute left-0 right-0 top-[50px] md:top-[62px] z-30 rounded-xl md:rounded-2xl border border-black/10 bg-white shadow-[0_20px_45px_-16px_rgba(0,0,0,0.12)] overflow-hidden"
           >
-            <div className="max-h-56 overflow-y-auto py-1.5">
+            <div className="max-h-48 md:max-h-56 overflow-y-auto py-1.5">
               {options.length === 0 && (
-                <div className="px-5 py-3 text-[13.5px] text-slate-400">No options available</div>
+                <div className="px-5 py-2.5 md:py-3 text-[12.5px] md:text-[13.5px] text-slate-400">No options available</div>
               )}
               {options.map((o) => (
                 <button
@@ -132,7 +133,7 @@ function CustomSelect({
                     onChange(o.value);
                     setOpen(false);
                   }}
-                  className={`w-full flex items-center justify-between gap-3 px-5 py-3 text-[14.5px] text-left transition-colors ${
+                  className={`w-full flex items-center justify-between gap-3 px-5 py-2.5 md:py-3 text-[13.5px] md:text-[14.5px] text-left transition-colors ${
                     o.value === value ? "text-[#10192B] font-semibold bg-[#F7F7F8]" : "text-[#171C26] hover:bg-[#F7F7F8]"
                   }`}
                 >
@@ -284,7 +285,6 @@ export default function LoginPage() {
     setStep(3);
   };
 
-  // --- UPDATED STRICT SECURITY LOGIC ---
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault(); 
     setError(""); 
@@ -296,7 +296,6 @@ export default function LoginPage() {
       setError("Authentication failed. Please verify your credentials."); 
       setIsLoggingIn(false); 
     } else {
-      // 1. Verify User exists in database
       const { data: empData, error: empError } = await supabase
         .from('employees')
         .select('id, access_level, company_id')
@@ -310,7 +309,6 @@ export default function LoginPage() {
         return;
       }
 
-      // 2. Validate the correct role & company access before logging them into the local store
       if (selectedRole === 'admin') {
         if (empData.access_level !== 'admin') {
           setError("Unauthorized. Administrator privileges required.");
@@ -318,18 +316,15 @@ export default function LoginPage() {
           await supabase.auth.signOut();
           return;
         }
-        // Force activeWorkspace to null so old workspace sessions don't survive refresh
         useAuthStore.setState({ role: 'admin', companyId: null, activeWorkspace: null });
         
       } else if (selectedRole && activeCompanyObj) {
         
         let hasAccess = false;
         
-        // Match primary company & role explicitly
         if (empData.company_id === activeCompanyObj.id && empData.access_level === selectedRole) {
           hasAccess = true;
         } else {
-          // Check alternate assigned roles
           const { data: jData } = await supabase
             .from('employee_company_roles')
             .select('id')
@@ -341,7 +336,6 @@ export default function LoginPage() {
           if (jData) hasAccess = true;
         }
 
-        // If a User tries to log in as a Head, or logs into the wrong company
         if (!hasAccess) {
           setError(`Unauthorized. You do not have ${selectedRole} access to ${activeCompanyObj.name}.`);
           setIsLoggingIn(false);
@@ -352,7 +346,7 @@ export default function LoginPage() {
         useAuthStore.setState({ 
           role: selectedRole, 
           companyId: activeCompanyObj.id,
-          activeWorkspace: null // Prevents dashboard caching overlaps
+          activeWorkspace: null 
         });
       }
       
@@ -384,20 +378,30 @@ export default function LoginPage() {
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap');
         .font-display { font-family: 'Fraunces', Georgia, serif; font-optical-sizing: auto; }
         .font-sans { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+        
+        @keyframes goldenShine {
+          0% { text-shadow: 0 0 5px #D4AF37, 0 0 10px rgba(212,175,55,0.6); opacity: 0.8; }
+          50% { text-shadow: 0 0 15px #FFDF73, 0 0 20px #FFDF73; opacity: 1; }
+          100% { text-shadow: 0 0 5px #D4AF37, 0 0 10px rgba(212,175,55,0.6); opacity: 0.8; }
+        }
+        .shining-gold {
+          color: #D4AF37;
+          font-weight: 700;
+          animation: goldenShine 2s infinite ease-in-out;
+        }
       `}</style>
 
-      {/* Main Container - Strict h-screen to prevent any scrolling */}
-      <div className="h-screen w-full flex flex-col md:flex-row font-sans bg-[#F9F9FB] overflow-hidden">
+      {/* Main Container - Strict 100dvh for mobile toolbars preventing scroll */}
+      <div className="h-[100dvh] w-full flex flex-col md:flex-row font-sans bg-[#F9F9FB] overflow-hidden relative">
 
-        {/* LEFT: BRAND PANEL (WHITE & GOLD CREAM THEME) */}
+        {/* LEFT: BRAND PANEL (Adjusted height limits for mobile) */}
         <div
           onMouseMove={handlePanelMouseMove}
-          className="w-full md:w-1/2 relative flex flex-col overflow-hidden px-8 md:pl-24 md:pr-14 lg:pl-32 py-10 md:py-12"
+          className="w-full md:w-1/2 relative flex flex-col justify-center overflow-hidden px-6 py-4 md:px-8 md:pl-24 md:pr-14 lg:pl-32 md:py-12 flex-none h-[25dvh] md:h-full"
           style={{ background: "linear-gradient(160deg, #FFFFFF 0%, #FAFAFA 55%, #F0F2F5 100%)" }}
         >
-          {/* Softer background gradients for light theme */}
           <motion.div
-            className="absolute w-[440px] h-[440px] rounded-full pointer-events-none"
+            className="absolute w-[300px] md:w-[440px] h-[300px] md:h-[440px] rounded-full pointer-events-none"
             style={{
               top: "-12%",
               left: "-8%",
@@ -408,7 +412,7 @@ export default function LoginPage() {
             transition={{ duration: 26, repeat: Infinity, ease: "easeInOut" }}
           />
           <motion.div
-            className="absolute w-[380px] h-[380px] rounded-full pointer-events-none"
+            className="absolute w-[250px] md:w-[380px] h-[250px] md:h-[380px] rounded-full pointer-events-none"
             style={{
               bottom: "-14%",
               right: "2%",
@@ -424,8 +428,7 @@ export default function LoginPage() {
           <div
             className="absolute inset-0 pointer-events-none opacity-[0.03]"
             style={{
-              backgroundImage:
-                "linear-gradient(rgba(0,0,0,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.5) 1px, transparent 1px)",
+              backgroundImage: "linear-gradient(rgba(0,0,0,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.5) 1px, transparent 1px)",
               backgroundSize: "46px 46px",
             }}
           />
@@ -435,14 +438,14 @@ export default function LoginPage() {
             style={{ backgroundImage: `url("${NOISE_BG}")` }}
           />
 
-          <div className="absolute left-5 md:left-7 top-0 bottom-0 w-px bg-black/[0.04] pointer-events-none hidden sm:block">
+          <div className="absolute left-5 md:left-7 top-0 bottom-0 w-px bg-black/[0.04] pointer-events-none hidden md:block">
             {Array.from({ length: 40 }).map((_, i) => (
               <span key={i} className="absolute left-0 w-2 h-px bg-black/[0.08]" style={{ top: `${i * 40}px` }} />
             ))}
           </div>
 
           <motion.svg
-            className="absolute -right-24 -bottom-32 md:-right-4 md:-bottom-36 w-[560px] h-[560px] pointer-events-none"
+            className="absolute -right-16 -bottom-24 md:-right-4 md:-bottom-36 w-[320px] h-[320px] md:w-[560px] md:h-[560px] pointer-events-none opacity-40 md:opacity-100"
             viewBox="0 0 520 520"
             fill="none"
             initial={reduceMotion ? false : { opacity: 0, scale: 0.94 }}
@@ -515,28 +518,28 @@ export default function LoginPage() {
               transition={{ duration: 0.7, ease: "easeOut" }}
               className="max-w-md w-full"
             >
-              <div className="mb-8 relative">
-                {/* Directly using logo from public folder without CSS filters */}
+              <div className="mb-4 md:mb-8 relative">
                 <img 
                   src="/logo.png" 
                   alt="Zac Holdings Logo" 
-                  className="h-14 md:h-16 w-auto max-w-[200px] object-contain" 
+                  className="h-8 md:h-16 w-auto max-w-[150px] md:max-w-[200px] object-contain" 
                 />
               </div>
 
-              <h1 className="font-display text-[2.7rem] md:text-[3.4rem] leading-[1.06] text-[#10192B] font-normal tracking-tight mb-6">
-                Welcome to<br />Zac Holdings
+              <h1 className="font-display text-[26px] md:text-[3.4rem] leading-[1.1] md:leading-[1.06] text-[#10192B] font-normal tracking-tight mb-2 md:mb-6">
+                Welcome to<br className="hidden md:block" /> Zac Holdings
               </h1>
 
-              <div className="w-14 h-px bg-[#D4AF37] mb-6" />
+              <div className="w-10 md:w-14 h-px bg-[#D4AF37] mb-3 md:mb-6" />
 
-              <p className="text-[15.5px] text-[#171C26]/60 font-normal leading-relaxed max-w-xs">
+              <p className="text-[12px] md:text-[15.5px] text-[#171C26]/60 font-normal leading-relaxed max-w-[260px] md:max-w-xs">
                 Access is invitation-only. For credentials or support, contact your administrator.
               </p>
             </motion.div>
           </div>
 
-          <div className="relative z-10 flex items-center justify-between pt-6">
+          {/* DESKTOP ONLY FOOTER */}
+          <div className="relative z-10 hidden md:flex items-center justify-between pt-6 mt-auto">
             <p className="text-[11.5px] text-[#171C26]/40 font-medium">© 2026 Zac Holdings Pvt Ltd</p>
             <a
               href="https://wa.me/917558957246"
@@ -550,14 +553,14 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* RIGHT: LOGIN CARD */}
-        <div className="w-full md:w-1/2 flex flex-col items-center justify-center bg-[#F9F9FB] p-4 sm:p-10">
+        {/* RIGHT: LOGIN CARD (Flex-1 ensures it fills mobile screen remainder) */}
+        <div className="w-full md:w-1/2 flex flex-col items-center justify-center bg-[#F9F9FB] p-4 sm:p-10 flex-1 relative z-10">
 
           <motion.div
             onMouseMove={handleCardMouseMove}
             onMouseLeave={handleCardMouseLeave}
             style={{ rotateX: springRotateX, rotateY: springRotateY, transformPerspective: 1400 }}
-            className="relative bg-white rounded-[2rem] shadow-[0_20px_60px_-20px_rgba(0,0,0,0.08)] border border-black/[0.04] w-full max-w-[460px] h-[520px] overflow-hidden"
+            className="relative bg-white rounded-[1.5rem] md:rounded-[2rem] shadow-[0_20px_60px_-20px_rgba(0,0,0,0.08)] border border-black/[0.04] w-full max-w-[460px] h-[400px] md:h-[520px] overflow-hidden"
           >
             <span className="absolute top-4 left-4 w-3 h-3 border-t border-l border-[#D4AF37]/50 pointer-events-none z-20" />
             <span className="absolute bottom-4 right-4 w-3 h-3 border-b border-r border-[#D4AF37]/50 pointer-events-none z-20" />
@@ -586,43 +589,43 @@ export default function LoginPage() {
                   initial="initial"
                   animate="animate"
                   exit="exit"
-                  className="absolute inset-0 flex flex-col p-8 pt-12"
+                  className="absolute inset-0 flex flex-col p-5 pt-7 md:p-8 md:pt-12"
                 >
-                  <h2 className="font-display text-[28px] text-[#171C26] font-normal tracking-tight mb-1">Sign in as</h2>
-                  <p className="text-[14px] text-slate-500 mb-5">Choose the role that matches your access.</p>
+                  <h2 className="font-display text-[22px] md:text-[28px] text-[#171C26] font-normal tracking-tight mb-0.5 md:mb-1">Sign in as</h2>
+                  <p className="text-[12px] md:text-[14px] text-slate-500 mb-3 md:mb-5">Choose the role that matches your access.</p>
 
-                  <div className="flex flex-col gap-1">
-                    <button onClick={() => handleRoleSelect("admin")} className="w-full flex items-center gap-4 py-4 px-2 -mx-2 rounded-xl border-b border-black/[0.04] group text-left transition-all duration-200 hover:bg-black/[0.015] active:scale-[0.99]">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-black/[0.03] text-[#171C26]/70 group-hover:bg-gradient-to-br group-hover:from-[#D4AF37] group-hover:to-[#996515] group-hover:text-white group-hover:rotate-6 transition-all duration-300">
-                        <Shield className="h-[18px] w-[18px]" strokeWidth={1.75} />
+                  <div className="flex flex-col gap-0.5 md:gap-1">
+                    <button onClick={() => handleRoleSelect("admin")} className="w-full flex items-center gap-3 md:gap-4 py-2.5 md:py-4 px-2 -mx-2 rounded-xl border-b border-black/[0.04] group text-left transition-all duration-200 hover:bg-black/[0.015] active:scale-[0.99]">
+                      <div className="flex h-8 w-8 md:h-11 md:w-11 shrink-0 items-center justify-center rounded-full bg-black/[0.03] text-[#171C26]/70 group-hover:bg-gradient-to-br group-hover:from-[#D4AF37] group-hover:to-[#996515] group-hover:text-white group-hover:rotate-6 transition-all duration-300">
+                        <Shield className="h-[14px] w-[14px] md:h-[18px] md:w-[18px]" strokeWidth={1.75} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <span className="block text-[15.5px] font-semibold text-[#171C26]">System Administrator</span>
-                        <span className="block text-[12px] text-slate-400 mt-0.5">Full platform oversight</span>
+                        <span className="block text-[13.5px] md:text-[15.5px] font-semibold text-[#171C26]">System Administrator</span>
+                        <span className="block text-[10px] md:text-[12px] text-slate-400 mt-0.5">Full platform oversight</span>
                       </div>
-                      <ChevronRight className="h-[18px] w-[18px] text-slate-300 group-hover:text-[#D4AF37] group-hover:translate-x-0.5 transition-all duration-300 shrink-0" />
+                      <ChevronRight className="h-[16px] w-[16px] md:h-[18px] md:w-[18px] text-slate-300 group-hover:text-[#D4AF37] group-hover:translate-x-0.5 transition-all duration-300 shrink-0" />
                     </button>
 
-                    <button onClick={() => handleRoleSelect("head")} className="w-full flex items-center gap-4 py-4 px-2 -mx-2 rounded-xl border-b border-black/[0.04] group text-left transition-all duration-200 hover:bg-black/[0.015] active:scale-[0.99]">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-black/[0.03] text-[#171C26]/70 group-hover:bg-gradient-to-br group-hover:from-[#D4AF37] group-hover:to-[#996515] group-hover:text-white group-hover:rotate-6 transition-all duration-300">
-                        <Briefcase className="h-[18px] w-[18px]" strokeWidth={1.75} />
+                    <button onClick={() => handleRoleSelect("head")} className="w-full flex items-center gap-3 md:gap-4 py-2.5 md:py-4 px-2 -mx-2 rounded-xl border-b border-black/[0.04] group text-left transition-all duration-200 hover:bg-black/[0.015] active:scale-[0.99]">
+                      <div className="flex h-8 w-8 md:h-11 md:w-11 shrink-0 items-center justify-center rounded-full bg-black/[0.03] text-[#171C26]/70 group-hover:bg-gradient-to-br group-hover:from-[#D4AF37] group-hover:to-[#996515] group-hover:text-white group-hover:rotate-6 transition-all duration-300">
+                        <Briefcase className="h-[14px] w-[14px] md:h-[18px] md:w-[18px]" strokeWidth={1.75} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <span className="block text-[15.5px] font-semibold text-[#171C26]">Organizational Head</span>
-                        <span className="block text-[12px] text-slate-400 mt-0.5">Manage your division or parent company</span>
+                        <span className="block text-[13.5px] md:text-[15.5px] font-semibold text-[#171C26]">Organizational Head</span>
+                        <span className="block text-[10px] md:text-[12px] text-slate-400 mt-0.5">Manage your division or parent company</span>
                       </div>
-                      <ChevronRight className="h-[18px] w-[18px] text-slate-300 group-hover:text-[#D4AF37] group-hover:translate-x-0.5 transition-all duration-300 shrink-0" />
+                      <ChevronRight className="h-[16px] w-[16px] md:h-[18px] md:w-[18px] text-slate-300 group-hover:text-[#D4AF37] group-hover:translate-x-0.5 transition-all duration-300 shrink-0" />
                     </button>
 
-                    <button onClick={() => handleRoleSelect("user")} className="w-full flex items-center gap-4 py-4 px-2 -mx-2 rounded-xl group text-left transition-all duration-200 hover:bg-black/[0.015] active:scale-[0.99]">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-black/[0.03] text-[#171C26]/70 group-hover:bg-gradient-to-br group-hover:from-[#D4AF37] group-hover:to-[#996515] group-hover:text-white group-hover:rotate-6 transition-all duration-300">
-                        <UserCircle className="h-[18px] w-[18px]" strokeWidth={1.75} />
+                    <button onClick={() => handleRoleSelect("user")} className="w-full flex items-center gap-3 md:gap-4 py-2.5 md:py-4 px-2 -mx-2 rounded-xl group text-left transition-all duration-200 hover:bg-black/[0.015] active:scale-[0.99]">
+                      <div className="flex h-8 w-8 md:h-11 md:w-11 shrink-0 items-center justify-center rounded-full bg-black/[0.03] text-[#171C26]/70 group-hover:bg-gradient-to-br group-hover:from-[#D4AF37] group-hover:to-[#996515] group-hover:text-white group-hover:rotate-6 transition-all duration-300">
+                        <UserCircle className="h-[14px] w-[14px] md:h-[18px] md:w-[18px]" strokeWidth={1.75} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <span className="block text-[15.5px] font-semibold text-[#171C26]">Corporate Employee</span>
-                        <span className="block text-[12px] text-slate-400 mt-0.5">Daily workspace access</span>
+                        <span className="block text-[13.5px] md:text-[15.5px] font-semibold text-[#171C26]">Corporate Employee</span>
+                        <span className="block text-[10px] md:text-[12px] text-slate-400 mt-0.5">Daily workspace access</span>
                       </div>
-                      <ChevronRight className="h-[18px] w-[18px] text-slate-300 group-hover:text-[#D4AF37] group-hover:translate-x-0.5 transition-all duration-300 shrink-0" />
+                      <ChevronRight className="h-[16px] w-[16px] md:h-[18px] md:w-[18px] text-slate-300 group-hover:text-[#D4AF37] group-hover:translate-x-0.5 transition-all duration-300 shrink-0" />
                     </button>
                   </div>
                 </motion.div>
@@ -637,28 +640,28 @@ export default function LoginPage() {
                   initial="initial"
                   animate="animate"
                   exit="exit"
-                  className="absolute inset-0 flex flex-col p-8 pt-12"
+                  className="absolute inset-0 flex flex-col p-5 pt-7 md:p-8 md:pt-12"
                 >
-                  <h2 className="font-display text-[28px] text-[#171C26] font-normal tracking-tight mb-1">Your organization</h2>
-                  <p className="text-[14px] text-slate-500 mb-6">Select the company you're signing in to.</p>
+                  <h2 className="font-display text-[22px] md:text-[28px] text-[#171C26] font-normal tracking-tight mb-0.5 md:mb-1">Your organization</h2>
+                  <p className="text-[12px] md:text-[14px] text-slate-500 mb-4 md:mb-6">Select the company you're signing in to.</p>
 
-                  <form onSubmit={handleCompanySelect} className="space-y-4">
+                  <form onSubmit={handleCompanySelect} className="space-y-3 md:space-y-4">
                     <CustomSelect
-                      icon={<Building2 className="absolute left-5 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-slate-400 pointer-events-none z-10" strokeWidth={1.75} />}
+                      icon={<Building2 className="absolute left-5 top-1/2 -translate-y-1/2 h-[16px] w-[16px] md:h-[18px] md:w-[18px] text-slate-400 pointer-events-none z-10" strokeWidth={1.75} />}
                       label="Organization"
                       value={selectedCompany}
                       onChange={setSelectedCompany}
                       options={(companiesDb || []).map((c) => ({ value: c.name, label: c.name }))}
                     />
 
-                    <Button type="submit" disabled={!selectedCompany} className="w-full h-[56px] rounded-2xl text-[14.5px] font-bold shadow-[0_15px_30px_-12px_rgba(212,175,55,0.3)] transition-all duration-300 bg-gradient-to-br from-[#D4AF37] to-[#996515] hover:from-[#E5C158] hover:to-[#B8860B] active:scale-[0.98] text-[#0A0A0A] disabled:opacity-40 mt-2">
+                    <Button type="submit" disabled={!selectedCompany} className="w-full h-[46px] md:h-[56px] rounded-xl md:rounded-2xl text-[13.5px] md:text-[14.5px] font-bold shadow-[0_15px_30px_-12px_rgba(212,175,55,0.3)] transition-all duration-300 bg-gradient-to-br from-[#D4AF37] to-[#996515] hover:from-[#E5C158] hover:to-[#B8860B] active:scale-[0.98] text-[#0A0A0A] disabled:opacity-40 mt-1 md:mt-2">
                       Continue
                     </Button>
                   </form>
 
-                  <div className="mt-auto pt-4 border-t border-black/[0.04]">
-                    <button onClick={goBack} className="text-[13px] font-medium text-slate-400 hover:text-[#10192B] transition-colors flex items-center gap-2 group">
-                      <ArrowLeft className="h-[14px] w-[14px] group-hover:-translate-x-0.5 transition-transform duration-200" /> Back
+                  <div className="mt-auto pt-3 md:pt-4 border-t border-black/[0.04]">
+                    <button onClick={goBack} className="text-[12px] md:text-[13px] font-medium text-slate-400 hover:text-[#10192B] transition-colors flex items-center gap-1.5 md:gap-2 group">
+                      <ArrowLeft className="h-[12px] w-[12px] md:h-[14px] md:w-[14px] group-hover:-translate-x-0.5 transition-transform duration-200" /> Back
                     </button>
                   </div>
                 </motion.div>
@@ -673,34 +676,33 @@ export default function LoginPage() {
                   initial="initial"
                   animate="animate"
                   exit="exit"
-                  className="absolute inset-0 flex flex-col p-8 pt-12"
+                  className="absolute inset-0 flex flex-col p-5 pt-7 md:p-8 md:pt-12"
                 >
-                  <div className="flex items-center gap-4 mb-5 shrink-0">
+                  <div className="flex items-center gap-3 md:gap-4 mb-3 md:mb-5 shrink-0">
                     {selectedRole === 'admin' ? (
-                      <img src="/logo.png" alt="Admin" className="h-9 w-auto max-w-[100px] object-contain shrink-0 rounded-lg" />
+                      <img src="/logo.png" alt="Admin" className="h-7 md:h-9 w-auto max-w-[80px] md:max-w-[100px] object-contain shrink-0 rounded-lg" />
                     ) : (
-                      activeCompanyObj?.logo_url ? <img src={activeCompanyObj.logo_url} alt={activeCompanyObj.name} className="h-9 w-auto max-w-[100px] object-contain shrink-0 rounded-lg" /> : <Building2 className="h-8 w-8 text-[#10192B] shrink-0" strokeWidth={1.5} />
+                      activeCompanyObj?.logo_url ? <img src={activeCompanyObj.logo_url} alt={activeCompanyObj.name} className="h-7 md:h-9 w-auto max-w-[80px] md:max-w-[100px] object-contain shrink-0 rounded-lg" /> : <Building2 className="h-7 w-7 md:h-8 md:w-8 text-[#10192B] shrink-0" strokeWidth={1.5} />
                     )}
                     <div className="min-w-0">
-                      <h2 className="font-display text-[24px] text-[#171C26] font-normal tracking-tight leading-none truncate">Sign in</h2>
-                      <p className="text-[12px] text-slate-400 mt-1 truncate">
+                      <h2 className="font-display text-[20px] md:text-[24px] text-[#171C26] font-normal tracking-tight leading-none truncate">Sign in</h2>
+                      <p className="text-[11px] md:text-[12px] text-slate-400 mt-0.5 md:mt-1 truncate">
                         {selectedRole === 'admin' ? 'Master administration' : activeCompanyObj?.name}
                       </p>
                     </div>
                   </div>
 
                   {error && (
-                    <div className="mb-3 rounded-xl bg-red-50 p-3 text-[13px] font-medium text-red-600 border border-red-100 flex items-center gap-2 shrink-0">
-                      <Shield className="h-4 w-4 shrink-0" strokeWidth={1.75} /> {error}
+                    <div className="mb-2 md:mb-3 rounded-lg md:rounded-xl bg-red-50 p-2.5 md:p-3 text-[11px] md:text-[13px] font-medium text-red-600 border border-red-100 flex items-center gap-2 shrink-0">
+                      <Shield className="h-[14px] w-[14px] md:h-4 md:w-4 shrink-0" strokeWidth={1.75} /> {error}
                     </div>
                   )}
 
-                  <form onSubmit={handleLogin} className="space-y-3 w-full shrink-0">
-
+                  <form onSubmit={handleLogin} className="space-y-2 md:space-y-3 w-full shrink-0">
                     {selectedRole === 'head' && activeCompanyObj?.business_type !== 'parent' ? (
                       (headUsers || []).length > 1 ? (
                         <CustomSelect
-                          icon={<UserCircle className="absolute left-5 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-slate-400 pointer-events-none z-10" strokeWidth={1.75} />}
+                          icon={<UserCircle className="absolute left-5 top-1/2 -translate-y-1/2 h-[16px] w-[16px] md:h-[18px] md:w-[18px] text-slate-400 pointer-events-none z-10" strokeWidth={1.75} />}
                           label="Your profile"
                           value={email}
                           onChange={setEmail}
@@ -708,61 +710,61 @@ export default function LoginPage() {
                         />
                       ) : (
                         <div className="relative">
-                          <UserCircle className="absolute left-5 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-slate-400 pointer-events-none" strokeWidth={1.75} />
+                          <UserCircle className="absolute left-5 top-1/2 -translate-y-1/2 h-[16px] w-[16px] md:h-[18px] md:w-[18px] text-slate-400 pointer-events-none" strokeWidth={1.75} />
                           <input type="text" readOnly value={headUsers[0]?.name || email} className={`${fieldInputClass} text-slate-500 cursor-not-allowed`} />
                           <label className={fieldLabelClass(true, false)}>Your profile</label>
                         </div>
                       )
                     ) : selectedRole === 'head' && activeCompanyObj?.business_type === 'parent' ? (
                       <div className="relative">
-                        <UserCircle className="absolute left-5 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-slate-400 pointer-events-none" strokeWidth={1.75} />
+                        <UserCircle className="absolute left-5 top-1/2 -translate-y-1/2 h-[16px] w-[16px] md:h-[18px] md:w-[18px] text-slate-400 pointer-events-none" strokeWidth={1.75} />
                         <input type="text" readOnly value="System Admin" className={`${fieldInputClass} text-slate-500 cursor-not-allowed`} />
                         <label className={fieldLabelClass(true, false)}>Your profile</label>
                       </div>
                     ) : (
                       <div className="relative">
-                        <Mail className="absolute left-5 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-slate-400 pointer-events-none z-10" strokeWidth={1.75} />
+                        <Mail className="absolute left-5 top-1/2 -translate-y-1/2 h-[16px] w-[16px] md:h-[18px] md:w-[18px] text-slate-400 pointer-events-none z-10" strokeWidth={1.75} />
                         <input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder=" " className={fieldInputClass} />
-                        <label htmlFor="email" className={`${fieldLabelClass(false, false)} peer-focus:top-[12px] peer-focus:text-[11px] peer-focus:text-[#D4AF37] peer-[&:not(:placeholder-shown)]:top-[12px] peer-[&:not(:placeholder-shown)]:text-[11px]`}>
+                        <label htmlFor="email" className={`${fieldLabelClass(false, false)} peer-focus:top-[6px] md:peer-focus:top-[12px] peer-focus:text-[10px] md:peer-focus:text-[11px] peer-focus:text-[#D4AF37] peer-[&:not(:placeholder-shown)]:top-[6px] md:peer-[&:not(:placeholder-shown)]:top-[12px] peer-[&:not(:placeholder-shown)]:text-[10px] md:peer-[&:not(:placeholder-shown)]:text-[11px]`}>
                           Email address
                         </label>
                       </div>
                     )}
 
                     <div className="relative">
-                      <Lock className="absolute left-5 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-slate-400 pointer-events-none z-10" strokeWidth={1.75} />
+                      <Lock className="absolute left-5 top-1/2 -translate-y-1/2 h-[16px] w-[16px] md:h-[18px] md:w-[18px] text-slate-400 pointer-events-none z-10" strokeWidth={1.75} />
                       <input
                         id="password"
                         type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)}
                         placeholder=" " className={`${fieldInputClass} pr-14 [&::-ms-reveal]:hidden [&::-ms-clear]:hidden`}
                       />
-                      <label htmlFor="password" className={`${fieldLabelClass(false, false)} peer-focus:top-[12px] peer-focus:text-[11px] peer-focus:text-[#D4AF37] peer-[&:not(:placeholder-shown)]:top-[12px] peer-[&:not(:placeholder-shown)]:text-[11px]`}>
+                      <label htmlFor="password" className={`${fieldLabelClass(false, false)} peer-focus:top-[6px] md:peer-focus:top-[12px] peer-focus:text-[10px] md:peer-focus:text-[11px] peer-focus:text-[#D4AF37] peer-[&:not(:placeholder-shown)]:top-[6px] md:peer-[&:not(:placeholder-shown)]:top-[12px] peer-[&:not(:placeholder-shown)]:text-[10px] md:peer-[&:not(:placeholder-shown)]:text-[11px]`}>
                         Password
                       </label>
-                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#10192B] transition-colors p-1.5 rounded-lg z-10">
-                        {showPassword ? <EyeOff className="h-[18px] w-[18px]" strokeWidth={1.75} /> : <Eye className="h-[18px] w-[18px]" strokeWidth={1.75} />}
+                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 md:right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#10192B] transition-colors p-1 md:p-1.5 rounded-lg z-10">
+                        {showPassword ? <EyeOff className="h-[16px] w-[16px] md:h-[18px] md:w-[18px]" strokeWidth={1.75} /> : <Eye className="h-[16px] w-[16px] md:h-[18px] md:w-[18px]" strokeWidth={1.75} />}
                       </button>
                     </div>
 
-                    <div className="flex justify-end pt-1 pb-1">
+                    <div className="flex justify-end pt-0.5 pb-0.5 md:pt-1 md:pb-1">
                       <a
                         href={forgotHref}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[12px] font-medium text-slate-400 hover:text-[#D4AF37] transition-colors"
+                        className="text-[11px] md:text-[12px] font-medium text-slate-400 hover:text-[#D4AF37] transition-colors"
                       >
                         Forgot password?
                       </a>
                     </div>
 
-                    <Button type="submit" disabled={isLoggingIn || headNeedsSelection} className="w-full h-[56px] rounded-2xl text-[14.5px] font-bold shadow-[0_15px_30px_-12px_rgba(212,175,55,0.3)] transition-all duration-300 bg-gradient-to-br from-[#D4AF37] to-[#996515] hover:from-[#E5C158] hover:to-[#B8860B] active:scale-[0.98] text-[#0A0A0A] disabled:opacity-50">
+                    <Button type="submit" disabled={isLoggingIn || headNeedsSelection} className="w-full h-[46px] md:h-[56px] rounded-xl md:rounded-2xl text-[13.5px] md:text-[14.5px] font-bold shadow-[0_15px_30px_-12px_rgba(212,175,55,0.3)] transition-all duration-300 bg-gradient-to-br from-[#D4AF37] to-[#996515] hover:from-[#E5C158] hover:to-[#B8860B] active:scale-[0.98] text-[#0A0A0A] disabled:opacity-50">
                       {isLoggingIn ? "Signing in..." : "Sign in"}
                     </Button>
                   </form>
 
-                  <div className="mt-auto pt-4 border-t border-black/[0.04] shrink-0">
-                    <button onClick={goBack} className="text-[13px] font-medium text-slate-400 hover:text-[#10192B] transition-colors flex items-center gap-2 group">
-                      <ArrowLeft className="h-[14px] w-[14px] group-hover:-translate-x-0.5 transition-transform duration-200" /> Back
+                  <div className="mt-auto pt-3 md:pt-4 border-t border-black/[0.04] shrink-0">
+                    <button onClick={goBack} className="text-[12px] md:text-[13px] font-medium text-slate-400 hover:text-[#10192B] transition-colors flex items-center gap-1.5 md:gap-2 group">
+                      <ArrowLeft className="h-[12px] w-[12px] md:h-[14px] md:w-[14px] group-hover:-translate-x-0.5 transition-transform duration-200" /> Back
                     </button>
                   </div>
                 </motion.div>
@@ -770,6 +772,21 @@ export default function LoginPage() {
             </AnimatePresence>
           </motion.div>
 
+        </div>
+
+        {/* MOBILE STRICT FOOTER (Absolute positioned globally for mobile to never trigger scroll) */}
+        <div className="absolute bottom-2 left-0 right-0 flex md:hidden items-center justify-center gap-1.5 z-50 text-[10px] text-[#171C26]/60 font-medium pb-[env(safe-area-inset-bottom)]">
+          <span>copyright(zac holdings pvt ltd)</span>
+          <span className="text-black/20">|</span>
+          <a
+            href="https://wa.me/917558957246"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shining-gold select-none text-[12px]"
+            title="Developer"
+          >
+            R.
+          </a>
         </div>
       </div>
     </>

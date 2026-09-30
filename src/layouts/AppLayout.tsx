@@ -41,7 +41,6 @@ export default function AppLayout() {
   const handleExitWorkspace = () => { 
     if (setActiveWorkspace) setActiveWorkspace(""); 
     useAuthStore.setState({ activeWorkspace: "" });
-    // REMOVED: await fetchAllData() - The useEffect above handles this automatically now, stopping the double-fetch
     setIsMobileDrawerOpen(false);
     navigate("/dashboard"); 
   };
@@ -67,17 +66,32 @@ export default function AppLayout() {
   
   const visibleLinks = allNavLinks.filter(link => link.allowedRoles.includes(role || 'user'));
 
+  // OPTIMIZED: Contact Filter now explicitly checks the junction roles (company_roles)
   const allowedContacts = employees.filter(emp => {
     if (emp.id == employeeId) return false; 
     const currentRole = role?.toLowerCase() || 'user';
     
+    // Helper to check if employee is assigned to a specific company ID
+    const isLinkedToCompany = (targetId: string | number | null | undefined) => {
+      if (!targetId) return false;
+      const targetStr = targetId.toString();
+      if (emp.company_id?.toString() === targetStr) return true;
+      if (emp.company_roles && Array.isArray(emp.company_roles)) {
+        return emp.company_roles.some((r: any) => r.company_id?.toString() === targetStr);
+      }
+      return false;
+    };
+
     if (currentRole === 'admin') {
-      if (activeWorkspace) return emp.company_id?.toString() === activeWorkspace?.toString() || emp.access_level === 'admin';
-      if (chatCompanyFilter !== "all") return emp.company_id?.toString() === chatCompanyFilter || emp.access_level === 'admin';
-      return true;
+      if (activeWorkspace) return isLinkedToCompany(activeWorkspace) || emp.access_level === 'admin';
+      if (chatCompanyFilter !== "all") return isLinkedToCompany(chatCompanyFilter) || emp.access_level === 'admin';
+      return true; // Global view sees everyone
     }
     
-    if (currentRole === 'head' || currentRole === 'user') return emp.access_level === 'admin' || emp.company_id?.toString() === companyId?.toString();
+    if (currentRole === 'head' || currentRole === 'user') {
+      return emp.access_level === 'admin' || isLinkedToCompany(companyId);
+    }
+    
     return false;
   });
 
@@ -424,14 +438,12 @@ export default function AppLayout() {
            ${activeWorkspace && role === 'admin' ? 'sm:pr-6 lg:pr-64' : 'sm:pr-6 lg:pr-10'}
            [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full`}>
           
-          {/* OPTIMIZED: The full-page spinner is strictly limited to initial empty state rendering. */}
           {isDataLoading && companies.length === 0 ? (
             <div className="flex h-full w-full items-center justify-center">
               <Loader2 className="h-10 w-10 animate-spin text-blue-900" />
             </div>
           ) : (
             <>
-              {/* Elegant non-blocking sync indicator */}
               {isDataLoading && companies.length > 0 && (
                 <div className="absolute top-4 right-4 z-50 bg-white/80 backdrop-blur rounded-full shadow-sm p-1.5 pointer-events-none transition-all">
                   <Loader2 className="h-3 w-3 animate-spin text-blue-600" />
