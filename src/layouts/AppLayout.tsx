@@ -23,6 +23,7 @@ export default function AppLayout() {
   
   const prevMessageCount = useRef(messages.length);
 
+  // Background Sync: Triggers automatically when workspace changes
   useEffect(() => {
     fetchAllData();
   }, [activeWorkspace, role, companyId, fetchAllData]);
@@ -37,11 +38,10 @@ export default function AppLayout() {
   const brandLogo = currentDisplayCompany?.logo_url || masterAdmin?.profile_image_url || null;
   const isAcademy = currentDisplayCompany?.business_type === 'academy' || currentDisplayCompany?.business_type?.includes('education');
 
-  // STRICT OVERWRITE: Uses empty string instead of null to force local storage to wipe the old ID
-  const handleExitWorkspace = async () => { 
+  const handleExitWorkspace = () => { 
     if (setActiveWorkspace) setActiveWorkspace(""); 
     useAuthStore.setState({ activeWorkspace: "" });
-    await fetchAllData(); 
+    // REMOVED: await fetchAllData() - The useEffect above handles this automatically now, stopping the double-fetch
     setIsMobileDrawerOpen(false);
     navigate("/dashboard"); 
   };
@@ -234,7 +234,6 @@ export default function AppLayout() {
                 <NavLink 
                   key={link.path} 
                   to={link.path} 
-                  // If admin clicks Dashboard from the sidebar, automatically exit workspace and wipe storage
                   onClick={() => {
                     setIsMobileDrawerOpen(false);
                     if (link.path === '/dashboard' && role === 'admin') {
@@ -425,12 +424,21 @@ export default function AppLayout() {
            ${activeWorkspace && role === 'admin' ? 'sm:pr-6 lg:pr-64' : 'sm:pr-6 lg:pr-10'}
            [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full`}>
           
-          {isDataLoading ? (
+          {/* OPTIMIZED: The full-page spinner is strictly limited to initial empty state rendering. */}
+          {isDataLoading && companies.length === 0 ? (
             <div className="flex h-full w-full items-center justify-center">
               <Loader2 className="h-10 w-10 animate-spin text-blue-900" />
             </div>
           ) : (
-            <Outlet />
+            <>
+              {/* Elegant non-blocking sync indicator */}
+              {isDataLoading && companies.length > 0 && (
+                <div className="absolute top-4 right-4 z-50 bg-white/80 backdrop-blur rounded-full shadow-sm p-1.5 pointer-events-none transition-all">
+                  <Loader2 className="h-3 w-3 animate-spin text-blue-600" />
+                </div>
+              )}
+              <Outlet />
+            </>
           )}
 
         </main>
