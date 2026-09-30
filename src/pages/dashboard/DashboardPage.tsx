@@ -276,7 +276,11 @@ export default function DashboardPage() {
     await fetchAllData();
   };
 
-  const handleEnterWorkspace = async () => { setActiveWorkspace(selectedCompany.id); await fetchAllData(); setIsCompanyModalOpen(false); };
+  // OPTIMIZED: Synchronous state update allows instant view transition without locking the UI
+  const handleEnterWorkspace = () => { 
+    setIsCompanyModalOpen(false); 
+    setActiveWorkspace(selectedCompany.id); 
+  };
 
   // --- STRICT DATA SCOPING ---
   
@@ -351,8 +355,7 @@ export default function DashboardPage() {
       (invoices || []).forEach(inv => {
         if (!isCompanyMatch(inv.company_id)) return;
         const compName = companies.find(c => c.id === inv.company_id)?.name || 'Subsidiary';
-        feed.push({ id: `inv_${inv.id}`, type: 'Invoice', title: `Invoice Generated: ${inv.invoice_number}`, desc: `Total: ₹${parseFloat(inv.total_amount || 0).toLocaleString()}Status: 
-${inv.status}`, date: inv.created_at || inv.issue_date || todayStr, companyName: compName, icon: FileText, color: 'text-amber-500 bg-amber-50 border-amber-200' });
+        feed.push({ id: `inv_${inv.id}`, type: 'Invoice', title: `Invoice Generated: ${inv.invoice_number}`, desc: `Total: ₹${parseFloat(inv.total_amount || 0).toLocaleString()}Status: \n${inv.status}`, date: inv.created_at || inv.issue_date || todayStr, companyName: compName, icon: FileText, color: 'text-amber-500 bg-amber-50 border-amber-200' });
       });
     }
 
@@ -379,7 +382,7 @@ ${inv.status}`, date: inv.created_at || inv.issue_date || todayStr, companyName:
             </p>
           </div>
           
-          {/* Added sm:mt-[56px] so this flex container clears the floating AppLayout header buttons */}
+          {/* Added sm:mt-[56px] to comfortably clear the absolute-positioned AppLayout header buttons */}
           <div className="flex gap-2 sm:gap-3 flex-wrap items-center mt-4 sm:mt-[56px] relative z-10">
             {/* Show Add Company ONLY if Admin and NOT in a workspace */}
             {isAdmin && !activeWorkspace && (
@@ -407,166 +410,168 @@ ${inv.status}`, date: inv.created_at || inv.issue_date || todayStr, companyName:
         )}
 
         {/* --- DYNAMIC RENDER BLOCK BASED ON ROLE & WORKSPACE --- */}
-        {isAdmin && activeWorkspace ? (
-          /* --- ADMIN WORKSPACE SPECIFIC VIEW --- */
-          <div className="space-y-6 sm:space-y-8 pt-4 sm:pt-6 border-t border-slate-200/60">
-            {/* Company Overview Header */}
-            <div className="bg-white border border-slate-100 rounded-2xl sm:rounded-3xl p-6 shadow-sm flex flex-col sm:flex-row items-center sm:items-start gap-6">
-               <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-[1.25rem] bg-slate-50 border border-slate-100 flex items-center justify-center overflow-hidden p-2 shadow-sm shrink-0">
-                 {currentCompany?.logo_url ? <img src={currentCompany.logo_url} alt="Logo" className="h-full w-full object-contain" /> : <Building2 className="h-10 w-10 text-slate-300"/>}
-               </div>
-               <div className="text-center sm:text-left">
-                 <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">{currentCompany?.name}</h2>
-                 <p className="text-sm font-medium text-slate-500 mt-1">{currentCompany?.area || 'Subsidiary'}</p>
-               </div>
-            </div>
-
-            {/* Workspace Stats Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-              <div className="bg-white border border-slate-100 p-4 sm:p-7 rounded-2xl sm:rounded-3xl shadow-sm flex flex-col justify-between min-h-[120px] sm:min-h-[160px] relative overflow-hidden group">
-                <div className="absolute -right-6 -top-6 w-16 h-16 sm:w-24 sm:h-24 bg-blue-50 rounded-full blur-2xl group-hover:bg-blue-100 transition-colors"></div>
-                <p className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest relative z-10 truncate">Total Employees</p>
-                <p className="text-3xl sm:text-5xl font-semibold text-slate-800 tracking-tight relative z-10 mt-2">{workspaceEmployeesCount}</p>
-              </div>
-              
-              <div className="bg-white border border-slate-100 p-4 sm:p-7 rounded-2xl sm:rounded-3xl shadow-sm flex flex-col justify-between min-h-[120px] sm:min-h-[160px] relative overflow-hidden group">
-                <div className="absolute -right-6 -top-6 w-16 h-16 sm:w-24 sm:h-24 bg-indigo-50 rounded-full blur-2xl group-hover:bg-indigo-100 transition-colors"></div>
-                <p className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest relative z-10 truncate">Total Projects</p>
-                <p className="text-3xl sm:text-5xl font-semibold text-slate-800 tracking-tight relative z-10 mt-2">{workspaceProjects.length}</p>
+        <AnimatePresence mode="wait">
+          {isAdmin && activeWorkspace ? (
+            /* --- ADMIN WORKSPACE SPECIFIC VIEW --- */
+            <motion.div key="admin-workspace" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} transition={{ duration: 0.2 }} className="space-y-6 sm:space-y-8 pt-4 sm:pt-6 border-t border-slate-200/60">
+              {/* Company Overview Header */}
+              <div className="bg-white border border-slate-100 rounded-2xl sm:rounded-3xl p-6 shadow-sm flex flex-col sm:flex-row items-center sm:items-start gap-6">
+                 <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-[1.25rem] bg-slate-50 border border-slate-100 flex items-center justify-center overflow-hidden p-2 shadow-sm shrink-0">
+                   {currentCompany?.logo_url ? <img src={currentCompany.logo_url} alt="Logo" className="h-full w-full object-contain" /> : <Building2 className="h-10 w-10 text-slate-300"/>}
+                 </div>
+                 <div className="text-center sm:text-left">
+                   <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">{currentCompany?.name}</h2>
+                   <p className="text-sm font-medium text-slate-500 mt-1">{currentCompany?.area || 'Subsidiary'}</p>
+                 </div>
               </div>
 
-              {completedProjects > 0 && (
-                <div className="bg-white border border-slate-100 p-4 sm:p-7 rounded-2xl sm:rounded-3xl shadow-sm flex flex-col justify-between min-h-[120px] sm:min-h-[160px] relative overflow-hidden group">
-                  <div className="absolute -right-6 -top-6 w-16 h-16 sm:w-24 sm:h-24 bg-emerald-50 rounded-full blur-2xl group-hover:bg-emerald-100 transition-colors"></div>
-                  <p className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest relative z-10 truncate">Completed</p>
-                  <p className="text-3xl sm:text-5xl font-semibold text-slate-800 tracking-tight relative z-10 mt-2">{completedProjects}</p>
-                </div>
-              )}
-
-              {pendingProjects > 0 && (
-                <div className="bg-white border border-slate-100 p-4 sm:p-7 rounded-2xl sm:rounded-3xl shadow-sm flex flex-col justify-between min-h-[120px] sm:min-h-[160px] relative overflow-hidden group">
-                  <div className="absolute -right-6 -top-6 w-16 h-16 sm:w-24 sm:h-24 bg-amber-50 rounded-full blur-2xl group-hover:bg-amber-100 transition-colors"></div>
-                  <p className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest relative z-10 truncate">Pending</p>
-                  <p className="text-3xl sm:text-5xl font-semibold text-slate-800 tracking-tight relative z-10 mt-2">{pendingProjects}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        ) : isAdmin && !activeWorkspace ? (
-          /* --- GLOBAL ADMIN OVERVIEW SECTION --- */
-          <>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+              {/* Workspace Stats Grid */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                 <div className="bg-white border border-slate-100 p-4 sm:p-7 rounded-2xl sm:rounded-3xl shadow-sm flex flex-col justify-between min-h-[120px] sm:min-h-[160px] relative overflow-hidden group">
                   <div className="absolute -right-6 -top-6 w-16 h-16 sm:w-24 sm:h-24 bg-blue-50 rounded-full blur-2xl group-hover:bg-blue-100 transition-colors"></div>
-                  <p className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest relative z-10 truncate">Companies</p>
-                  <p className="text-3xl sm:text-5xl font-semibold text-slate-800 tracking-tight relative z-10 mt-2">{overviewCompanies.length || 0}</p>
+                  <p className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest relative z-10 truncate">Total Employees</p>
+                  <p className="text-3xl sm:text-5xl font-semibold text-slate-800 tracking-tight relative z-10 mt-2">{workspaceEmployeesCount}</p>
                 </div>
-              <div className="bg-white border border-slate-100 p-4 sm:p-7 rounded-2xl sm:rounded-3xl shadow-sm flex flex-col justify-between min-h-[120px] sm:min-h-[160px] relative overflow-hidden group">
-                <div className="absolute -right-6 -top-6 w-16 h-16 sm:w-24 sm:h-24 bg-blue-50 rounded-full blur-2xl group-hover:bg-blue-100 transition-colors"></div>
-                <p className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest relative z-10 truncate">Total Employees</p>
-                <p className="text-3xl sm:text-5xl font-semibold text-slate-800 tracking-tight relative z-10 mt-2">{overviewEmployees.length || 0}</p>
-              </div>
-              <div className="bg-white border border-slate-100 p-4 sm:p-7 rounded-2xl sm:rounded-3xl shadow-sm flex flex-col justify-between min-h-[120px] sm:min-h-[160px] relative overflow-hidden group">
-                <div className="absolute -right-6 -top-6 w-16 h-16 sm:w-24 sm:h-24 bg-indigo-50 rounded-full blur-2xl group-hover:bg-indigo-100 transition-colors"></div>
-                <p className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest relative z-10 truncate">Active Projects</p>
-                <p className="text-3xl sm:text-5xl font-semibold text-slate-800 tracking-tight relative z-10 mt-2">{overviewProjects.length || 0}</p>
-              </div>
-              <div className="bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-800 p-4 sm:p-7 rounded-2xl sm:rounded-3xl shadow-xl shadow-blue-900/10 flex flex-col justify-between min-h-[120px] sm:min-h-[160px] relative overflow-hidden">
-                <div className="absolute -right-10 -bottom-10 w-24 h-24 sm:w-40 sm:h-40 bg-white/5 rounded-full blur-3xl"></div>
-                <p className="text-[9px] sm:text-[11px] font-bold text-blue-200 uppercase tracking-widest relative z-10 truncate">Total Payroll</p>
-                <p className="text-2xl sm:text-4xl font-semibold text-white tracking-tight relative z-10 mt-2">₹{overviewPayroll.toLocaleString()}</p>
-              </div>
-            </div>
+                
+                <div className="bg-white border border-slate-100 p-4 sm:p-7 rounded-2xl sm:rounded-3xl shadow-sm flex flex-col justify-between min-h-[120px] sm:min-h-[160px] relative overflow-hidden group">
+                  <div className="absolute -right-6 -top-6 w-16 h-16 sm:w-24 sm:h-24 bg-indigo-50 rounded-full blur-2xl group-hover:bg-indigo-100 transition-colors"></div>
+                  <p className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest relative z-10 truncate">Total Projects</p>
+                  <p className="text-3xl sm:text-5xl font-semibold text-slate-800 tracking-tight relative z-10 mt-2">{workspaceProjects.length}</p>
+                </div>
 
-            <div className="pt-2 sm:pt-4">
-              <h2 className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4 sm:mb-6 px-1">Company Directory</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-                {overviewCompanies.map((company, i) => (
-                  <motion.div key={company.id} onClick={() => openViewCompany(company)} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="bg-white border border-slate-100 p-4 sm:p-6 rounded-2xl shadow-sm hover:shadow-md hover:border-blue-200 cursor-pointer transition-all group flex items-start justify-between">
-                    <div>
-                      <div className="h-10 w-10 sm:h-12 sm:w-12 bg-slate-50 rounded-xl flex items-center justify-center mb-4 sm:mb-5 overflow-hidden border border-slate-100 group-hover:scale-105 transition-transform">
-                        {company.logo_url ? <img src={company.logo_url} alt="" className="h-full w-full object-contain p-1.5 sm:p-2" /> : <Building2 className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400"/>}
-                      </div>
-                      <h3 className="font-bold text-[14px] sm:text-[15px] text-slate-900 tracking-tight">{company.name}</h3>
-                      <p className="text-[11px] sm:text-[12px] font-medium text-slate-400 mt-1">{company.area || "Subsidiary"}</p>
-                    </div>
-                    <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-slate-50 flex items-center justify-center opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all">
-                      <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-900"/>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            </div>
-          </>
-        ) : (
-          /* --- USER & HEAD SECTION (Personal Projects & Payroll Only) --- */
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 pt-4 sm:pt-6 border-t border-slate-200/60">
-            <div className="lg:col-span-2">
-              <h2 className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4 px-1">My Active Projects</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {myProjects.length === 0 ? (
-                  <div className="col-span-full p-6 sm:p-8 bg-slate-50 rounded-2xl border border-slate-100 text-center">
-                    <Briefcase className="h-8 w-8 text-slate-300 mx-auto mb-3" />
-                    <p className="text-sm font-medium text-slate-500">No active projects assigned to you.</p>
+                {completedProjects > 0 && (
+                  <div className="bg-white border border-slate-100 p-4 sm:p-7 rounded-2xl sm:rounded-3xl shadow-sm flex flex-col justify-between min-h-[120px] sm:min-h-[160px] relative overflow-hidden group">
+                    <div className="absolute -right-6 -top-6 w-16 h-16 sm:w-24 sm:h-24 bg-emerald-50 rounded-full blur-2xl group-hover:bg-emerald-100 transition-colors"></div>
+                    <p className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest relative z-10 truncate">Completed</p>
+                    <p className="text-3xl sm:text-5xl font-semibold text-slate-800 tracking-tight relative z-10 mt-2">{completedProjects}</p>
                   </div>
-                ) : (
-                  myProjects.map(project => (
-                    <div key={project.id} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group flex flex-col justify-between">
+                )}
+
+                {pendingProjects > 0 && (
+                  <div className="bg-white border border-slate-100 p-4 sm:p-7 rounded-2xl sm:rounded-3xl shadow-sm flex flex-col justify-between min-h-[120px] sm:min-h-[160px] relative overflow-hidden group">
+                    <div className="absolute -right-6 -top-6 w-16 h-16 sm:w-24 sm:h-24 bg-amber-50 rounded-full blur-2xl group-hover:bg-amber-100 transition-colors"></div>
+                    <p className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest relative z-10 truncate">Pending</p>
+                    <p className="text-3xl sm:text-5xl font-semibold text-slate-800 tracking-tight relative z-10 mt-2">{pendingProjects}</p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          ) : isAdmin && !activeWorkspace ? (
+            /* --- GLOBAL ADMIN OVERVIEW SECTION --- */
+            <motion.div key="admin-global" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} transition={{ duration: 0.2 }} className="space-y-6 sm:space-y-8">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+                  <div className="bg-white border border-slate-100 p-4 sm:p-7 rounded-2xl sm:rounded-3xl shadow-sm flex flex-col justify-between min-h-[120px] sm:min-h-[160px] relative overflow-hidden group">
+                    <div className="absolute -right-6 -top-6 w-16 h-16 sm:w-24 sm:h-24 bg-blue-50 rounded-full blur-2xl group-hover:bg-blue-100 transition-colors"></div>
+                    <p className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest relative z-10 truncate">Companies</p>
+                    <p className="text-3xl sm:text-5xl font-semibold text-slate-800 tracking-tight relative z-10 mt-2">{overviewCompanies.length || 0}</p>
+                  </div>
+                <div className="bg-white border border-slate-100 p-4 sm:p-7 rounded-2xl sm:rounded-3xl shadow-sm flex flex-col justify-between min-h-[120px] sm:min-h-[160px] relative overflow-hidden group">
+                  <div className="absolute -right-6 -top-6 w-16 h-16 sm:w-24 sm:h-24 bg-blue-50 rounded-full blur-2xl group-hover:bg-blue-100 transition-colors"></div>
+                  <p className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest relative z-10 truncate">Total Employees</p>
+                  <p className="text-3xl sm:text-5xl font-semibold text-slate-800 tracking-tight relative z-10 mt-2">{overviewEmployees.length || 0}</p>
+                </div>
+                <div className="bg-white border border-slate-100 p-4 sm:p-7 rounded-2xl sm:rounded-3xl shadow-sm flex flex-col justify-between min-h-[120px] sm:min-h-[160px] relative overflow-hidden group">
+                  <div className="absolute -right-6 -top-6 w-16 h-16 sm:w-24 sm:h-24 bg-indigo-50 rounded-full blur-2xl group-hover:bg-indigo-100 transition-colors"></div>
+                  <p className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest relative z-10 truncate">Active Projects</p>
+                  <p className="text-3xl sm:text-5xl font-semibold text-slate-800 tracking-tight relative z-10 mt-2">{overviewProjects.length || 0}</p>
+                </div>
+                <div className="bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-800 p-4 sm:p-7 rounded-2xl sm:rounded-3xl shadow-xl shadow-blue-900/10 flex flex-col justify-between min-h-[120px] sm:min-h-[160px] relative overflow-hidden">
+                  <div className="absolute -right-10 -bottom-10 w-24 h-24 sm:w-40 sm:h-40 bg-white/5 rounded-full blur-3xl"></div>
+                  <p className="text-[9px] sm:text-[11px] font-bold text-blue-200 uppercase tracking-widest relative z-10 truncate">Total Payroll</p>
+                  <p className="text-2xl sm:text-4xl font-semibold text-white tracking-tight relative z-10 mt-2">₹{overviewPayroll.toLocaleString()}</p>
+                </div>
+              </div>
+
+              <div className="pt-2 sm:pt-4">
+                <h2 className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4 sm:mb-6 px-1">Company Directory</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+                  {overviewCompanies.map((company, i) => (
+                    <motion.div key={company.id} onClick={() => openViewCompany(company)} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="bg-white border border-slate-100 p-4 sm:p-6 rounded-2xl shadow-sm hover:shadow-md hover:border-blue-200 cursor-pointer transition-all group flex items-start justify-between">
                       <div>
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="h-10 w-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                            <Briefcase className="h-5 w-5" />
-                          </div>
-                          <h3 className="font-bold text-slate-900 text-[14px] sm:text-[15px] leading-tight">{project.name}</h3>
+                        <div className="h-10 w-10 sm:h-12 sm:w-12 bg-slate-50 rounded-xl flex items-center justify-center mb-4 sm:mb-5 overflow-hidden border border-slate-100 group-hover:scale-105 transition-transform">
+                          {company.logo_url ? <img src={company.logo_url} alt="" className="h-full w-full object-contain p-1.5 sm:p-2" /> : <Building2 className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400"/>}
                         </div>
-                        <p className="text-xs text-slate-500 line-clamp-3 mb-4 leading-relaxed">{project.description || 'No description provided.'}</p>
+                        <h3 className="font-bold text-[14px] sm:text-[15px] text-slate-900 tracking-tight">{company.name}</h3>
+                        <p className="text-[11px] sm:text-[12px] font-medium text-slate-400 mt-1">{company.area || "Subsidiary"}</p>
                       </div>
-                      <div className="pt-3 border-t border-slate-50 flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{new Date(project.created_at).toLocaleDateString()}</span>
-                        <span className="text-[10px] font-bold px-2 py-1 bg-emerald-50 text-emerald-600 rounded-md border border-emerald-100 uppercase tracking-wider">{project.status || 'Active'}</span>
+                      <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-slate-50 flex items-center justify-center opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all">
+                        <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-900"/>
                       </div>
-                    </div>
-                  ))
-                )}
+                    </motion.div>
+                  ))}
+                </div>
               </div>
-            </div>
-            
-            <div>
-              <h2 className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 sm:mb-4 px-1">Financial Status</h2>
-              <div className="bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-800 text-white p-6 sm:p-8 rounded-2xl sm:rounded-3xl min-h-[140px] sm:min-h-[180px] flex flex-col justify-between shadow-xl shadow-blue-900/10 relative overflow-hidden">
-                <div className="absolute -right-10 -top-10 w-24 h-24 sm:w-40 sm:h-40 bg-white/5 rounded-full blur-3xl"></div>
-                {lastSalary ? (
-                  <>
-                    <div className="relative z-10">
-                      <p className="text-[9px] sm:text-[10px] text-blue-200 font-bold uppercase tracking-widest mb-1.5 sm:mb-2">Latest Payout</p>
-                      <div className="inline-flex items-center gap-1.5 text-emerald-300 bg-emerald-400/10 border border-emerald-400/20 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md shadow-sm">
-                        <CheckCircle2 className="h-3 w-3 sm:h-3.5 sm:w-3.5"/>
-                        <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest">Disbursed</span>
+            </motion.div>
+          ) : (
+            /* --- USER & HEAD SECTION (Personal Projects & Payroll Only) --- */
+            <motion.div key="user-view" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} transition={{ duration: 0.2 }} className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 pt-4 sm:pt-6 border-t border-slate-200/60">
+              <div className="lg:col-span-2">
+                <h2 className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4 px-1">My Active Projects</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {myProjects.length === 0 ? (
+                    <div className="col-span-full p-6 sm:p-8 bg-slate-50 rounded-2xl border border-slate-100 text-center">
+                      <Briefcase className="h-8 w-8 text-slate-300 mx-auto mb-3" />
+                      <p className="text-sm font-medium text-slate-500">No active projects assigned to you.</p>
+                    </div>
+                  ) : (
+                    myProjects.map(project => (
+                      <div key={project.id} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className="h-10 w-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                              <Briefcase className="h-5 w-5" />
+                            </div>
+                            <h3 className="font-bold text-slate-900 text-[14px] sm:text-[15px] leading-tight">{project.name}</h3>
+                          </div>
+                          <p className="text-xs text-slate-500 line-clamp-3 mb-4 leading-relaxed">{project.description || 'No description provided.'}</p>
+                        </div>
+                        <div className="pt-3 border-t border-slate-50 flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{new Date(project.created_at).toLocaleDateString()}</span>
+                          <span className="text-[10px] font-bold px-2 py-1 bg-emerald-50 text-emerald-600 rounded-md border border-emerald-100 uppercase tracking-wider">{project.status || 'Active'}</span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="relative z-10 mt-4 sm:mt-6">
-                       <p className="text-3xl sm:text-4xl font-semibold tracking-tight text-white">₹{lastSalary.amount.toLocaleString()}</p>
-                       <p className="text-[9px] sm:text-[10px] text-blue-300 font-medium uppercase tracking-wider mt-1.5 sm:mt-2">Paid on: {new Date(lastSalary.payment_date).toLocaleDateString()}</p>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="relative z-10">
-                      <p className="text-[9px] sm:text-[10px] text-blue-200 font-bold uppercase tracking-widest mb-1.5 sm:mb-2">Next Payout</p>
-                      <div className="inline-flex items-center gap-1.5 sm:gap-2 text-amber-300 bg-amber-400/10 border border-amber-400/20 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md">
-                        <Clock className="h-3 w-3 sm:h-3.5 sm:w-3.5"/>
-                        <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest">Processing</span>
-                      </div>
-                    </div>
-                    <div className="relative z-10 mt-4 sm:mt-6">
-                       <p className="text-[12px] sm:text-[13px] text-blue-200 font-medium">Ledger unavailable.</p>
-                    </div>
-                  </>
-                )}
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
-          </div>
-        )}
+              
+              <div>
+                <h2 className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 sm:mb-4 px-1">Financial Status</h2>
+                <div className="bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-800 text-white p-6 sm:p-8 rounded-2xl sm:rounded-3xl min-h-[140px] sm:min-h-[180px] flex flex-col justify-between shadow-xl shadow-blue-900/10 relative overflow-hidden">
+                  <div className="absolute -right-10 -top-10 w-24 h-24 sm:w-40 sm:h-40 bg-white/5 rounded-full blur-3xl"></div>
+                  {lastSalary ? (
+                    <>
+                      <div className="relative z-10">
+                        <p className="text-[9px] sm:text-[10px] text-blue-200 font-bold uppercase tracking-widest mb-1.5 sm:mb-2">Latest Payout</p>
+                        <div className="inline-flex items-center gap-1.5 text-emerald-300 bg-emerald-400/10 border border-emerald-400/20 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md shadow-sm">
+                          <CheckCircle2 className="h-3 w-3 sm:h-3.5 sm:w-3.5"/>
+                          <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest">Disbursed</span>
+                        </div>
+                      </div>
+                      <div className="relative z-10 mt-4 sm:mt-6">
+                         <p className="text-3xl sm:text-4xl font-semibold tracking-tight text-white">₹{lastSalary.amount.toLocaleString()}</p>
+                         <p className="text-[9px] sm:text-[10px] text-blue-300 font-medium uppercase tracking-wider mt-1.5 sm:mt-2">Paid on: {new Date(lastSalary.payment_date).toLocaleDateString()}</p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="relative z-10">
+                        <p className="text-[9px] sm:text-[10px] text-blue-200 font-bold uppercase tracking-widest mb-1.5 sm:mb-2">Next Payout</p>
+                        <div className="inline-flex items-center gap-1.5 sm:gap-2 text-amber-300 bg-amber-400/10 border border-amber-400/20 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md">
+                          <Clock className="h-3 w-3 sm:h-3.5 sm:w-3.5"/>
+                          <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest">Processing</span>
+                        </div>
+                      </div>
+                      <div className="relative z-10 mt-4 sm:mt-6">
+                         <p className="text-[12px] sm:text-[13px] text-blue-200 font-medium">Ledger unavailable.</p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* ACTIVITY PULSE MODAL */}
