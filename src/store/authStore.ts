@@ -14,7 +14,7 @@ interface AuthState {
   checkSession: () => Promise<void>;
   signIn: (email: string, password: string, selectedRole?: 'admin' | 'head' | 'user' | null, selectedCompanyId?: number | string | null) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
-  setActiveWorkspace: (id: number | null) => Promise<void>;
+  setActiveWorkspace: (id: number | string | null) => Promise<void>; // Added string to handle "" clear overrides
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -41,7 +41,6 @@ export const useAuthStore = create<AuthState>()(
           
           const targetWorkspace = currentWorkspace || currentCompanyId || emp?.company_id || null;
 
-          // MODIFIED: We set the base data but KEEP isLoading: true
           set({ 
             user: session.user, 
             employeeId: emp?.id || null, 
@@ -50,12 +49,10 @@ export const useAuthStore = create<AuthState>()(
             activeWorkspace: targetWorkspace
           }); 
 
-          // Wait for the workspace permissions and specific role to be fully hydrated
           if (targetWorkspace) {
             await get().setActiveWorkspace(targetWorkspace);
           }
           
-          // MODIFIED: NOW we stop the loading spinner, preventing the UI flash
           set({ isLoading: false });
         } else {
           set({ user: null, role: null, companyId: null, employeeId: null, activeWorkspace: null, permissions: null, isLoading: false });
@@ -77,7 +74,6 @@ export const useAuthStore = create<AuthState>()(
         const initialCompanyId = parsedCompanyId || emp?.company_id || null;
         const initialRole = selectedRole || emp?.access_level || 'user';
 
-        // MODIFIED: We set the base data but KEEP isLoading: true
         set({ 
           user: auth.user, 
           employeeId: emp?.id || null, 
@@ -86,12 +82,10 @@ export const useAuthStore = create<AuthState>()(
           activeWorkspace: initialCompanyId
         });
 
-        // Wait for the workspace permissions and specific role to be fully hydrated
         if (initialCompanyId) {
             await get().setActiveWorkspace(initialCompanyId);
         }
         
-        // MODIFIED: NOW we stop the loading spinner, preventing the UI flash
         set({ isLoading: false });
         return { error: null };
       },
@@ -102,12 +96,32 @@ export const useAuthStore = create<AuthState>()(
       },
 
       setActiveWorkspace: async (id) => {
+        const empId = get().employeeId;
+
+        // THE FIX: If exiting a workspace (null or ""), completely restore the user's BASE profile
         if (!id) {
-            set({ activeWorkspace: null, permissions: null });
+            let baseRole: 'admin' | 'head' | 'user' = 'user';
+            let baseCompanyId: number | null = null;
+            
+            if (empId) {
+                const { data: emp } = await supabase.from('employees').select('access_level, company_id').eq('id', empId).single();
+                if (emp) {
+                    baseRole = emp.access_level as 'admin' | 'head' | 'user';
+                    baseCompanyId = emp.company_id;
+                }
+            }
+            
+            // This properly clears the linger variables from local storage so the refresh bug is killed
+            set({ 
+                activeWorkspace: null, 
+                companyId: baseCompanyId, 
+                role: baseRole, 
+                permissions: null 
+            });
             return;
         }
 
-        const employeeId = get().employeeId;
+        const parsedId = typeof id === 'string' ? parseInt(id, 10) : id;
         let newRole = get().role; 
         let canViewFinancials = true; 
 
@@ -115,23 +129,23 @@ export const useAuthStore = create<AuthState>()(
             const { data: companyData } = await supabase
                 .from('companies')
                 .select('allow_head_finance') 
-                .eq('id', id)
+                .eq('id', parsedId)
                 .single();
             
             if (companyData && companyData.allow_head_finance === false) {
                 canViewFinancials = false;
             }
 
-            if (employeeId) {
+            if (empId) {
                 const { data: roleData } = await supabase
                     .from('employee_company_roles')
                     .select('access_level') 
-                    .eq('employee_id', employeeId)
-                    .eq('company_id', id)
+                    .eq('employee_id', empId)
+                    .eq('company_id', parsedId)
                     .single();
 
                 if (roleData && roleData.access_level) {
-                    newRole = roleData.access_level;
+                    newRole = roleData.access_level as 'admin' | 'head' | 'user';
                 }
             }
         } catch (error) {
@@ -139,8 +153,8 @@ export const useAuthStore = create<AuthState>()(
         }
 
         set({ 
-            activeWorkspace: id, 
-            companyId: id, 
+            activeWorkspace: parsedId, 
+            companyId: parsedId, 
             role: newRole, 
             permissions: { canViewFinancials }
         });

@@ -73,11 +73,12 @@ export default function DashboardPage() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "compressing" | "uploading" | "saving">("idle");
   const [companyFormData, setCompanyFormData] = useState({ name: "", area: "", head_name: "", phone: "", website_url: "", logo_url: "", business_type: "normal", allow_head_finance: true });
 
-  const activeCompanyId = activeWorkspace || companyId;
-  const currentCompany = companies.find((c: any) => c.id?.toString() === activeCompanyId?.toString());
-  
   const isAdmin = role === 'admin';
   const isHead = role === 'head';
+
+  // STRICT EVALUATION: Safely reads the empty string ("") as a Global Dashboard view
+  const activeCompanyId = isAdmin ? activeWorkspace : (activeWorkspace || companyId);
+  const currentCompany = companies.find((c: any) => c.id?.toString() === activeCompanyId?.toString());
   
   const visibleAnnouncements = announcements.filter(a => !a.company_id || a.company_id?.toString() === activeCompanyId?.toString());
   const safeAnnouncementIndex = activeAnnouncementIndex % (visibleAnnouncements.length || 1);
@@ -87,7 +88,6 @@ export default function DashboardPage() {
     ? currentEmployee.name.split(' ')[0] 
     : (user?.email ? user.email.split('@')[0].toUpperCase() : 'USER');
 
-  // Listen for custom events dispatched from AppLayout
   useEffect(() => {
     const openAnnouncements = () => setIsAnnouncementModalOpen(true);
     const openActivity = () => setIsActivityModalOpen(true);
@@ -276,15 +276,15 @@ export default function DashboardPage() {
     await fetchAllData();
   };
 
-  // OPTIMIZED: Synchronous state update allows instant view transition without locking the UI
+  // STRICT OVERWRITE: Uses explicit string cast to force persist to save
   const handleEnterWorkspace = () => { 
     setIsCompanyModalOpen(false); 
-    setActiveWorkspace(selectedCompany.id); 
+    if (setActiveWorkspace) setActiveWorkspace(selectedCompany.id.toString());
+    useAuthStore.setState({ activeWorkspace: selectedCompany.id.toString() }); 
   };
 
   // --- STRICT DATA SCOPING ---
   
-  // Admin Data Scoping (High Level Overall Details)
   const overviewCompanies = isAdmin ? (activeWorkspace ? companies.filter(c => c.id?.toString() === activeWorkspace?.toString()) : companies) : [];
   const overviewEmployees = isAdmin ? (activeWorkspace ? employees.filter(e => e.company_id?.toString() === activeWorkspace?.toString() || (e.company_roles && e.company_roles.some((r: any) => r.company_id?.toString() === activeWorkspace?.toString()))) : employees) : [];
   const overviewProjects = isAdmin ? (activeWorkspace ? projects.filter(p => p.company_id?.toString() === activeWorkspace?.toString()) : projects) : [];
@@ -292,13 +292,11 @@ export default function DashboardPage() {
     .filter(p => activeWorkspace ? p.company_id?.toString() === activeWorkspace?.toString() : true)
     .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) : 0;
 
-  // Workspace-Specific Metrics for Admin Summary
   const workspaceProjects = projects.filter(p => p.company_id?.toString() === activeCompanyId?.toString());
   const completedProjects = workspaceProjects.filter(p => p.status?.toLowerCase() === 'completed').length;
   const pendingProjects = workspaceProjects.filter(p => p.status?.toLowerCase() === 'pending' || p.status?.toLowerCase() === 'in progress').length;
   const workspaceEmployeesCount = employees.filter(e => e.company_id?.toString() === activeCompanyId?.toString() || (e.company_roles && e.company_roles.some((r: any) => r.company_id?.toString() === activeCompanyId?.toString()))).length;
 
-  // User & Head Data Scoping (Personal Details Only)
   const myProjects = !isAdmin ? projects.filter(p => (p.assignee_ids || []).includes(employeeId)) : [];
   const mySalaries = !isAdmin ? salaryPayments
     .filter(s => s.employee_id === employeeId)
@@ -382,9 +380,7 @@ export default function DashboardPage() {
             </p>
           </div>
           
-          {/* Added sm:mt-[56px] to comfortably clear the absolute-positioned AppLayout header buttons */}
           <div className="flex gap-2 sm:gap-3 flex-wrap items-center mt-4 sm:mt-[56px] relative z-10">
-            {/* Show Add Company ONLY if Admin and NOT in a workspace */}
             {isAdmin && !activeWorkspace && (
               <button onClick={openAddCompany} className="h-[46px] bg-gradient-to-r from-blue-900 to-indigo-800 text-white shadow-lg shadow-blue-900/20 hover:shadow-xl hover:-translate-y-0.5 px-6 rounded-full text-[13px] font-bold transition-all flex items-center justify-center ml-1">
                 <Plus className="h-4 w-4 mr-1.5"/> Add Company
@@ -414,7 +410,6 @@ export default function DashboardPage() {
           {isAdmin && activeWorkspace ? (
             /* --- ADMIN WORKSPACE SPECIFIC VIEW --- */
             <motion.div key="admin-workspace" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} transition={{ duration: 0.2 }} className="space-y-6 sm:space-y-8 pt-4 sm:pt-6 border-t border-slate-200/60">
-              {/* Company Overview Header */}
               <div className="bg-white border border-slate-100 rounded-2xl sm:rounded-3xl p-6 shadow-sm flex flex-col sm:flex-row items-center sm:items-start gap-6">
                  <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-[1.25rem] bg-slate-50 border border-slate-100 flex items-center justify-center overflow-hidden p-2 shadow-sm shrink-0">
                    {currentCompany?.logo_url ? <img src={currentCompany.logo_url} alt="Logo" className="h-full w-full object-contain" /> : <Building2 className="h-10 w-10 text-slate-300"/>}
@@ -425,7 +420,6 @@ export default function DashboardPage() {
                  </div>
               </div>
 
-              {/* Workspace Stats Grid */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                 <div className="bg-white border border-slate-100 p-4 sm:p-7 rounded-2xl sm:rounded-3xl shadow-sm flex flex-col justify-between min-h-[120px] sm:min-h-[160px] relative overflow-hidden group">
                   <div className="absolute -right-6 -top-6 w-16 h-16 sm:w-24 sm:h-24 bg-blue-50 rounded-full blur-2xl group-hover:bg-blue-100 transition-colors"></div>

@@ -29,8 +29,7 @@ export default function AppLayout() {
 
   const masterAdmin = employees.find(e => e.access_level === 'admin');
 
-  // MODIFIED: Added `.toString()` to gracefully handle URL strings or Database numbers
-  const targetWorkspaceId = activeWorkspace || companyId;
+  const targetWorkspaceId = role === 'admin' ? activeWorkspace : (activeWorkspace || companyId);
   const activeCompany = activeWorkspace ? companies.find(c => c.id?.toString() === activeWorkspace?.toString()) : null;
   const currentDisplayCompany = (role !== 'admin' || activeWorkspace) ? companies.find(c => c.id?.toString() === targetWorkspaceId?.toString()) : null;
   
@@ -38,8 +37,10 @@ export default function AppLayout() {
   const brandLogo = currentDisplayCompany?.logo_url || masterAdmin?.profile_image_url || null;
   const isAcademy = currentDisplayCompany?.business_type === 'academy' || currentDisplayCompany?.business_type?.includes('education');
 
+  // STRICT OVERWRITE: Uses empty string instead of null to force local storage to wipe the old ID
   const handleExitWorkspace = async () => { 
-    setActiveWorkspace(null); 
+    if (setActiveWorkspace) setActiveWorkspace(""); 
+    useAuthStore.setState({ activeWorkspace: "" });
     await fetchAllData(); 
     setIsMobileDrawerOpen(false);
     navigate("/dashboard"); 
@@ -144,7 +145,6 @@ export default function AppLayout() {
     }
   };
 
-  // Logic to only show Dashboard action icons for Admin/Head on the Dashboard route
   const isDashboardRoute = location.pathname === '/dashboard' || location.pathname === '/';
   const showDashboardActions = isDashboardRoute && (role === 'admin' || role === 'head');
 
@@ -231,7 +231,18 @@ export default function AppLayout() {
 
             <nav className="flex-1 overflow-y-auto px-6 space-y-2 [&::-webkit-scrollbar]:hidden pt-2">
               {visibleLinks.map((link) => (
-                <NavLink key={link.path} to={link.path} className={({ isActive }) => `group flex items-center gap-4 px-5 py-4 text-[14px] rounded-2xl transition-all duration-300 ${isActive ? 'bg-gradient-to-r from-blue-900 to-indigo-800 text-white shadow-md font-semibold' : 'text-slate-500 hover:bg-slate-50 hover:text-blue-900'}`}>
+                <NavLink 
+                  key={link.path} 
+                  to={link.path} 
+                  // If admin clicks Dashboard from the sidebar, automatically exit workspace and wipe storage
+                  onClick={() => {
+                    setIsMobileDrawerOpen(false);
+                    if (link.path === '/dashboard' && role === 'admin') {
+                      if (setActiveWorkspace) setActiveWorkspace("");
+                      useAuthStore.setState({ activeWorkspace: "" });
+                    }
+                  }}
+                  className={({ isActive }) => `group flex items-center gap-4 px-5 py-4 text-[14px] rounded-2xl transition-all duration-300 ${isActive ? 'bg-gradient-to-r from-blue-900 to-indigo-800 text-white shadow-md font-semibold' : 'text-slate-500 hover:bg-slate-50 hover:text-blue-900'}`}>
                   {({ isActive }) => (
                     <>
                       <link.icon className={`h-5 w-5 transition-colors ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-blue-900'}`} />
@@ -376,7 +387,17 @@ export default function AppLayout() {
                   <div className="flex-1 overflow-y-auto px-4 py-6 space-y-1">
                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2 mb-2">Navigation</p>
                     {visibleLinks.map((link) => (
-                      <NavLink key={link.path} to={link.path} onClick={() => setIsMobileDrawerOpen(false)} className={({ isActive }) => `flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all text-[15px] font-bold ${isActive ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}>
+                      <NavLink 
+                        key={link.path} 
+                        to={link.path} 
+                        onClick={() => {
+                          setIsMobileDrawerOpen(false);
+                          if (link.path === '/dashboard' && role === 'admin') {
+                            if (setActiveWorkspace) setActiveWorkspace("");
+                            useAuthStore.setState({ activeWorkspace: "" });
+                          }
+                        }}
+                        className={({ isActive }) => `flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all text-[15px] font-bold ${isActive ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}>
                         {({ isActive }) => (
                           <>
                             <link.icon className={`h-5 w-5 transition-colors ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
