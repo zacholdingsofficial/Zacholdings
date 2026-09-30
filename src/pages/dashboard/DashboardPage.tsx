@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Building2, Plus, ArrowRight, X, Globe, Trash2, Edit3, LogIn, Clock, CheckCircle2, Megaphone, Bell, Loader2, ImagePlus, Activity, Briefcase, Wallet, FileText, Layers, Lock } from "lucide-react";
+import { Building2, Plus, ArrowRight, X, Globe, Trash2, Edit3, LogIn, Clock, CheckCircle2, Megaphone, Bell, Loader2, ImagePlus, Activity, Briefcase, Wallet, FileText, Layers, MessageSquare } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import { useDataStore } from "../../store/dataStore";
 import { supabase } from "../../supabase";
@@ -274,6 +274,12 @@ export default function DashboardPage() {
     .filter(p => activeWorkspace ? p.company_id?.toString() === activeWorkspace?.toString() : true)
     .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) : 0;
 
+  // Workspace-Specific Metrics for Admin Summary
+  const workspaceProjects = projects.filter(p => p.company_id?.toString() === activeCompanyId?.toString());
+  const completedProjects = workspaceProjects.filter(p => p.status?.toLowerCase() === 'completed').length;
+  const pendingProjects = workspaceProjects.filter(p => p.status?.toLowerCase() === 'pending' || p.status?.toLowerCase() === 'in progress').length;
+  const workspaceEmployeesCount = employees.filter(e => e.company_id?.toString() === activeCompanyId?.toString() || (e.company_roles && e.company_roles.some((r: any) => r.company_id?.toString() === activeCompanyId?.toString()))).length;
+
   // User & Head Data Scoping (Personal Details Only)
   const myProjects = !isAdmin ? projects.filter(p => (p.assignee_ids || []).includes(employeeId)) : [];
   const mySalaries = !isAdmin ? salaryPayments
@@ -331,7 +337,8 @@ export default function DashboardPage() {
       (invoices || []).forEach(inv => {
         if (!isCompanyMatch(inv.company_id)) return;
         const compName = companies.find(c => c.id === inv.company_id)?.name || 'Subsidiary';
-        feed.push({ id: `inv_${inv.id}`, type: 'Invoice', title: `Invoice Generated: ${inv.invoice_number}`, desc: `Total: ₹${parseFloat(inv.total_amount || 0).toLocaleString()} • Status: ${inv.status}`, date: inv.created_at || inv.issue_date || todayStr, companyName: compName, icon: FileText, color: 'text-amber-500 bg-amber-50 border-amber-200' });
+        feed.push({ id: `inv_${inv.id}`, type: 'Invoice', title: `Invoice Generated: ${inv.invoice_number}`, desc: `Total: ₹${parseFloat(inv.total_amount || 0).toLocaleString()}Status: 
+${inv.status}`, date: inv.created_at || inv.issue_date || todayStr, companyName: compName, icon: FileText, color: 'text-amber-500 bg-amber-50 border-amber-200' });
       });
     }
 
@@ -362,13 +369,8 @@ export default function DashboardPage() {
               <Activity className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600"/>
             </button>
             
-            {(isAdmin || isHead) && (
-              <button onClick={() => setIsAnnouncementModalOpen(true)} className="flex-1 sm:flex-none bg-white border border-slate-200 text-slate-700 shadow-sm hover:shadow-md hover:-translate-y-0.5 px-3 py-2.5 sm:px-5 sm:py-3 rounded-xl sm:rounded-2xl text-[11px] sm:text-[13px] font-bold transition-all flex items-center justify-center">
-                <Megaphone className="h-3.5 w-3.5 sm:h-4 w-4 mr-1.5 sm:mr-2 text-blue-600"/> <span className="hidden sm:inline">New</span> Announcement
-              </button>
-            )}
-            
-            {isAdmin && (
+            {/* Show Add Company ONLY if Admin and NOT in a workspace */}
+            {isAdmin && !activeWorkspace && (
               <button onClick={openAddCompany} className="flex-1 sm:flex-none bg-gradient-to-r from-blue-900 to-indigo-800 text-white shadow-lg shadow-blue-900/20 hover:shadow-xl hover:-translate-y-0.5 px-3 py-2.5 sm:px-5 sm:py-3 rounded-xl sm:rounded-2xl text-[11px] sm:text-[13px] font-bold transition-all flex items-center justify-center">
                 <Plus className="h-3.5 w-3.5 sm:h-4 w-4 mr-1.5 sm:mr-2"/> Add Company
               </button>
@@ -392,18 +394,73 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* --- ADMIN OVERVIEW SECTION (All Details, No Individual Projects/Payroll) --- */}
-        {isAdmin ? (
+        {/* --- DYNAMIC RENDER BLOCK BASED ON ROLE & WORKSPACE --- */}
+        {isAdmin && activeWorkspace ? (
+          /* --- ADMIN WORKSPACE SPECIFIC VIEW --- */
+          <div className="space-y-6 sm:space-y-8 pt-4 sm:pt-6 border-t border-slate-200/60">
+            {/* Company Overview Header */}
+            <div className="bg-white border border-slate-100 rounded-2xl sm:rounded-3xl p-6 shadow-sm flex flex-col sm:flex-row items-center sm:items-start gap-6">
+               <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-[1.25rem] bg-slate-50 border border-slate-100 flex items-center justify-center overflow-hidden p-2 shadow-sm shrink-0">
+                 {currentCompany?.logo_url ? <img src={currentCompany.logo_url} alt="Logo" className="h-full w-full object-contain" /> : <Building2 className="h-10 w-10 text-slate-300"/>}
+               </div>
+               <div className="text-center sm:text-left">
+                 <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">{currentCompany?.name}</h2>
+                 <p className="text-sm font-medium text-slate-500 mt-1">{currentCompany?.area || 'Subsidiary'}</p>
+                 <div className="flex flex-wrap justify-center sm:justify-start gap-2 mt-4">
+                    <button onClick={() => setIsActivityModalOpen(true)} className="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-xl flex items-center transition-colors">
+                      <Activity className="h-3.5 w-3.5 mr-1.5" /> Activities
+                    </button>
+                    <button onClick={() => setIsAnnouncementModalOpen(true)} className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl flex items-center transition-colors">
+                      <Megaphone className="h-3.5 w-3.5 mr-1.5" /> Announce
+                    </button>
+                    <button onClick={() => navigate('/messages')} className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold rounded-xl flex items-center transition-colors">
+                      <MessageSquare className="h-3.5 w-3.5 mr-1.5" /> Messaging
+                    </button>
+                 </div>
+               </div>
+            </div>
+
+            {/* Workspace Stats Grid */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+              <div className="bg-white border border-slate-100 p-4 sm:p-7 rounded-2xl sm:rounded-3xl shadow-sm flex flex-col justify-between min-h-[120px] sm:min-h-[160px] relative overflow-hidden group">
+                <div className="absolute -right-6 -top-6 w-16 h-16 sm:w-24 sm:h-24 bg-blue-50 rounded-full blur-2xl group-hover:bg-blue-100 transition-colors"></div>
+                <p className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest relative z-10 truncate">Total Employees</p>
+                <p className="text-3xl sm:text-5xl font-semibold text-slate-800 tracking-tight relative z-10 mt-2">{workspaceEmployeesCount}</p>
+              </div>
+              
+              <div className="bg-white border border-slate-100 p-4 sm:p-7 rounded-2xl sm:rounded-3xl shadow-sm flex flex-col justify-between min-h-[120px] sm:min-h-[160px] relative overflow-hidden group">
+                <div className="absolute -right-6 -top-6 w-16 h-16 sm:w-24 sm:h-24 bg-indigo-50 rounded-full blur-2xl group-hover:bg-indigo-100 transition-colors"></div>
+                <p className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest relative z-10 truncate">Total Projects</p>
+                <p className="text-3xl sm:text-5xl font-semibold text-slate-800 tracking-tight relative z-10 mt-2">{workspaceProjects.length}</p>
+              </div>
+
+              {completedProjects > 0 && (
+                <div className="bg-white border border-slate-100 p-4 sm:p-7 rounded-2xl sm:rounded-3xl shadow-sm flex flex-col justify-between min-h-[120px] sm:min-h-[160px] relative overflow-hidden group">
+                  <div className="absolute -right-6 -top-6 w-16 h-16 sm:w-24 sm:h-24 bg-emerald-50 rounded-full blur-2xl group-hover:bg-emerald-100 transition-colors"></div>
+                  <p className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest relative z-10 truncate">Completed</p>
+                  <p className="text-3xl sm:text-5xl font-semibold text-slate-800 tracking-tight relative z-10 mt-2">{completedProjects}</p>
+                </div>
+              )}
+
+              {pendingProjects > 0 && (
+                <div className="bg-white border border-slate-100 p-4 sm:p-7 rounded-2xl sm:rounded-3xl shadow-sm flex flex-col justify-between min-h-[120px] sm:min-h-[160px] relative overflow-hidden group">
+                  <div className="absolute -right-6 -top-6 w-16 h-16 sm:w-24 sm:h-24 bg-amber-50 rounded-full blur-2xl group-hover:bg-amber-100 transition-colors"></div>
+                  <p className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest relative z-10 truncate">Pending</p>
+                  <p className="text-3xl sm:text-5xl font-semibold text-slate-800 tracking-tight relative z-10 mt-2">{pendingProjects}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : isAdmin && !activeWorkspace ? (
+          /* --- GLOBAL ADMIN OVERVIEW SECTION --- */
           <>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-              {!activeWorkspace && (
                 <div className="bg-white border border-slate-100 p-4 sm:p-7 rounded-2xl sm:rounded-3xl shadow-sm flex flex-col justify-between min-h-[120px] sm:min-h-[160px] relative overflow-hidden group">
                   <div className="absolute -right-6 -top-6 w-16 h-16 sm:w-24 sm:h-24 bg-blue-50 rounded-full blur-2xl group-hover:bg-blue-100 transition-colors"></div>
                   <p className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest relative z-10 truncate">Companies</p>
                   <p className="text-3xl sm:text-5xl font-semibold text-slate-800 tracking-tight relative z-10 mt-2">{overviewCompanies.length || 0}</p>
                 </div>
-              )}
-              <div className={`bg-white border border-slate-100 p-4 sm:p-7 rounded-2xl sm:rounded-3xl shadow-sm flex flex-col justify-between min-h-[120px] sm:min-h-[160px] relative overflow-hidden group ${activeWorkspace ? 'col-span-2 lg:col-span-2' : ''}`}>
+              <div className="bg-white border border-slate-100 p-4 sm:p-7 rounded-2xl sm:rounded-3xl shadow-sm flex flex-col justify-between min-h-[120px] sm:min-h-[160px] relative overflow-hidden group">
                 <div className="absolute -right-6 -top-6 w-16 h-16 sm:w-24 sm:h-24 bg-blue-50 rounded-full blur-2xl group-hover:bg-blue-100 transition-colors"></div>
                 <p className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest relative z-10 truncate">Total Employees</p>
                 <p className="text-3xl sm:text-5xl font-semibold text-slate-800 tracking-tight relative z-10 mt-2">{overviewEmployees.length || 0}</p>
@@ -421,7 +478,7 @@ export default function DashboardPage() {
             </div>
 
             <div className="pt-2 sm:pt-4">
-              <h2 className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4 sm:mb-6 px-1">{activeWorkspace ? 'Workspace Details' : 'Company Directory'}</h2>
+              <h2 className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4 sm:mb-6 px-1">Company Directory</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
                 {overviewCompanies.map((company, i) => (
                   <motion.div key={company.id} onClick={() => openViewCompany(company)} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="bg-white border border-slate-100 p-4 sm:p-6 rounded-2xl shadow-sm hover:shadow-md hover:border-blue-200 cursor-pointer transition-all group flex items-start justify-between">
