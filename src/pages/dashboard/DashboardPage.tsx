@@ -375,14 +375,15 @@ ${inv.status}`, date: inv.created_at || inv.issue_date || todayStr, companyName:
               Welcome, {firstName}.
             </h1>
             <p className="text-[13px] sm:text-[14px] font-medium text-slate-500 mt-1">
-              {isAdmin && !activeWorkspace ? 'Global system overview.' : isAdmin && activeWorkspace ? `Auditing workspace: ${currentCompany?.name || 'radix'}` : `Viewing workspace: ${currentCompany?.name || 'radix'}`}
+              {isAdmin && !activeWorkspace ? 'Global system overview.' : isAdmin && activeWorkspace ? `Auditing workspace: ${currentCompany?.name || 'Zac Holdings'}` : `Viewing workspace: ${currentCompany?.name || 'Zac Holdings'}`}
             </p>
           </div>
           
-          <div className="flex gap-2 sm:gap-3 flex-wrap items-center mt-2 sm:mt-0 relative z-10">
+          {/* Added sm:mt-[56px] so this flex container clears the floating AppLayout header buttons */}
+          <div className="flex gap-2 sm:gap-3 flex-wrap items-center mt-4 sm:mt-[56px] relative z-10">
             {/* Show Add Company ONLY if Admin and NOT in a workspace */}
             {isAdmin && !activeWorkspace && (
-              <button onClick={openAddCompany} className="h-[46px] bg-gradient-to-r from-blue-900 to-indigo-800 text-white shadow-lg shadow-blue-900/20 hover:shadow-xl hover:-translate-y-0.5 px-4 rounded-full text-[12px] font-bold transition-all flex items-center justify-center ml-1">
+              <button onClick={openAddCompany} className="h-[46px] bg-gradient-to-r from-blue-900 to-indigo-800 text-white shadow-lg shadow-blue-900/20 hover:shadow-xl hover:-translate-y-0.5 px-6 rounded-full text-[13px] font-bold transition-all flex items-center justify-center ml-1">
                 <Plus className="h-4 w-4 mr-1.5"/> Add Company
               </button>
             )}
