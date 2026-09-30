@@ -349,6 +349,18 @@ ${inv.status}`, date: inv.created_at || inv.issue_date || todayStr, companyName:
 
   return (
     <>
+      {/* DESKTOP FIXED ACTION BUTTONS (Temporary Hack to force them next to the layout header) */}
+      <div className="hidden sm:flex fixed top-[20px] lg:top-[24px] right-[320px] lg:right-[340px] xl:right-[360px] gap-3 z-[60]">
+        {(isAdmin || isHead) && (
+          <button onClick={() => setIsAnnouncementModalOpen(true)} title="Announcements" className="h-[46px] w-[46px] bg-white border border-slate-200 text-slate-500 shadow-sm hover:shadow-md hover:bg-slate-50 hover:text-slate-900 rounded-full transition-all flex items-center justify-center shrink-0">
+            <Megaphone className="h-[18px] w-[18px]"/>
+          </button>
+        )}
+        <button onClick={() => setIsActivityModalOpen(true)} title="Activity Pulse" className="h-[46px] w-[46px] bg-white border border-slate-200 text-slate-500 shadow-sm hover:shadow-md hover:bg-slate-50 hover:text-slate-900 rounded-full transition-all flex items-center justify-center shrink-0">
+          <Activity className="h-[18px] w-[18px]"/>
+        </button>
+      </div>
+
       <div className="max-w-[1200px] mx-auto space-y-8 sm:space-y-10 animate-in fade-in duration-700 relative z-0">
         
         {/* SHARED HEADER */}
@@ -365,21 +377,18 @@ ${inv.status}`, date: inv.created_at || inv.issue_date || todayStr, companyName:
             </p>
           </div>
           
-          {/* 
-            Notice the `sm:mr-[340px]` class below. 
-            This margin pushes the icons to the left so they perfectly align next to the floating layout header! 
-          */}
-          <div className="flex gap-2 sm:gap-3 flex-wrap items-center mt-2 sm:mt-0 sm:mr-[340px] relative z-10">
-            
-            {(isAdmin || isHead) && (
-              <button onClick={() => setIsAnnouncementModalOpen(true)} title="Announcements" className="h-[46px] w-[46px] bg-white border border-slate-200 text-slate-500 shadow-sm hover:shadow-md hover:bg-slate-50 hover:text-slate-900 rounded-full transition-all flex items-center justify-center shrink-0">
-                <Megaphone className="h-[20px] w-[20px]"/>
+          <div className="flex gap-2 sm:gap-3 flex-wrap items-center mt-2 sm:mt-0 relative z-10">
+            {/* MOBILE ACTION BUTTONS (Fallback when fixed desktop buttons hide) */}
+            <div className="flex sm:hidden gap-2">
+              {(isAdmin || isHead) && (
+                <button onClick={() => setIsAnnouncementModalOpen(true)} title="Announcements" className="h-[46px] w-[46px] bg-white border border-slate-200 text-slate-500 shadow-sm hover:shadow-md hover:bg-slate-50 hover:text-slate-900 rounded-full transition-all flex items-center justify-center shrink-0">
+                  <Megaphone className="h-[18px] w-[18px]"/>
+                </button>
+              )}
+              <button onClick={() => setIsActivityModalOpen(true)} title="Activity Pulse" className="h-[46px] w-[46px] bg-white border border-slate-200 text-slate-500 shadow-sm hover:shadow-md hover:bg-slate-50 hover:text-slate-900 rounded-full transition-all flex items-center justify-center shrink-0">
+                <Activity className="h-[18px] w-[18px]"/>
               </button>
-            )}
-
-            <button onClick={() => setIsActivityModalOpen(true)} title="Activity Pulse" className="h-[46px] w-[46px] bg-white border border-slate-200 text-slate-500 shadow-sm hover:shadow-md hover:bg-slate-50 hover:text-slate-900 rounded-full transition-all flex items-center justify-center shrink-0">
-              <Activity className="h-[20px] w-[20px]"/>
-            </button>
+            </div>
 
             {/* Show Add Company ONLY if Admin and NOT in a workspace */}
             {isAdmin && !activeWorkspace && (
