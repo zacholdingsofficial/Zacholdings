@@ -375,21 +375,6 @@ export default function LoginPage() {
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,800&family=Inter:wght@400;500;600;700&display=swap');
         .font-display { font-family: 'Fraunces', Georgia, serif; font-optical-sizing: auto; }
         .font-sans { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
-        
-        @keyframes goldenTextShine {
-          0% { text-shadow: 0 0 4px rgba(212,175,55,0.4); opacity: 0.9; }
-          50% { text-shadow: 0 0 12px #D4AF37, 0 0 20px #FFDF73; color: #FFDF73; opacity: 1; }
-          100% { text-shadow: 0 0 4px rgba(212,175,55,0.4); opacity: 0.9; }
-        }
-        
-        .shining-r-text {
-          color: #D4AF37;
-          font-family: 'Fraunces', Georgia, serif;
-          font-weight: 800;
-          font-size: 15px;
-          text-decoration: none;
-          animation: goldenTextShine 2.5s infinite ease-in-out;
-        }
       `}</style>
 
       {/* Main Container - Strict 100dvh to prevent global scrolling */}
@@ -541,12 +526,12 @@ export default function LoginPage() {
 
           {/* DESKTOP ONLY FOOTER */}
           <div className="relative z-10 hidden md:flex items-center justify-between pt-6 mt-auto">
-            <p className="text-[11.5px] text-[#171C26]/40 font-medium">© 2026 Zac Holdings Pvt Ltd</p>
+            <p className="text-[11.5px] text-[#171C26]/40 font-medium">copyright(zac holdings pvt ltd)</p>
             <a
               href="https://wa.me/917558957246"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[13px] font-medium text-[#171C26]/30 hover:text-[#D4AF37] transition-colors select-none"
+              className="font-display font-semibold text-[#171C26]/30 hover:text-[#D4AF37] text-[14px] transition-colors select-none"
               title="Developer"
             >
               R.
@@ -554,14 +539,14 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* RIGHT: LOGIN CARD (Bottom 55% on mobile) */}
-        <div className="w-full md:w-1/2 flex flex-col items-center justify-start md:justify-center bg-[#F9F9FB] px-5 pt-3 pb-12 md:p-10 h-[55dvh] md:h-full relative z-10">
+        {/* RIGHT: LOGIN CARD & MOBILE FOOTER CONTAINER */}
+        <div className="w-full md:w-1/2 flex flex-col items-center justify-start md:justify-center bg-[#F9F9FB] px-5 pt-3 pb-4 md:p-10 h-[55dvh] md:h-full relative z-10">
 
           <motion.div
             onMouseMove={handleCardMouseMove}
             onMouseLeave={handleCardMouseLeave}
             style={{ rotateX: springRotateX, rotateY: springRotateY, transformPerspective: 1400 }}
-            className="relative bg-white rounded-[1.5rem] md:rounded-[2rem] shadow-[0_20px_60px_-20px_rgba(0,0,0,0.08)] border border-black/[0.04] w-full max-w-[460px] h-[370px] md:h-[520px] overflow-hidden shrink-0"
+            className="relative bg-white rounded-[1.5rem] md:rounded-[2rem] shadow-[0_20px_60px_-20px_rgba(0,0,0,0.08)] border border-black/[0.04] w-full max-w-[460px] h-[350px] md:h-[520px] overflow-hidden shrink-0"
           >
             <span className="absolute top-4 left-4 w-3 h-3 border-t border-l border-[#D4AF37]/50 pointer-events-none z-20" />
             <span className="absolute bottom-4 right-4 w-3 h-3 border-b border-r border-[#D4AF37]/50 pointer-events-none z-20" />
@@ -590,13 +575,13 @@ export default function LoginPage() {
                   initial="initial"
                   animate="animate"
                   exit="exit"
-                  className="absolute inset-0 flex flex-col px-6 py-6 md:p-8 md:pt-12"
+                  className="absolute inset-0 flex flex-col px-5 py-5 md:p-8 md:pt-12"
                 >
                   <h2 className="font-display text-[22px] md:text-[28px] text-[#171C26] font-normal tracking-tight mb-0.5 md:mb-1 mt-1 md:mt-0">Sign in as</h2>
                   <p className="text-[12px] md:text-[14px] text-slate-500 mb-3 md:mb-5">Choose the role that matches your access.</p>
 
                   <div className="flex flex-col gap-0 md:gap-1">
-                    <button onClick={() => handleRoleSelect("admin")} className="w-full flex items-center gap-3 md:gap-4 py-3 md:py-4 px-2 -mx-2 rounded-xl border-b border-black/[0.04] group text-left transition-all duration-200 hover:bg-black/[0.015] active:scale-[0.99]">
+                    <button onClick={() => handleRoleSelect("admin")} className="w-full flex items-center gap-3 md:gap-4 py-2.5 md:py-4 px-2 -mx-2 rounded-xl border-b border-black/[0.04] group text-left transition-all duration-200 hover:bg-black/[0.015] active:scale-[0.99]">
                       <div className="flex h-9 w-9 md:h-11 md:w-11 shrink-0 items-center justify-center rounded-full bg-black/[0.03] text-[#171C26]/70 group-hover:bg-gradient-to-br group-hover:from-[#D4AF37] group-hover:to-[#996515] group-hover:text-white group-hover:rotate-6 transition-all duration-300">
                         <Shield className="h-[15px] w-[15px] md:h-[18px] md:w-[18px]" strokeWidth={1.75} />
                       </div>
@@ -607,7 +592,7 @@ export default function LoginPage() {
                       <ChevronRight className="h-[16px] w-[16px] md:h-[18px] md:w-[18px] text-slate-300 group-hover:text-[#D4AF37] group-hover:translate-x-0.5 transition-all duration-300 shrink-0" />
                     </button>
 
-                    <button onClick={() => handleRoleSelect("head")} className="w-full flex items-center gap-3 md:gap-4 py-3 md:py-4 px-2 -mx-2 rounded-xl border-b border-black/[0.04] group text-left transition-all duration-200 hover:bg-black/[0.015] active:scale-[0.99]">
+                    <button onClick={() => handleRoleSelect("head")} className="w-full flex items-center gap-3 md:gap-4 py-2.5 md:py-4 px-2 -mx-2 rounded-xl border-b border-black/[0.04] group text-left transition-all duration-200 hover:bg-black/[0.015] active:scale-[0.99]">
                       <div className="flex h-9 w-9 md:h-11 md:w-11 shrink-0 items-center justify-center rounded-full bg-black/[0.03] text-[#171C26]/70 group-hover:bg-gradient-to-br group-hover:from-[#D4AF37] group-hover:to-[#996515] group-hover:text-white group-hover:rotate-6 transition-all duration-300">
                         <Briefcase className="h-[15px] w-[15px] md:h-[18px] md:w-[18px]" strokeWidth={1.75} />
                       </div>
@@ -618,7 +603,7 @@ export default function LoginPage() {
                       <ChevronRight className="h-[16px] w-[16px] md:h-[18px] md:w-[18px] text-slate-300 group-hover:text-[#D4AF37] group-hover:translate-x-0.5 transition-all duration-300 shrink-0" />
                     </button>
 
-                    <button onClick={() => handleRoleSelect("user")} className="w-full flex items-center gap-3 md:gap-4 py-3 md:py-4 px-2 -mx-2 rounded-xl group text-left transition-all duration-200 hover:bg-black/[0.015] active:scale-[0.99]">
+                    <button onClick={() => handleRoleSelect("user")} className="w-full flex items-center gap-3 md:gap-4 py-2.5 md:py-4 px-2 -mx-2 rounded-xl group text-left transition-all duration-200 hover:bg-black/[0.015] active:scale-[0.99]">
                       <div className="flex h-9 w-9 md:h-11 md:w-11 shrink-0 items-center justify-center rounded-full bg-black/[0.03] text-[#171C26]/70 group-hover:bg-gradient-to-br group-hover:from-[#D4AF37] group-hover:to-[#996515] group-hover:text-white group-hover:rotate-6 transition-all duration-300">
                         <UserCircle className="h-[15px] w-[15px] md:h-[18px] md:w-[18px]" strokeWidth={1.75} />
                       </div>
@@ -641,12 +626,12 @@ export default function LoginPage() {
                   initial="initial"
                   animate="animate"
                   exit="exit"
-                  className="absolute inset-0 flex flex-col px-6 py-6 md:p-8 md:pt-12"
+                  className="absolute inset-0 flex flex-col px-5 py-5 md:p-8 md:pt-12"
                 >
                   <h2 className="font-display text-[22px] md:text-[28px] text-[#171C26] font-normal tracking-tight mb-0.5 md:mb-1 mt-1 md:mt-0">Your organization</h2>
                   <p className="text-[12px] md:text-[14px] text-slate-500 mb-4 md:mb-6">Select the company you're signing in to.</p>
 
-                  <form onSubmit={handleCompanySelect} className="space-y-3 md:space-y-4 mt-2">
+                  <form onSubmit={handleCompanySelect} className="space-y-3 md:space-y-4 mt-1 md:mt-2">
                     <CustomSelect
                       icon={<Building2 className="absolute left-5 top-1/2 -translate-y-1/2 h-[16px] w-[16px] md:h-[18px] md:w-[18px] text-slate-400 pointer-events-none z-10" strokeWidth={1.75} />}
                       label="Organization"
@@ -677,9 +662,9 @@ export default function LoginPage() {
                   initial="initial"
                   animate="animate"
                   exit="exit"
-                  className="absolute inset-0 flex flex-col px-6 py-6 md:p-8 md:pt-12"
+                  className="absolute inset-0 flex flex-col px-5 py-5 md:p-8 md:pt-12"
                 >
-                  <div className="flex items-center gap-3 md:gap-4 mb-4 md:mb-5 shrink-0 mt-1 md:mt-0">
+                  <div className="flex items-center gap-3 md:gap-4 mb-3 md:mb-5 shrink-0 mt-0.5 md:mt-0">
                     {selectedRole === 'admin' ? (
                       <img src="/logo.png" alt="Admin" className="h-8 md:h-9 w-auto max-w-[80px] md:max-w-[100px] object-contain shrink-0 rounded-lg" />
                     ) : (
@@ -694,12 +679,12 @@ export default function LoginPage() {
                   </div>
 
                   {error && (
-                    <div className="mb-2.5 md:mb-3 rounded-lg md:rounded-xl bg-red-50 p-2.5 md:p-3 text-[11.5px] md:text-[13px] font-medium text-red-600 border border-red-100 flex items-center gap-2 shrink-0">
-                      <Shield className="h-[14px] w-[14px] md:h-4 md:w-4 shrink-0" strokeWidth={1.75} /> {error}
+                    <div className="mb-2 md:mb-3 rounded-lg md:rounded-xl bg-red-50 p-2 md:p-3 text-[11px] md:text-[13px] font-medium text-red-600 border border-red-100 flex items-center gap-2 shrink-0">
+                      <Shield className="h-[13px] w-[13px] md:h-4 md:w-4 shrink-0" strokeWidth={1.75} /> {error}
                     </div>
                   )}
 
-                  <form onSubmit={handleLogin} className="space-y-2.5 md:space-y-3 w-full shrink-0">
+                  <form onSubmit={handleLogin} className="space-y-2 md:space-y-3 w-full shrink-0">
                     {selectedRole === 'head' && activeCompanyObj?.business_type !== 'parent' ? (
                       (headUsers || []).length > 1 ? (
                         <CustomSelect
@@ -763,7 +748,7 @@ export default function LoginPage() {
                     </Button>
                   </form>
 
-                  <div className="mt-auto pt-3 md:pt-4 border-t border-black/[0.04] shrink-0">
+                  <div className="mt-auto pt-2.5 md:pt-4 border-t border-black/[0.04] shrink-0">
                     <button onClick={goBack} className="text-[12.5px] md:text-[13px] font-medium text-slate-400 hover:text-[#10192B] transition-colors flex items-center gap-1.5 md:gap-2 group">
                       <ArrowLeft className="h-[13px] w-[13px] md:h-[14px] md:w-[14px] group-hover:-translate-x-0.5 transition-transform duration-200" /> Back
                     </button>
@@ -773,21 +758,21 @@ export default function LoginPage() {
             </AnimatePresence>
           </motion.div>
 
-        </div>
+          {/* MOBILE FOOTER (Positioned purely inside flexbox, outside the card) */}
+          <div className="mt-auto flex md:hidden items-center justify-center gap-2 w-full text-[11px] text-[#171C26]/50 font-medium pt-3">
+            <span>copyright(zac holdings pvt ltd)</span>
+            <span className="text-black/20">|</span>
+            <a
+              href="https://wa.me/917558957246"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-display font-semibold text-[#10192B] hover:text-[#D4AF37] text-[13.5px] transition-colors"
+              title="Developer"
+            >
+              R.
+            </a>
+          </div>
 
-        {/* MOBILE FOOTER (Absolute positioned at the bottom of the screen) */}
-        <div className="absolute bottom-4 left-0 right-0 flex md:hidden items-center justify-center gap-2 z-50 text-[11px] text-[#171C26]/50 font-medium">
-          <span>© 2026 Zac Holdings Pvt Ltd</span>
-          <span className="text-black/20">|</span>
-          <a
-            href="https://wa.me/917558957246"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="shining-r-text"
-            title="Developer"
-          >
-            R.
-          </a>
         </div>
       </div>
     </>
