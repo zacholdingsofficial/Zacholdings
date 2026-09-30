@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, Users, Briefcase, FileText, Settings, LogOut, ArrowLeft, Banknote, UserSquare2, Menu, X, MessageSquare, Send, ChevronLeft, Loader2, Building2 } from "lucide-react";
+import { LayoutDashboard, Users, Briefcase, FileText, Settings, LogOut, ArrowLeft, Banknote, UserSquare2, Menu, X, MessageSquare, Send, ChevronLeft, Loader2, Building2, Megaphone, Activity } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuthStore } from "../store/authStore";
 import { useDataStore } from "../store/dataStore";
@@ -144,6 +144,10 @@ export default function AppLayout() {
     }
   };
 
+  // Logic to only show Dashboard action icons for Admin/Head on the Dashboard route
+  const isDashboardRoute = location.pathname === '/dashboard' || location.pathname === '/';
+  const showDashboardActions = isDashboardRoute && (role === 'admin' || role === 'head');
+
   if (role === 'admin' && unclassifiedCompanies.length > 0) {
     return (
       <div className="fixed inset-0 z-[10000] bg-slate-900/60 backdrop-blur-2xl flex items-center justify-center p-4">
@@ -269,12 +273,25 @@ export default function AppLayout() {
             )}
           </div>
           <div className="pointer-events-auto flex items-center gap-3">
-             <button onClick={() => setIsChatOpen(true)} className="relative h-12 w-12 bg-white/90 backdrop-blur-md border border-slate-200/50 rounded-full flex items-center justify-center text-slate-500 hover:text-blue-900 shadow-sm transition-all">
+             
+             {showDashboardActions && (
+               <>
+                 <button onClick={() => window.dispatchEvent(new Event('open-announcements'))} className="relative h-12 w-12 bg-white/90 backdrop-blur-md border border-slate-200/50 rounded-full flex items-center justify-center text-slate-500 hover:text-blue-900 shadow-sm transition-all" title="Announcements">
+                    <Megaphone className="h-5 w-5" />
+                 </button>
+                 <button onClick={() => window.dispatchEvent(new Event('open-activity'))} className="relative h-12 w-12 bg-white/90 backdrop-blur-md border border-slate-200/50 rounded-full flex items-center justify-center text-slate-500 hover:text-blue-900 shadow-sm transition-all" title="Activity Pulse">
+                    <Activity className="h-5 w-5" />
+                 </button>
+               </>
+             )}
+
+             <button onClick={() => setIsChatOpen(true)} className="relative h-12 w-12 bg-white/90 backdrop-blur-md border border-slate-200/50 rounded-full flex items-center justify-center text-slate-500 hover:text-blue-900 shadow-sm transition-all" title="Messages">
                 <MessageSquare className="h-5 w-5" />
                 {totalUnread > 0 && <span className="absolute top-0 right-0 h-3.5 w-3.5 border-2 border-white bg-rose-500 rounded-full"></span>}
              </button>
+
             {activeWorkspace && role === 'admin' && (
-              <div className="flex items-center gap-3 bg-white/90 backdrop-blur-md px-5 py-3 rounded-2xl border border-slate-200/50 shadow-sm">
+              <div className="flex items-center gap-3 bg-white/90 backdrop-blur-md px-5 py-3 rounded-2xl border border-slate-200/50 shadow-sm ml-1">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Viewing:</span>
                 <span className="text-[12px] font-bold text-blue-900">{activeCompany?.name}</span>
                 <span className="h-5 w-[1px] bg-slate-200 mx-2"></span>
@@ -317,7 +334,17 @@ export default function AppLayout() {
               </div>
            </div>
 
-           <div className="flex items-center">
+           <div className="flex items-center gap-1">
+             {showDashboardActions && (
+               <>
+                 <button onClick={() => window.dispatchEvent(new Event('open-announcements'))} className="relative h-10 w-10 text-slate-500 hover:text-blue-900 flex items-center justify-center transition-all active:scale-95">
+                    <Megaphone className="h-5 w-5" />
+                 </button>
+                 <button onClick={() => window.dispatchEvent(new Event('open-activity'))} className="relative h-10 w-10 text-slate-500 hover:text-blue-900 flex items-center justify-center transition-all active:scale-95">
+                    <Activity className="h-5 w-5" />
+                 </button>
+               </>
+             )}
              <button onClick={() => setIsChatOpen(true)} className="relative h-10 w-10 text-slate-500 hover:text-blue-900 flex items-center justify-center transition-all active:scale-95">
                 <MessageSquare className="h-5 w-5" />
                 {totalUnread > 0 && <span className="absolute top-2 right-2 h-2.5 w-2.5 border-2 border-white bg-rose-500 rounded-full"></span>}
