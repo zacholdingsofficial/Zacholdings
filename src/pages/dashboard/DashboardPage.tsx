@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Building2, Plus, ArrowRight, X, Globe, Trash2, Edit3, LogIn, Clock, CheckCircle2, Megaphone, Bell, Loader2, ImagePlus, Activity, Briefcase, Wallet, FileText, Layers, MessageSquare } from "lucide-react";
+import { Building2, Plus, ArrowRight, X, Globe, Trash2, Edit3, LogIn, Clock, CheckCircle2, Megaphone, Bell, Loader2, ImagePlus, Activity, Briefcase, Wallet, FileText, Layers } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import { useDataStore } from "../../store/dataStore";
 import { supabase } from "../../supabase";
@@ -352,7 +352,8 @@ ${inv.status}`, date: inv.created_at || inv.issue_date || todayStr, companyName:
       <div className="max-w-[1200px] mx-auto space-y-8 sm:space-y-10 animate-in fade-in duration-700 relative z-0">
         
         {/* SHARED HEADER */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 sm:gap-6">
+        {/* Changed sm:items-end to sm:items-start so the buttons align to the top right of the dashboard view */}
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 sm:gap-6">
           <div>
             <p className="text-[9px] sm:text-[11px] font-bold text-blue-600 uppercase tracking-[0.2em] mb-2 bg-blue-50 inline-block px-3 py-1 rounded-full">
               {isAdmin && !activeWorkspace ? 'Admin Dashboard' : isAdmin && activeWorkspace ? 'Workspace Audit' : isHead ? 'Director Dashboard' : 'Employee Dashboard'}
@@ -364,11 +365,9 @@ ${inv.status}`, date: inv.created_at || inv.issue_date || todayStr, companyName:
               {isAdmin && !activeWorkspace ? 'Global system overview.' : isAdmin && activeWorkspace ? `Auditing workspace: ${currentCompany?.name || 'radix'}` : `Viewing workspace: ${currentCompany?.name || 'radix'}`}
             </p>
           </div>
-          <div className="flex gap-2 sm:gap-3 flex-wrap items-center">
+          <div className="flex gap-2 sm:gap-3 flex-wrap items-center mt-2 sm:mt-0">
             
-            <button onClick={() => navigate('/messages')} title="Messaging" className="h-[42px] w-[42px] sm:h-[50px] w-[50px] bg-white border border-slate-200 text-slate-600 shadow-sm hover:shadow-md hover:-translate-y-0.5 rounded-xl sm:rounded-2xl transition-all flex items-center justify-center shrink-0">
-              <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600"/>
-            </button>
+            {/* The redundant Message button has been removed from here */}
             
             {(isAdmin || isHead) && (
               <button onClick={() => setIsAnnouncementModalOpen(true)} title="Announcements" className="h-[42px] w-[42px] sm:h-[50px] w-[50px] bg-white border border-slate-200 text-slate-600 shadow-sm hover:shadow-md hover:-translate-y-0.5 rounded-xl sm:rounded-2xl transition-all flex items-center justify-center shrink-0">
