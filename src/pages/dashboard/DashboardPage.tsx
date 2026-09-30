@@ -352,8 +352,7 @@ ${inv.status}`, date: inv.created_at || inv.issue_date || todayStr, companyName:
       <div className="max-w-[1200px] mx-auto space-y-8 sm:space-y-10 animate-in fade-in duration-700 relative z-0">
         
         {/* SHARED HEADER */}
-        {/* Changed sm:items-end to sm:items-start so the buttons align to the top right of the dashboard view */}
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 sm:gap-6">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 sm:gap-6 relative">
           <div>
             <p className="text-[9px] sm:text-[11px] font-bold text-blue-600 uppercase tracking-[0.2em] mb-2 bg-blue-50 inline-block px-3 py-1 rounded-full">
               {isAdmin && !activeWorkspace ? 'Admin Dashboard' : isAdmin && activeWorkspace ? 'Workspace Audit' : isHead ? 'Director Dashboard' : 'Employee Dashboard'}
@@ -365,24 +364,27 @@ ${inv.status}`, date: inv.created_at || inv.issue_date || todayStr, companyName:
               {isAdmin && !activeWorkspace ? 'Global system overview.' : isAdmin && activeWorkspace ? `Auditing workspace: ${currentCompany?.name || 'radix'}` : `Viewing workspace: ${currentCompany?.name || 'radix'}`}
             </p>
           </div>
-          <div className="flex gap-2 sm:gap-3 flex-wrap items-center mt-2 sm:mt-0">
-            
-            {/* The redundant Message button has been removed from here */}
+          
+          {/* 
+            Notice the `sm:mr-[340px]` class below. 
+            This margin pushes the icons to the left so they perfectly align next to the floating layout header! 
+          */}
+          <div className="flex gap-2 sm:gap-3 flex-wrap items-center mt-2 sm:mt-0 sm:mr-[340px] relative z-10">
             
             {(isAdmin || isHead) && (
-              <button onClick={() => setIsAnnouncementModalOpen(true)} title="Announcements" className="h-[42px] w-[42px] sm:h-[50px] w-[50px] bg-white border border-slate-200 text-slate-600 shadow-sm hover:shadow-md hover:-translate-y-0.5 rounded-xl sm:rounded-2xl transition-all flex items-center justify-center shrink-0">
-                <Megaphone className="h-4 w-4 sm:h-5 sm:w-5 text-indigo-600"/>
+              <button onClick={() => setIsAnnouncementModalOpen(true)} title="Announcements" className="h-[46px] w-[46px] bg-white border border-slate-200 text-slate-500 shadow-sm hover:shadow-md hover:bg-slate-50 hover:text-slate-900 rounded-full transition-all flex items-center justify-center shrink-0">
+                <Megaphone className="h-[20px] w-[20px]"/>
               </button>
             )}
 
-            <button onClick={() => setIsActivityModalOpen(true)} title="Activity Pulse" className="h-[42px] w-[42px] sm:h-[50px] w-[50px] bg-white border border-slate-200 text-slate-600 shadow-sm hover:shadow-md hover:-translate-y-0.5 rounded-xl sm:rounded-2xl transition-all flex items-center justify-center shrink-0">
-              <Activity className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600"/>
+            <button onClick={() => setIsActivityModalOpen(true)} title="Activity Pulse" className="h-[46px] w-[46px] bg-white border border-slate-200 text-slate-500 shadow-sm hover:shadow-md hover:bg-slate-50 hover:text-slate-900 rounded-full transition-all flex items-center justify-center shrink-0">
+              <Activity className="h-[20px] w-[20px]"/>
             </button>
 
             {/* Show Add Company ONLY if Admin and NOT in a workspace */}
             {isAdmin && !activeWorkspace && (
-              <button onClick={openAddCompany} className="flex-1 sm:flex-none bg-gradient-to-r from-blue-900 to-indigo-800 text-white shadow-lg shadow-blue-900/20 hover:shadow-xl hover:-translate-y-0.5 px-3 py-2.5 sm:px-5 sm:py-3 rounded-xl sm:rounded-2xl text-[11px] sm:text-[13px] font-bold transition-all flex items-center justify-center ml-2">
-                <Plus className="h-3.5 w-3.5 sm:h-4 w-4 mr-1.5 sm:mr-2"/> Add Company
+              <button onClick={openAddCompany} className="h-[46px] bg-gradient-to-r from-blue-900 to-indigo-800 text-white shadow-lg shadow-blue-900/20 hover:shadow-xl hover:-translate-y-0.5 px-4 rounded-full text-[12px] font-bold transition-all flex items-center justify-center ml-1">
+                <Plus className="h-4 w-4 mr-1.5"/> Add Company
               </button>
             )}
           </div>
