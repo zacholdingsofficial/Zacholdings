@@ -364,14 +364,25 @@ ${inv.status}`, date: inv.created_at || inv.issue_date || todayStr, companyName:
               {isAdmin && !activeWorkspace ? 'Global system overview.' : isAdmin && activeWorkspace ? `Auditing workspace: ${currentCompany?.name || 'radix'}` : `Viewing workspace: ${currentCompany?.name || 'radix'}`}
             </p>
           </div>
-          <div className="flex gap-2 sm:gap-3 flex-wrap">
+          <div className="flex gap-2 sm:gap-3 flex-wrap items-center">
+            
+            <button onClick={() => navigate('/messages')} title="Messaging" className="h-[42px] w-[42px] sm:h-[50px] w-[50px] bg-white border border-slate-200 text-slate-600 shadow-sm hover:shadow-md hover:-translate-y-0.5 rounded-xl sm:rounded-2xl transition-all flex items-center justify-center shrink-0">
+              <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600"/>
+            </button>
+            
+            {(isAdmin || isHead) && (
+              <button onClick={() => setIsAnnouncementModalOpen(true)} title="Announcements" className="h-[42px] w-[42px] sm:h-[50px] w-[50px] bg-white border border-slate-200 text-slate-600 shadow-sm hover:shadow-md hover:-translate-y-0.5 rounded-xl sm:rounded-2xl transition-all flex items-center justify-center shrink-0">
+                <Megaphone className="h-4 w-4 sm:h-5 sm:w-5 text-indigo-600"/>
+              </button>
+            )}
+
             <button onClick={() => setIsActivityModalOpen(true)} title="Activity Pulse" className="h-[42px] w-[42px] sm:h-[50px] w-[50px] bg-white border border-slate-200 text-slate-600 shadow-sm hover:shadow-md hover:-translate-y-0.5 rounded-xl sm:rounded-2xl transition-all flex items-center justify-center shrink-0">
               <Activity className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600"/>
             </button>
-            
+
             {/* Show Add Company ONLY if Admin and NOT in a workspace */}
             {isAdmin && !activeWorkspace && (
-              <button onClick={openAddCompany} className="flex-1 sm:flex-none bg-gradient-to-r from-blue-900 to-indigo-800 text-white shadow-lg shadow-blue-900/20 hover:shadow-xl hover:-translate-y-0.5 px-3 py-2.5 sm:px-5 sm:py-3 rounded-xl sm:rounded-2xl text-[11px] sm:text-[13px] font-bold transition-all flex items-center justify-center">
+              <button onClick={openAddCompany} className="flex-1 sm:flex-none bg-gradient-to-r from-blue-900 to-indigo-800 text-white shadow-lg shadow-blue-900/20 hover:shadow-xl hover:-translate-y-0.5 px-3 py-2.5 sm:px-5 sm:py-3 rounded-xl sm:rounded-2xl text-[11px] sm:text-[13px] font-bold transition-all flex items-center justify-center ml-2">
                 <Plus className="h-3.5 w-3.5 sm:h-4 w-4 mr-1.5 sm:mr-2"/> Add Company
               </button>
             )}
@@ -406,17 +417,6 @@ ${inv.status}`, date: inv.created_at || inv.issue_date || todayStr, companyName:
                <div className="text-center sm:text-left">
                  <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">{currentCompany?.name}</h2>
                  <p className="text-sm font-medium text-slate-500 mt-1">{currentCompany?.area || 'Subsidiary'}</p>
-                 <div className="flex flex-wrap justify-center sm:justify-start gap-2 mt-4">
-                    <button onClick={() => setIsActivityModalOpen(true)} className="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-xl flex items-center transition-colors">
-                      <Activity className="h-3.5 w-3.5 mr-1.5" /> Activities
-                    </button>
-                    <button onClick={() => setIsAnnouncementModalOpen(true)} className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl flex items-center transition-colors">
-                      <Megaphone className="h-3.5 w-3.5 mr-1.5" /> Announce
-                    </button>
-                    <button onClick={() => navigate('/messages')} className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold rounded-xl flex items-center transition-colors">
-                      <MessageSquare className="h-3.5 w-3.5 mr-1.5" /> Messaging
-                    </button>
-                 </div>
                </div>
             </div>
 
