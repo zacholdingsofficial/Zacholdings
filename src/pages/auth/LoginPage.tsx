@@ -240,26 +240,26 @@ export default function LoginPage() {
     setStep(role === "admin" ? 3 : 2);
   };
 
+  // --- UPDATED: Company Selection fetches all Heads, Directors, and Admins dynamically ---
   const handleCompanySelect = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCompany) return;
 
-    if (activeCompanyObj?.business_type === 'parent') {
-      setEmail(adminEmail);
-      setHeadUsers([{ name: "System Admin", email: adminEmail }]);
-    } else if (selectedRole === 'head') {
+    if (selectedRole === 'head') {
       if (activeCompanyObj) {
+        // Fetch users directly assigned to the company as head, director, or admin
         const { data: legacyData } = await supabase
           .from('employees')
           .select('name, email')
           .eq('company_id', activeCompanyObj.id)
-          .eq('access_level', 'head');
+          .in('access_level', ['head', 'director', 'admin']);
           
+        // Fetch users assigned via the multi-company roles junction table
         const { data: junctionData } = await supabase
           .from('employee_company_roles')
           .select('employees(name, email)')
           .eq('company_id', activeCompanyObj.id)
-          .eq('access_level', 'head');
+          .in('access_level', ['head', 'director', 'admin']);
           
         const junctionHeads = (junctionData || [])
           .map((row: any) => row.employees)
@@ -267,10 +267,13 @@ export default function LoginPage() {
           .filter(Boolean);
           
         const combined = [...(legacyData || []), ...junctionHeads];
+        
+        // Ensure no duplicate dropdown options by filtering unique emails
         const uniqueHeads = Array.from(new Map(combined.map(item => [item.email, item])).values());
 
         if (uniqueHeads.length > 0) {
           setHeadUsers(uniqueHeads);
+          // Auto-select if there is only 1, otherwise leave blank to force user dropdown choice
           if (uniqueHeads.length === 1) setEmail(uniqueHeads[0].email);
           else setEmail("");
         } else {
@@ -367,7 +370,8 @@ export default function LoginPage() {
   const forgotMessage = `Hi, I've forgotten my password for Zac Holdings. I work under ${forgotContext} and my username is ${forgotIdentity}. Could you please reset my password?`;
   const forgotHref = `https://wa.me/917558957246?text=${encodeURIComponent(forgotMessage)}`;
 
-  const headNeedsSelection = selectedRole === 'head' && activeCompanyObj?.business_type !== 'parent' && headUsers.length > 1 && !email;
+  // Require selection if multiple heads exist
+  const headNeedsSelection = selectedRole === 'head' && headUsers.length > 1 && !email;
 
   return (
     <>
@@ -685,7 +689,7 @@ export default function LoginPage() {
                   )}
 
                   <form onSubmit={handleLogin} className="space-y-3 w-full shrink-0">
-                    {selectedRole === 'head' && activeCompanyObj?.business_type !== 'parent' ? (
+                    {selectedRole === 'head' ? (
                       (headUsers || []).length > 1 ? (
                         <CustomSelect
                           icon={<UserCircle className="absolute left-5 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-slate-400 pointer-events-none z-10" strokeWidth={1.75} />}
@@ -701,12 +705,6 @@ export default function LoginPage() {
                           <label className={fieldLabelClass(true, false)}>Your profile</label>
                         </div>
                       )
-                    ) : selectedRole === 'head' && activeCompanyObj?.business_type === 'parent' ? (
-                      <div className="relative">
-                        <UserCircle className="absolute left-5 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-slate-400 pointer-events-none" strokeWidth={1.75} />
-                        <input type="text" readOnly value="System Admin" className={`${fieldInputClass} text-slate-500 cursor-not-allowed`} />
-                        <label className={fieldLabelClass(true, false)}>Your profile</label>
-                      </div>
                     ) : (
                       <div className="relative">
                         <Mail className="absolute left-5 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-slate-400 pointer-events-none z-10" strokeWidth={1.75} />

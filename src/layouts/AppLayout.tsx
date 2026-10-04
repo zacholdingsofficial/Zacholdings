@@ -28,7 +28,11 @@ export default function AppLayout() {
     fetchAllData();
   }, [activeWorkspace, role, companyId, fetchAllData]);
 
-  const masterAdmin = employees.find(e => e.access_level === 'admin');
+  // STRICT USER MATCHING: Ensures the layout never guesses the admin and accurately uses your specific profile
+  const currentUser = employees.find(e => e.id == employeeId) || employees.find(e => e.email === user?.email);
+  
+  // Brand logo prioritizes the current user if they are an admin, falling back to any admin if necessary
+  const masterAdmin = employees.find(e => e.access_level === 'admin' && e.email === user?.email) || employees.find(e => e.access_level === 'admin');
 
   const targetWorkspaceId = role === 'admin' ? activeWorkspace : (activeWorkspace || companyId);
   const activeCompany = activeWorkspace ? companies.find(c => c.id?.toString() === activeWorkspace?.toString()) : null;
@@ -126,7 +130,6 @@ export default function AppLayout() {
     setMessageText(""); await fetchAllData(); 
   };
 
-  const currentUser = employees.find(e => e.id == employeeId);
   const displayEmail = user?.email || 'User';
   const displayInitial = currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : displayEmail.charAt(0).toUpperCase();
   const displayName = currentUser?.name || displayEmail.split('@')[0];
