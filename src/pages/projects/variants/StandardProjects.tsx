@@ -49,7 +49,10 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const [uploadNote, setUploadNote] = useState(""); 
 
   const [timelineModalEmpId, setTimelineModalEmpId] = useState<number | null>(null);
-  const [taskRedirectPrompt, setTaskRedirectPrompt] = useState<any>(null); // NEW: State for the timeline redirect prompt
+  const [taskRedirectPrompt, setTaskRedirectPrompt] = useState<any>(null);
+  
+  // NEW: State for our custom discard warning popup
+  const [showDiscardPrompt, setShowDiscardPrompt] = useState(false);
 
   const [reactionFormId, setReactionFormId] = useState<string | null>(null);
   const [reactionText, setReactionText] = useState("");
@@ -86,7 +89,8 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const adminTimelineReport = (selectedProject && timelineModalEmpId) ? reports.find(r => r.project_id?.toString() === selectedProject.id?.toString() && r.employee_id?.toString() === timelineModalEmpId?.toString()) : null;
   const adminTimelineEntries = Array.isArray(adminTimelineReport?.entries) ? adminTimelineReport.entries : [];
 
-  const currentSnapshot = JSON.stringify({ formData, pendingTasks: selectedProject ? [] : pendingTasks, customerType, newCustomer });
+  // FIX: Staged pendingTasks are now universally tracked to enable the "Save Changes" button
+  const currentSnapshot = JSON.stringify({ formData, pendingTasks, customerType, newCustomer });
   const hasUnsavedChanges = initialSnapshot !== null && initialSnapshot !== currentSnapshot;
 
   const visibleProjects = projects.filter(p => {
@@ -126,14 +130,19 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     }
   }, [autoOpenProjectId, projects, role]);
 
+  // FIX: Triggers custom popup instead of browser default
   const handleCloseModal = () => {
     if (hasUnsavedChanges) {
-      if (!window.confirm("You have unsaved changes. Are you sure you want to discard them and close?")) {
-        return;
-      }
+      setShowDiscardPrompt(true);
+      return;
     }
+    executeClose();
+  };
+
+  const executeClose = () => {
     setIsModalOpen(false);
     setInitialSnapshot(null);
+    setShowDiscardPrompt(false);
     if (onClearOverride) onClearOverride();
   };
 
@@ -930,8 +939,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
       {typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
-          {typeof document !== 'undefined' && createPortal(
-        <AnimatePresence>
           {timelineModalEmpId && isAdminView && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[10005] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
               <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="bg-[#FAFCFF] rounded-[2rem] shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden border border-slate-200">
@@ -981,7 +988,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                            {adminTimelineEntries.map((entry: any) => {
                               const hasReaction = !!entry.reaction;
                               const visual = getReactionVisuals(entry.reaction?.status);
-                              const VisualIcon = visual.icon || MessageCircle; // CRASH PREVENTION
+                              const VisualIcon = visual.icon || MessageCircle;
 
                               return (
                                 <div key={entry.id} className="flex flex-col relative group">
@@ -1115,6 +1122,30 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
         document.body
       )}
 
+      {/* NEW: Custom Discard Warning Prompt */}
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {showDiscardPrompt && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[10010] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+              <motion.div initial={{ scale: 0.95, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 10 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 relative flex flex-col items-center text-center border border-slate-100">
+                <div className="h-12 w-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
+                  <AlertCircle className="h-6 w-6" />
+                </div>
+                <h3 className="text-lg font-black text-slate-900 tracking-tight mb-2">Unsaved Changes</h3>
+                <p className="text-xs font-medium text-slate-500 mb-6 leading-relaxed">
+                  You have unsaved changes. Are you sure you want to discard them and close?
+                </p>
+                <div className="flex gap-3 w-full">
+                  <button type="button" onClick={() => setShowDiscardPrompt(false)} className="flex-1 h-10 rounded-xl bg-slate-50 text-slate-600 font-bold text-xs uppercase tracking-wider hover:bg-slate-100 transition-colors border border-slate-200">Cancel</button>
+                  <button type="button" onClick={executeClose} className="flex-1 h-10 rounded-xl bg-rose-600 text-white font-bold text-xs uppercase tracking-wider hover:bg-rose-700 transition-colors shadow-md">Discard</button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+
       {typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
           {taskRedirectPrompt && (
@@ -1183,7 +1214,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                         <button type="button" onClick={() => setModalTab('tasks')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'tasks' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>3. Action Items</button>
                         <button type="button" onClick={() => setModalTab('progress')} disabled={!selectedProject} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedProject ? 'opacity-30 cursor-not-allowed' : modalTab === 'progress' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>4. Timeline</button>
                         
-                        {/* SAFE FINANCE TAB CHECK */}
                         {showFinance && (
                           <button type="button" onClick={() => setModalTab('finance')} disabled={!selectedProject} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedProject ? 'opacity-30 cursor-not-allowed' : modalTab === 'finance' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>5. Budget & Finances</button>
                         )}
@@ -1309,7 +1339,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                             <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 text-[12px] sm:text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 shadow-sm disabled:bg-slate-50" />
                           </div>
                           
-                          {/* STRICT FINANCE ACCESS LOCK */}
                           {showFinance && role === 'admin' && (
                             <div className="flex flex-col">
                               <label className="text-[9px] sm:text-[10px] font-bold text-emerald-600 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1 whitespace-nowrap truncate">Expected Value (₹)</label>
@@ -1471,7 +1500,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                               <div key={task.id || index} className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl sm:rounded-2xl border transition-all ${task.is_completed ? 'bg-slate-50 border-slate-100' : 'bg-white border-slate-200 shadow-sm'}`}>
                                 <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
                                   
-                                  {/* CLICKABLE CHECKMARK WITH SMART REDIRECT LOGIC */}
                                   <div onClick={() => {
                                       if (isAdminView) {
                                         if (task.id) {
@@ -1701,7 +1729,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                     </div>
                   </div>
                 )}
-                
+
                 {/* TAB 5: FINANCE & BUDGET */}
                 {showFinance && modalTab === 'finance' && (
                   <div className="flex-1 overflow-y-auto min-h-0 overscroll-contain p-5 sm:p-8 flex flex-col sm:[&::-webkit-scrollbar]:w-1.5 sm:[&::-webkit-scrollbar-thumb]:bg-slate-300 sm:[&::-webkit-scrollbar-thumb]:rounded-full sm:[&::-webkit-scrollbar-track]:bg-transparent max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none] max-sm:[scrollbar-width:none]">
