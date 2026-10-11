@@ -50,8 +50,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
   const [timelineModalEmpId, setTimelineModalEmpId] = useState<number | null>(null);
   const [taskRedirectPrompt, setTaskRedirectPrompt] = useState<any>(null);
-  
-  // NEW: State for our custom discard warning popup
   const [showDiscardPrompt, setShowDiscardPrompt] = useState(false);
 
   const [reactionFormId, setReactionFormId] = useState<string | null>(null);
@@ -89,7 +87,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const adminTimelineReport = (selectedProject && timelineModalEmpId) ? reports.find(r => r.project_id?.toString() === selectedProject.id?.toString() && r.employee_id?.toString() === timelineModalEmpId?.toString()) : null;
   const adminTimelineEntries = Array.isArray(adminTimelineReport?.entries) ? adminTimelineReport.entries : [];
 
-  // FIX: Staged pendingTasks are now universally tracked to enable the "Save Changes" button
   const currentSnapshot = JSON.stringify({ formData, pendingTasks, customerType, newCustomer });
   const hasUnsavedChanges = initialSnapshot !== null && initialSnapshot !== currentSnapshot;
 
@@ -130,7 +127,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     }
   }, [autoOpenProjectId, projects, role]);
 
-  // FIX: Triggers custom popup instead of browser default
   const handleCloseModal = () => {
     if (hasUnsavedChanges) {
       setShowDiscardPrompt(true);
@@ -391,8 +387,15 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     try {
       for (const empId of Object.keys(allocationsForm)) {
         const alloc = allocationsForm[parseInt(empId)];
-        const { error } = await supabase.from('project_allocations').upsert({ project_id: selectedProject.id, employee_id: parseInt(empId), allocated_amount: alloc.allocated, incentive_amount: alloc.incentive }, { onConflict: 'project_id, employee_id' });
-        if (error) throw new Error(`Allocation Error: ${error.message}`);
+        const existing = projectAllocations.find(pa => pa.project_id?.toString() === selectedProject.id?.toString() && pa.employee_id?.toString() === empId.toString());
+        
+        if (existing) {
+          const { error } = await supabase.from('project_allocations').update({ allocated_amount: alloc.allocated, incentive_amount: alloc.incentive }).eq('id', existing.id);
+          if (error) throw new Error(`Allocation Update Error: ${error.message}`);
+        } else {
+          const { error } = await supabase.from('project_allocations').insert([{ project_id: selectedProject.id, employee_id: parseInt(empId), allocated_amount: alloc.allocated, incentive_amount: alloc.incentive }]);
+          if (error) throw new Error(`Allocation Insert Error: ${error.message}`);
+        }
       }
       alert("Allocations saved successfully.");
       await fetchAllData();
@@ -400,17 +403,30 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   };
 
   const handleRecordProjectPayment = async () => {
-    if (!paymentForm.employee_id || paymentForm.amount <= 0) return alert("Select an employee and enter an amount.");
+    if (!paymentForm.employee_id || paymentForm.amount <= 0) return alert("Select an employee and enter a valid amount.");
+    
+    const empId = parseInt(paymentForm.employee_id);
+    const alloc = allocationsForm[empId] || { allocated: 0, incentive: 0 };
+    const maxAllowed = Number(alloc.allocated) + Number(alloc.incentive);
+    
+    const existingPayments = salaryPayments.filter(sp => sp.project_id?.toString() === selectedProject?.id?.toString() && sp.employee_id?.toString() === empId.toString());
+    const alreadyPaid = existingPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+    
+    if ((alreadyPaid + paymentForm.amount) > maxAllowed) {
+       alert(`Payment denied. The amount exceeds the allocated budget for this employee.\nMaximum payable remaining: ₹${Math.max(0, maxAllowed - alreadyPaid).toLocaleString()}`);
+       return;
+    }
+
     setIsSaving(true);
     try {
       const { error } = await supabase.from('salary_payments').insert([{
-        employee_id: parseInt(paymentForm.employee_id), company_id: selectedProject.company_id, project_id: selectedProject.id,
+        employee_id: empId, company_id: selectedProject.company_id, project_id: selectedProject.id,
         amount: paymentForm.amount, payment_type: paymentForm.payment_type, payment_date: today, payment_month: today.substring(0, 7), notes: paymentForm.notes
       }]);
       if (error) throw new Error(`Database Error: ${error.message}`);
 
       setPaymentForm({ employee_id: "", amount: 0, payment_type: "Advance", notes: "" });
-      setExpandedFinanceEmpId(parseInt(paymentForm.employee_id)); 
+      setExpandedFinanceEmpId(empId); 
       setShowPayoutForm(false); 
       await fetchAllData();
     } catch (error: any) { alert(error.message); } finally { setIsSaving(false); }
@@ -549,7 +565,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     if (error) alert(`Error deleting project: ${error.message}`);
     
     await fetchAllData(); 
-    handleCloseModal(); 
+    executeClose(); 
     setIsSaving(false);
   };
 
@@ -943,7 +959,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[10005] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
               <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="bg-[#FAFCFF] rounded-[2rem] shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden border border-slate-200">
                  
-                 {/* CRASH-PROOF HEADER */}
                  <div className="px-6 py-5 border-b border-slate-200 bg-white flex items-center justify-between shrink-0">
                     <div className="flex items-center gap-4">
                        <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600 overflow-hidden border border-slate-200">
@@ -959,7 +974,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
                  <div className="flex-1 overflow-y-auto p-6 space-y-6">
                     
-                    {/* TIMELINE SECTION: Task Completion Checkbox UI */}
                     <div className="mb-6">
                       <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5"><ListTodo className="h-3.5 w-3.5" /> Assigned Tasks</h4>
                       {displayTasks.filter(t => t.assignee_id?.toString() === timelineModalEmpId?.toString()).length === 0 ? (
@@ -1122,7 +1136,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
         document.body
       )}
 
-      {/* NEW: Custom Discard Warning Prompt */}
       {typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
           {showDiscardPrompt && (
@@ -1341,11 +1354,11 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                           
                           {showFinance && role === 'admin' && (
                             <div className="flex flex-col">
-                              <label className="text-[9px] sm:text-[10px] font-bold text-emerald-600 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1 whitespace-nowrap truncate">Expected Value (₹)</label>
+                              <label className="text-[9px] sm:text-[10px] font-bold text-slate-700 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1 whitespace-nowrap truncate">Expected Value (₹)</label>
                               <div className="flex gap-2 items-center">
-                                <input type="number" value={formData.expected_amount} onChange={(e) => setFormData({...formData, expected_amount: parseFloat(e.target.value) || 0})} className="w-full h-10 sm:h-12 rounded-xl border border-emerald-200 bg-emerald-50 px-3 sm:px-4 text-[12px] sm:text-sm font-bold text-emerald-700 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 shadow-sm disabled:bg-slate-50 disabled:text-slate-400 disabled:border-slate-200" />
+                                <input type="number" value={formData.expected_amount} onChange={(e) => setFormData({...formData, expected_amount: parseFloat(e.target.value) || 0})} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 bg-slate-50 px-3 sm:px-4 text-[12px] sm:text-sm font-bold text-slate-800 outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-400/10 shadow-sm disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200" />
                                 {selectedProject && (
-                                  <button type="button" onClick={handleGenerateInvoice} disabled={isSaving} className="shrink-0 h-10 sm:h-12 px-4 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl text-[11px] font-bold shadow-md transition-all">
+                                  <button type="button" onClick={handleGenerateInvoice} disabled={isSaving} className="shrink-0 h-10 sm:h-12 px-5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-[11px] font-bold shadow-md transition-all">
                                       Approve Invoice
                                   </button>
                                 )}
@@ -1733,30 +1746,36 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                 {/* TAB 5: FINANCE & BUDGET */}
                 {showFinance && modalTab === 'finance' && (
                   <div className="flex-1 overflow-y-auto min-h-0 overscroll-contain p-5 sm:p-8 flex flex-col sm:[&::-webkit-scrollbar]:w-1.5 sm:[&::-webkit-scrollbar-thumb]:bg-slate-300 sm:[&::-webkit-scrollbar-thumb]:rounded-full sm:[&::-webkit-scrollbar-track]:bg-transparent max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none] max-sm:[scrollbar-width:none]">
-                    <div className="space-y-6">
+                    <div className="space-y-6 max-w-4xl mx-auto w-full">
                       
-                      {/* Project Value Summary */}
-                      <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-5 sm:p-6 flex items-center justify-between shadow-sm">
+                      {/* Professional Project Value Summary */}
+                      <div className="bg-white border border-slate-200 rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center justify-between shadow-sm gap-4">
                          <div>
-                            <h4 className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Total Expected Value</h4>
-                            <p className="text-2xl sm:text-3xl font-black text-emerald-700">₹{(formData.expected_amount || 0).toLocaleString()}</p>
+                            <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Project Financial Cap</h4>
+                            <p className="text-3xl font-black text-slate-900 tracking-tight">₹{(formData.expected_amount || 0).toLocaleString()}</p>
                          </div>
-                         <div className="h-12 w-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center">
-                            <span className="font-bold text-xl">₹</span>
+                         <div className="text-right">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Team Allocations</p>
+                            <p className={`text-lg font-bold ${Object.values(allocationsForm).reduce((acc: any, val: any) => acc + Number(val.allocated) + Number(val.incentive), 0) > formData.expected_amount ? 'text-rose-600' : 'text-slate-700'}`}>
+                              ₹{Object.values(allocationsForm).reduce((acc: any, val: any) => acc + Number(val.allocated) + Number(val.incentive), 0).toLocaleString()}
+                            </p>
                          </div>
                       </div>
 
                       {/* Allocations Form */}
-                      <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-sm">
-                         <div className="flex items-center justify-between mb-5">
-                            <h4 className="text-[11px] font-bold text-slate-800 uppercase tracking-widest">Team Allocations</h4>
-                            <button type="button" onClick={handleSaveAllocations} disabled={isSaving || !hasAllocationChanges} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider disabled:opacity-50 transition-all shadow-md hover:shadow-lg">
+                      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-sm">
+                         <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-200">
+                            <div>
+                               <h4 className="text-[12px] font-bold text-slate-900 uppercase tracking-wider">Resource Allocation</h4>
+                               <p className="text-[10px] text-slate-500 mt-1 font-medium">Set fixed budgets and performance incentives for assigned members.</p>
+                            </div>
+                            <button type="button" onClick={handleSaveAllocations} disabled={isSaving || !hasAllocationChanges} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider disabled:opacity-50 transition-all shadow-md hover:shadow-lg hover:bg-blue-700">
                                {isSaving ? 'Saving...' : 'Save Allocations'}
                             </button>
                          </div>
                          
                          {(formData.assignee_ids || []).length === 0 ? (
-                            <p className="text-xs text-slate-400 italic">Assign team members in Tab 2 to set their budgets.</p>
+                            <p className="text-xs text-slate-400 italic text-center py-4 border border-dashed border-slate-200 rounded-xl bg-white">Assign team members in the "Team" tab to establish their budgets.</p>
                          ) : (
                             <div className="space-y-3">
                                {(formData.assignee_ids || []).map(empId => {
@@ -1764,24 +1783,34 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                                   const alloc = allocationsForm[empId] || { allocated: 0, incentive: 0 };
                                   const total = Number(alloc.allocated) + Number(alloc.incentive);
                                   return (
-                                     <div key={empId} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-slate-50 border border-slate-100 rounded-xl">
-                                        <div className="flex items-center gap-3 flex-1">
-                                           <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-600 overflow-hidden">
+                                     <div key={empId} className="flex flex-col md:flex-row md:items-center gap-4 p-4 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-slate-300 transition-colors">
+                                        <div className="flex items-center gap-3 w-full md:w-1/3 shrink-0">
+                                           <div className="h-9 w-9 rounded-full bg-slate-100 flex items-center justify-center text-[11px] font-bold text-slate-600 overflow-hidden ring-1 ring-slate-200">
                                               {emp?.profile_image_url ? <img src={emp.profile_image_url} alt="" className="h-full w-full object-cover"/> : (emp?.name || 'U').charAt(0)}
                                            </div>
-                                           <span className="text-xs font-bold text-slate-700 w-24 truncate">{emp?.name || 'Unknown'}</span>
+                                           <div>
+                                              <span className="text-[13px] font-bold text-slate-800 block truncate">{emp?.name || 'Unknown'}</span>
+                                              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mt-0.5">Assigned Resource</span>
+                                           </div>
                                         </div>
-                                        <div className="flex items-center gap-2 flex-1">
+                                        <div className="flex flex-1 items-center gap-3">
                                            <div className="flex-1">
-                                              <label className="text-[8px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Base Pay</label>
-                                              <input type="number" value={alloc.allocated || ''} onChange={(e) => setAllocationsForm({...allocationsForm, [empId]: { ...alloc, allocated: parseFloat(e.target.value) || 0 }})} className="w-full h-8 px-2 rounded-md border border-slate-200 text-xs outline-none focus:border-blue-500" placeholder="0" />
+                                              <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5">Base Package</label>
+                                              <div className="relative">
+                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">₹</span>
+                                                <input type="number" value={alloc.allocated || ''} onChange={(e) => setAllocationsForm({...allocationsForm, [empId]: { ...alloc, allocated: parseFloat(e.target.value) || 0 }})} className="w-full h-10 pl-7 pr-3 rounded-lg border border-slate-200 text-xs font-semibold text-slate-800 outline-none focus:border-blue-500 bg-slate-50" placeholder="0" />
+                                              </div>
                                            </div>
                                            <div className="flex-1">
-                                              <label className="text-[8px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Incentive</label>
-                                              <input type="number" value={alloc.incentive || ''} onChange={(e) => setAllocationsForm({...allocationsForm, [empId]: { ...alloc, incentive: parseFloat(e.target.value) || 0 }})} className="w-full h-8 px-2 rounded-md border border-slate-200 text-xs outline-none focus:border-blue-500" placeholder="0" />
+                                              <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5">Incentive</label>
+                                              <div className="relative">
+                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">₹</span>
+                                                <input type="number" value={alloc.incentive || ''} onChange={(e) => setAllocationsForm({...allocationsForm, [empId]: { ...alloc, incentive: parseFloat(e.target.value) || 0 }})} className="w-full h-10 pl-7 pr-3 rounded-lg border border-slate-200 text-xs font-semibold text-slate-800 outline-none focus:border-blue-500 bg-slate-50" placeholder="0" />
+                                              </div>
                                            </div>
-                                           <div className="w-20 text-right pt-4">
-                                              <span className="text-xs font-black text-slate-800">₹{total.toLocaleString()}</span>
+                                           <div className="w-24 text-right pt-4 shrink-0 border-l border-slate-100 pl-3">
+                                              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Max Cap</label>
+                                              <span className="text-[13px] font-black text-slate-900">₹{total.toLocaleString()}</span>
                                            </div>
                                         </div>
                                      </div>
@@ -1792,76 +1821,93 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                       </div>
 
                       {/* Payment Recording */}
-                      <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-sm">
-                         <h4 className="text-[11px] font-bold text-slate-800 uppercase tracking-widest mb-5">Record Payment Disbursal</h4>
-                         <div className="flex flex-col md:flex-row gap-3 items-end mb-6">
+                      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+                         <div className="mb-6 pb-4 border-b border-slate-100">
+                            <h4 className="text-[12px] font-bold text-slate-900 uppercase tracking-wider">Disburse Payment</h4>
+                            <p className="text-[10px] text-slate-500 mt-1 font-medium">Record outgoing payments against a user's allocation cap.</p>
+                         </div>
+                         
+                         <div className="flex flex-col md:flex-row gap-4 items-end mb-8 bg-slate-50 p-4 rounded-xl border border-slate-100">
                             <div className="flex-1 w-full">
-                               <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5">Employee</label>
-                               <select value={paymentForm.employee_id} onChange={(e) => setPaymentForm({...paymentForm, employee_id: e.target.value})} className="w-full h-10 rounded-xl border border-slate-200 px-3 text-[12px] font-medium outline-none bg-slate-50">
-                                  <option value="">-- Select --</option>
+                               <label className="text-[9px] font-bold text-slate-600 uppercase tracking-widest block mb-2">Select Employee</label>
+                               <select value={paymentForm.employee_id} onChange={(e) => setPaymentForm({...paymentForm, employee_id: e.target.value})} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-[12px] font-bold text-slate-800 outline-none bg-white shadow-sm focus:border-blue-500">
+                                  <option value="">-- Choose Member --</option>
                                   {(formData.assignee_ids || []).map(id => <option key={id} value={id}>{getAvatar(id)?.name || 'Unknown'}</option>)}
                                </select>
                             </div>
-                            <div className="w-full md:w-32 shrink-0">
-                               <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5">Amount (₹)</label>
-                               <input type="number" value={paymentForm.amount || ''} onChange={(e) => setPaymentForm({...paymentForm, amount: parseFloat(e.target.value) || 0})} className="w-full h-10 rounded-xl border border-slate-200 px-3 text-[12px] font-medium outline-none bg-white" placeholder="0" />
+                            <div className="w-full md:w-36 shrink-0">
+                               <label className="text-[9px] font-bold text-slate-600 uppercase tracking-widest block mb-2">Amount (₹)</label>
+                               <input type="number" value={paymentForm.amount || ''} onChange={(e) => setPaymentForm({...paymentForm, amount: parseFloat(e.target.value) || 0})} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-[12px] font-bold text-slate-800 outline-none bg-white shadow-sm focus:border-blue-500" placeholder="0" />
                             </div>
-                            <div className="w-full md:w-32 shrink-0">
-                               <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5">Type</label>
-                               <select value={paymentForm.payment_type} onChange={(e) => setPaymentForm({...paymentForm, payment_type: e.target.value})} className="w-full h-10 rounded-xl border border-slate-200 px-3 text-[12px] font-medium outline-none bg-white">
+                            <div className="w-full md:w-36 shrink-0">
+                               <label className="text-[9px] font-bold text-slate-600 uppercase tracking-widest block mb-2">Tranche Type</label>
+                               <select value={paymentForm.payment_type} onChange={(e) => setPaymentForm({...paymentForm, payment_type: e.target.value})} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-[12px] font-bold text-slate-800 outline-none bg-white shadow-sm focus:border-blue-500">
                                   <option value="Advance">Advance</option>
                                   <option value="Standard">Standard</option>
                                   <option value="Final">Final</option>
                                </select>
                             </div>
-                            <button type="button" onClick={handleRecordProjectPayment} disabled={isSaving || !paymentForm.employee_id || paymentForm.amount <= 0} className="w-full md:w-auto h-10 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-50">Record</button>
+                            <button type="button" onClick={handleRecordProjectPayment} disabled={isSaving || !paymentForm.employee_id || paymentForm.amount <= 0} className="w-full md:w-auto h-11 px-8 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-50 shadow-md">Record</button>
                          </div>
 
-                         {/* Payment History Accordion */}
-                         <div className="space-y-2">
-                            {(formData.assignee_ids || []).map(empId => {
-                               const emp = getAvatar(empId);
-                               const empPayments = salaryPayments.filter(sp => sp.project_id?.toString() === selectedProject?.id?.toString() && sp.employee_id?.toString() === empId.toString());
-                               const totalPaid = empPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
-                               const isExpanded = expandedFinanceEmpId === empId;
+                         {/* Payment Ledger Accordion */}
+                         <div>
+                            <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Payment Ledger</h4>
+                            <div className="space-y-3">
+                               {(formData.assignee_ids || []).map(empId => {
+                                  const emp = getAvatar(empId);
+                                  const empPayments = salaryPayments.filter(sp => sp.project_id?.toString() === selectedProject?.id?.toString() && sp.employee_id?.toString() === empId.toString());
+                                  const totalPaid = empPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+                                  
+                                  const alloc = allocationsForm[empId] || { allocated: 0, incentive: 0 };
+                                  const totalAlloc = Number(alloc.allocated) + Number(alloc.incentive);
+                                  
+                                  const isExpanded = expandedFinanceEmpId === empId;
 
-                               if (empPayments.length === 0) return null;
+                                  if (empPayments.length === 0) return null;
 
-                               return (
-                                  <div key={empId} className="border border-slate-200 rounded-xl overflow-hidden">
-                                     <button type="button" onClick={() => setExpandedFinanceEmpId(isExpanded ? null : empId)} className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100 transition-colors">
-                                        <div className="flex items-center gap-2">
-                                           <span className="text-xs font-bold text-slate-700">{emp?.name || 'Unknown'}</span>
-                                           <span className="text-[10px] font-bold text-slate-400 bg-white px-2 py-0.5 rounded-full border border-slate-200">{empPayments.length} Payments</span>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                           <span className="text-xs font-black text-emerald-600">₹{totalPaid.toLocaleString()} Total</span>
-                                           <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                                        </div>
-                                     </button>
-                                     <AnimatePresence>
-                                        {isExpanded && (
-                                           <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden bg-white">
-                                              <div className="p-3 space-y-2 border-t border-slate-100">
-                                                 {empPayments.map(p => (
-                                                    <div key={p.id} className="flex items-center justify-between text-xs p-2 bg-slate-50 rounded-lg">
-                                                       <div className="flex items-center gap-3">
-                                                          <span className="font-bold text-slate-600">{new Date(p.payment_date).toLocaleDateString()}</span>
-                                                          <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400">{p.payment_type}</span>
-                                                       </div>
-                                                       <div className="flex items-center gap-4">
-                                                          <span className="font-bold text-slate-800">₹{parseFloat(p.amount).toLocaleString()}</span>
-                                                          <button type="button" onClick={() => handleDeleteProjectPayment(p.id)} className="text-slate-400 hover:text-rose-500"><Trash2 className="h-3.5 w-3.5" /></button>
-                                                       </div>
-                                                    </div>
-                                                 ))}
+                                  return (
+                                     <div key={empId} className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                                        <button type="button" onClick={() => setExpandedFinanceEmpId(isExpanded ? null : empId)} className="w-full flex items-center justify-between p-4 bg-white hover:bg-slate-50 transition-colors">
+                                           <div className="flex items-center gap-3">
+                                              <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-600 ring-1 ring-slate-200 overflow-hidden">
+                                                {emp?.profile_image_url ? <img src={emp.profile_image_url} alt="" className="h-full w-full object-cover"/> : (emp?.name || 'U').charAt(0)}
                                               </div>
-                                           </motion.div>
-                                        )}
-                                     </AnimatePresence>
-                                  </div>
-                               );
-                            })}
+                                              <div className="text-left">
+                                                 <span className="text-sm font-bold text-slate-800 block">{emp?.name || 'Unknown'}</span>
+                                                 <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{empPayments.length} Transactions</span>
+                                              </div>
+                                           </div>
+                                           <div className="flex flex-col items-end mr-4">
+                                              <span className="text-sm font-black text-slate-900">₹{totalPaid.toLocaleString()} Paid</span>
+                                              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">of ₹{totalAlloc.toLocaleString()} Cap</span>
+                                           </div>
+                                           <ChevronDown className={`h-5 w-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                        </button>
+                                        <AnimatePresence>
+                                           {isExpanded && (
+                                              <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden bg-slate-50 border-t border-slate-200">
+                                                 <div className="p-4 space-y-2">
+                                                    {empPayments.map(p => (
+                                                       <div key={p.id} className="flex items-center justify-between text-xs p-3 bg-white border border-slate-100 rounded-lg shadow-sm">
+                                                          <div className="flex items-center gap-4">
+                                                             <span className="font-bold text-slate-700">{new Date(p.payment_date).toLocaleDateString()}</span>
+                                                             <span className="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-600 uppercase tracking-wider font-bold rounded-md">{p.payment_type}</span>
+                                                          </div>
+                                                          <div className="flex items-center gap-4">
+                                                             <span className="font-black text-slate-900">₹{parseFloat(p.amount).toLocaleString()}</span>
+                                                             <button type="button" onClick={() => handleDeleteProjectPayment(p.id)} className="text-slate-400 hover:text-rose-600 transition-colors p-1"><Trash2 className="h-4 w-4" /></button>
+                                                          </div>
+                                                       </div>
+                                                    ))}
+                                                 </div>
+                                              </motion.div>
+                                           )}
+                                        </AnimatePresence>
+                                     </div>
+                                  );
+                               })}
+                            </div>
                          </div>
                       </div>
 
