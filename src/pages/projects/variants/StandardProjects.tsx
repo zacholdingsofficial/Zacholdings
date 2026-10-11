@@ -930,16 +930,20 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
       {typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
+          {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
           {timelineModalEmpId && isAdminView && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[10005] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
               <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="bg-[#FAFCFF] rounded-[2rem] shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden border border-slate-200">
+                 
+                 {/* CRASH-PROOF HEADER */}
                  <div className="px-6 py-5 border-b border-slate-200 bg-white flex items-center justify-between shrink-0">
                     <div className="flex items-center gap-4">
                        <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600 overflow-hidden border border-slate-200">
                           {getAvatar(timelineModalEmpId)?.profile_image_url ? <img src={getAvatar(timelineModalEmpId)?.profile_image_url} alt="" className="h-full w-full object-cover" /> : (getAvatar(timelineModalEmpId)?.name || 'U').charAt(0).toUpperCase()}
                        </div>
                        <div>
-                         <h3 className="text-lg font-black text-slate-900 tracking-tight leading-none">{getAvatar(timelineModalEmpId)?.name}</h3>
+                         <h3 className="text-lg font-black text-slate-900 tracking-tight leading-none">{getAvatar(timelineModalEmpId)?.name || "Unknown User"}</h3>
                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Timeline & Updates</p>
                        </div>
                     </div>
@@ -969,7 +973,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                          </div>
                       )}
                     </div>
-                    {/* END TIMELINE SECTION */}
 
                     <div>
                       <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5"><MessageSquare className="h-3.5 w-3.5" /> Activity Log</h4>
@@ -978,13 +981,14 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                            {adminTimelineEntries.map((entry: any) => {
                               const hasReaction = !!entry.reaction;
                               const visual = getReactionVisuals(entry.reaction?.status);
+                              const VisualIcon = visual.icon || MessageCircle; // CRASH PREVENTION
 
                               return (
                                 <div key={entry.id} className="flex flex-col relative group">
                                    <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm z-10 relative">
                                       {entry.type === 'upload' && (
                                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-100 text-[9px] font-bold uppercase tracking-wider rounded-lg mb-3">
-                                           <FileText className="h-3 w-3" /> Attached File: {entry.task_title}
+                                           <FileText className="h-3 w-3" /> Attached File: {entry.task_title || "Unknown"}
                                       </span>
                                       )}
                                       <p className="text-[13px] text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">{entry.text}</p>
@@ -999,17 +1003,17 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                                    {hasReaction && reactionFormId !== entry.id && (
                                       <div className="ml-6 sm:ml-10 mt-2 relative">
                                          <CornerDownRight className="absolute -left-5 top-3 h-4 w-4 text-slate-300" />
-                                         <div className={`p-3.5 rounded-xl border ${visual.bg} ${visual.border}`}>
+                                         <div className={`p-3.5 rounded-xl border ${visual.bg || 'bg-slate-50'} ${visual.border || 'border-slate-200'}`}>
                                             <div className="flex items-center justify-between mb-1.5">
-                                               <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest ${visual.text}`}>
-                                                  <visual.icon className="h-3.5 w-3.5" /> {entry.reaction.status}
+                                               <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest ${visual.text || 'text-slate-700'}`}>
+                                                  <VisualIcon className="h-3.5 w-3.5" /> {entry.reaction.status}
                                                </span>
                                                <div className="flex gap-2">
-                                                  <button type="button" onClick={() => setReactionFormId(entry.id)} className={`text-[10px] font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity ${visual.text} hover:opacity-70`}><Edit2 className="h-3 w-3"/></button>
+                                                  <button type="button" onClick={() => setReactionFormId(entry.id)} className={`text-[10px] font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity ${visual.text || 'text-slate-700'} hover:opacity-70`}><Edit2 className="h-3 w-3"/></button>
                                                   <button type="button" onClick={() => handleDeleteReaction(timelineModalEmpId, entry.id)} className={`text-[10px] font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity text-rose-500 hover:opacity-70`}><Trash2 className="h-3 w-3"/></button>
                                                </div>
                                             </div>
-                                            {entry.reaction.text && <p className={`text-xs mt-1 ${visual.text} opacity-90`}>{entry.reaction.text}</p>}
+                                            {entry.reaction.text && <p className={`text-xs mt-1 ${visual.text || 'text-slate-700'} opacity-90`}>{entry.reaction.text}</p>}
                                          </div>
                                       </div>
                                    )}
@@ -1698,10 +1702,142 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                   </div>
                 )}
                 
-                {/* TAB 5: FINANCE PLACEHOLDER */}
+                {/* TAB 5: FINANCE & BUDGET */}
                 {showFinance && modalTab === 'finance' && (
-                  <div className="flex-1 overflow-y-auto min-h-0 overscroll-contain p-5 sm:p-8 flex flex-col items-center justify-center text-slate-400">
-                    <p className="font-bold uppercase tracking-wider">Finance module placeholder</p>
+                  <div className="flex-1 overflow-y-auto min-h-0 overscroll-contain p-5 sm:p-8 flex flex-col sm:[&::-webkit-scrollbar]:w-1.5 sm:[&::-webkit-scrollbar-thumb]:bg-slate-300 sm:[&::-webkit-scrollbar-thumb]:rounded-full sm:[&::-webkit-scrollbar-track]:bg-transparent max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none] max-sm:[scrollbar-width:none]">
+                    <div className="space-y-6">
+                      
+                      {/* Project Value Summary */}
+                      <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-5 sm:p-6 flex items-center justify-between shadow-sm">
+                         <div>
+                            <h4 className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Total Expected Value</h4>
+                            <p className="text-2xl sm:text-3xl font-black text-emerald-700">₹{(formData.expected_amount || 0).toLocaleString()}</p>
+                         </div>
+                         <div className="h-12 w-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center">
+                            <span className="font-bold text-xl">₹</span>
+                         </div>
+                      </div>
+
+                      {/* Allocations Form */}
+                      <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-sm">
+                         <div className="flex items-center justify-between mb-5">
+                            <h4 className="text-[11px] font-bold text-slate-800 uppercase tracking-widest">Team Allocations</h4>
+                            <button type="button" onClick={handleSaveAllocations} disabled={isSaving || !hasAllocationChanges} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider disabled:opacity-50 transition-all shadow-md hover:shadow-lg">
+                               {isSaving ? 'Saving...' : 'Save Allocations'}
+                            </button>
+                         </div>
+                         
+                         {(formData.assignee_ids || []).length === 0 ? (
+                            <p className="text-xs text-slate-400 italic">Assign team members in Tab 2 to set their budgets.</p>
+                         ) : (
+                            <div className="space-y-3">
+                               {(formData.assignee_ids || []).map(empId => {
+                                  const emp = getAvatar(empId);
+                                  const alloc = allocationsForm[empId] || { allocated: 0, incentive: 0 };
+                                  const total = Number(alloc.allocated) + Number(alloc.incentive);
+                                  return (
+                                     <div key={empId} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                                        <div className="flex items-center gap-3 flex-1">
+                                           <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-600 overflow-hidden">
+                                              {emp?.profile_image_url ? <img src={emp.profile_image_url} alt="" className="h-full w-full object-cover"/> : (emp?.name || 'U').charAt(0)}
+                                           </div>
+                                           <span className="text-xs font-bold text-slate-700 w-24 truncate">{emp?.name || 'Unknown'}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 flex-1">
+                                           <div className="flex-1">
+                                              <label className="text-[8px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Base Pay</label>
+                                              <input type="number" value={alloc.allocated || ''} onChange={(e) => setAllocationsForm({...allocationsForm, [empId]: { ...alloc, allocated: parseFloat(e.target.value) || 0 }})} className="w-full h-8 px-2 rounded-md border border-slate-200 text-xs outline-none focus:border-blue-500" placeholder="0" />
+                                           </div>
+                                           <div className="flex-1">
+                                              <label className="text-[8px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Incentive</label>
+                                              <input type="number" value={alloc.incentive || ''} onChange={(e) => setAllocationsForm({...allocationsForm, [empId]: { ...alloc, incentive: parseFloat(e.target.value) || 0 }})} className="w-full h-8 px-2 rounded-md border border-slate-200 text-xs outline-none focus:border-blue-500" placeholder="0" />
+                                           </div>
+                                           <div className="w-20 text-right pt-4">
+                                              <span className="text-xs font-black text-slate-800">₹{total.toLocaleString()}</span>
+                                           </div>
+                                        </div>
+                                     </div>
+                                  );
+                               })}
+                            </div>
+                         )}
+                      </div>
+
+                      {/* Payment Recording */}
+                      <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-sm">
+                         <h4 className="text-[11px] font-bold text-slate-800 uppercase tracking-widest mb-5">Record Payment Disbursal</h4>
+                         <div className="flex flex-col md:flex-row gap-3 items-end mb-6">
+                            <div className="flex-1 w-full">
+                               <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5">Employee</label>
+                               <select value={paymentForm.employee_id} onChange={(e) => setPaymentForm({...paymentForm, employee_id: e.target.value})} className="w-full h-10 rounded-xl border border-slate-200 px-3 text-[12px] font-medium outline-none bg-slate-50">
+                                  <option value="">-- Select --</option>
+                                  {(formData.assignee_ids || []).map(id => <option key={id} value={id}>{getAvatar(id)?.name || 'Unknown'}</option>)}
+                               </select>
+                            </div>
+                            <div className="w-full md:w-32 shrink-0">
+                               <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5">Amount (₹)</label>
+                               <input type="number" value={paymentForm.amount || ''} onChange={(e) => setPaymentForm({...paymentForm, amount: parseFloat(e.target.value) || 0})} className="w-full h-10 rounded-xl border border-slate-200 px-3 text-[12px] font-medium outline-none bg-white" placeholder="0" />
+                            </div>
+                            <div className="w-full md:w-32 shrink-0">
+                               <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5">Type</label>
+                               <select value={paymentForm.payment_type} onChange={(e) => setPaymentForm({...paymentForm, payment_type: e.target.value})} className="w-full h-10 rounded-xl border border-slate-200 px-3 text-[12px] font-medium outline-none bg-white">
+                                  <option value="Advance">Advance</option>
+                                  <option value="Standard">Standard</option>
+                                  <option value="Final">Final</option>
+                               </select>
+                            </div>
+                            <button type="button" onClick={handleRecordProjectPayment} disabled={isSaving || !paymentForm.employee_id || paymentForm.amount <= 0} className="w-full md:w-auto h-10 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-50">Record</button>
+                         </div>
+
+                         {/* Payment History Accordion */}
+                         <div className="space-y-2">
+                            {(formData.assignee_ids || []).map(empId => {
+                               const emp = getAvatar(empId);
+                               const empPayments = salaryPayments.filter(sp => sp.project_id?.toString() === selectedProject?.id?.toString() && sp.employee_id?.toString() === empId.toString());
+                               const totalPaid = empPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+                               const isExpanded = expandedFinanceEmpId === empId;
+
+                               if (empPayments.length === 0) return null;
+
+                               return (
+                                  <div key={empId} className="border border-slate-200 rounded-xl overflow-hidden">
+                                     <button type="button" onClick={() => setExpandedFinanceEmpId(isExpanded ? null : empId)} className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100 transition-colors">
+                                        <div className="flex items-center gap-2">
+                                           <span className="text-xs font-bold text-slate-700">{emp?.name || 'Unknown'}</span>
+                                           <span className="text-[10px] font-bold text-slate-400 bg-white px-2 py-0.5 rounded-full border border-slate-200">{empPayments.length} Payments</span>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                           <span className="text-xs font-black text-emerald-600">₹{totalPaid.toLocaleString()} Total</span>
+                                           <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                        </div>
+                                     </button>
+                                     <AnimatePresence>
+                                        {isExpanded && (
+                                           <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden bg-white">
+                                              <div className="p-3 space-y-2 border-t border-slate-100">
+                                                 {empPayments.map(p => (
+                                                    <div key={p.id} className="flex items-center justify-between text-xs p-2 bg-slate-50 rounded-lg">
+                                                       <div className="flex items-center gap-3">
+                                                          <span className="font-bold text-slate-600">{new Date(p.payment_date).toLocaleDateString()}</span>
+                                                          <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400">{p.payment_type}</span>
+                                                       </div>
+                                                       <div className="flex items-center gap-4">
+                                                          <span className="font-bold text-slate-800">₹{parseFloat(p.amount).toLocaleString()}</span>
+                                                          <button type="button" onClick={() => handleDeleteProjectPayment(p.id)} className="text-slate-400 hover:text-rose-500"><Trash2 className="h-3.5 w-3.5" /></button>
+                                                       </div>
+                                                    </div>
+                                                 ))}
+                                              </div>
+                                           </motion.div>
+                                        )}
+                                     </AnimatePresence>
+                                  </div>
+                               );
+                            })}
+                         </div>
+                      </div>
+
+                    </div>
                   </div>
                 )}
 
