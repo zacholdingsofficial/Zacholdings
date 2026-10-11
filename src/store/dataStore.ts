@@ -45,7 +45,7 @@ export const useDataStore = create<DataState>((set) => ({
       let salaryQuery = supabase.from('salary_payments').select('*').order('created_at', { ascending: false });
 
       if (targetCompanyId) {
-        companiesQuery = companiesQuery.eq('id', targetCompanyId);
+        //companiesQuery = companiesQuery.eq('id', targetCompanyId);
         projectsQuery = projectsQuery.eq('company_id', targetCompanyId);
         customersQuery = customersQuery.eq('company_id', targetCompanyId);
         
