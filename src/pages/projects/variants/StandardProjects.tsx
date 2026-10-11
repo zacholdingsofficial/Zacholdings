@@ -49,6 +49,8 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const [uploadNote, setUploadNote] = useState(""); 
 
   const [timelineModalEmpId, setTimelineModalEmpId] = useState<number | null>(null);
+  const [taskRedirectPrompt, setTaskRedirectPrompt] = useState<any>(null); // NEW: State for the timeline redirect prompt
+
   const [reactionFormId, setReactionFormId] = useState<string | null>(null);
   const [reactionText, setReactionText] = useState("");
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
@@ -1111,6 +1113,33 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
       {typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
+          {taskRedirectPrompt && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[10010] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+              <motion.div initial={{ scale: 0.95, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 10 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 relative flex flex-col items-center text-center border border-slate-100">
+                <div className="h-12 w-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mb-4">
+                  <ListTodo className="h-6 w-6" />
+                </div>
+                <h3 className="text-lg font-black text-slate-900 tracking-tight mb-2">Update via Timeline</h3>
+                <p className="text-xs font-medium text-slate-500 mb-6 leading-relaxed">
+                  Task completion must be recorded directly in <strong>{getAvatar(taskRedirectPrompt.assignee_id)?.name}'s</strong> personal timeline to ensure accurate activity logging.
+                </p>
+                <div className="flex gap-3 w-full">
+                  <button type="button" onClick={() => setTaskRedirectPrompt(null)} className="flex-1 h-10 rounded-xl bg-slate-50 text-slate-600 font-bold text-xs uppercase tracking-wider hover:bg-slate-100 transition-colors border border-slate-200">Cancel</button>
+                  <button type="button" onClick={() => {
+                    setModalTab('progress');
+                    setTimelineModalEmpId(taskRedirectPrompt.assignee_id);
+                    setTaskRedirectPrompt(null);
+                  }} className="flex-1 h-10 rounded-xl bg-blue-600 text-white font-bold text-xs uppercase tracking-wider hover:bg-blue-700 transition-colors shadow-md">Go To Timeline</button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
           {isModalOpen && !isPrintingPayslip && (
             <motion.div 
               initial={{ opacity: 0 }} 
@@ -1242,7 +1271,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                               {customerType === 'in_house' && (
                                 <><label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1">Internal Target *</label>
                                 <select value={formData.internal_company_id} onChange={(e) => setFormData({...formData, internal_company_id: e.target.value, customer_id: ""})} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 bg-blue-50/50 px-3 sm:px-4 text-[12px] sm:text-[13px] font-bold text-blue-900 outline-none focus:border-blue-500 shadow-sm disabled:bg-slate-100 disabled:text-slate-400">
-                                  <option value="">-- Select Own Company --</option>
+                                  <option value="">-- Select Subsidiary --</option>
                                   {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                 </select></>
                               )}
@@ -1437,10 +1466,26 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                             return (
                               <div key={task.id || index} className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl sm:rounded-2xl border transition-all ${task.is_completed ? 'bg-slate-50 border-slate-100' : 'bg-white border-slate-200 shadow-sm'}`}>
                                 <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
-                                  {/* READ ONLY INDICATOR: completion toggle has been removed from this view */}
-                                  <div className={`mt-0.5 h-4 w-4 sm:h-5 sm:w-5 rounded-full border flex items-center justify-center shrink-0 transition-colors ${task.is_completed ? 'bg-emerald-500 border-emerald-500' : 'bg-slate-50 border-slate-300'}`}>
+                                  
+                                  {/* CLICKABLE CHECKMARK WITH SMART REDIRECT LOGIC */}
+                                  <div onClick={() => {
+                                      if (isAdminView) {
+                                        if (task.id) {
+                                          if (!task.assignee_id) {
+                                            alert("Please assign this task to a team member before tracking its completion.");
+                                          } else {
+                                            setTaskRedirectPrompt(task);
+                                          }
+                                        } else {
+                                          handleAdminToggleTask(task, index);
+                                        }
+                                      }
+                                    }} 
+                                    className={`mt-0.5 h-4 w-4 sm:h-5 sm:w-5 rounded-full border flex items-center justify-center shrink-0 transition-colors ${isAdminView ? 'cursor-pointer hover:border-emerald-400' : 'opacity-70'} ${task.is_completed ? 'bg-emerald-500 border-emerald-500' : 'bg-slate-50 border-slate-300'}`}
+                                  >
                                     {task.is_completed && <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-white" />}
                                   </div>
+                                  
                                   <div className="flex-1 min-w-0">
                                     <p className={`text-[12px] sm:text-[13px] font-bold leading-relaxed break-words ${task.is_completed ? 'text-slate-500' : 'text-slate-700'}`}>{task.title}</p>
                                     <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1.5">
