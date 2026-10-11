@@ -111,7 +111,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     return assignments.some((cr: any) => cr.company_id?.toString() === formData.company_id?.toString());
   });
 
-  // MODIFIED: Changed to useLayoutEffect to prevent any visual flickering before the modal opens
   useLayoutEffect(() => {
     if (autoOpenProjectId && projects.length > 0) {
       const projToOpen = projects.find((p: any) => p.id === autoOpenProjectId);
@@ -131,7 +130,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     const isAcademyProj = projComp?.business_type === 'academy' || ['Course', 'Workshop', 'Internship'].includes(project.metadata?.type);
 
     if (isGlobalAdmin && isAcademyProj) {
-      // MODIFIED: Instantly trigger cross-handoff instead of waiting for a slow URL route change
       if (onCrossHandoff) {
         onCrossHandoff(project.id, project.company_id);
       }
@@ -461,9 +459,14 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     await fetchAllData(); handleCloseModal(); setIsSaving(false);
   };
 
+  // ----------------------------------------------------------------------
+  // LOGIC FIX: TASK ADDITION
+  // We no longer strictly require a deadline or assignee to add a task.
+  // ----------------------------------------------------------------------
   const handleAddTask = async () => {
-    if (!newTaskTitle.trim() || !newTaskAssignee || !newTaskDeadline) return;
-    if (formData.due_date && new Date(newTaskDeadline) > new Date(formData.due_date)) {
+    if (!newTaskTitle.trim()) return;
+    
+    if (newTaskDeadline && formData.due_date && new Date(newTaskDeadline) > new Date(formData.due_date)) {
       alert(`Task deadline cannot exceed the project's main due date (${formData.due_date}).`);
       return;
     }
@@ -1253,7 +1256,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
                                 e.preventDefault();
-                                if (newTaskTitle.trim() !== "" && newTaskAssignee !== "" && newTaskDeadline !== "") handleAddTask();
+                                if (newTaskTitle.trim() !== "") handleAddTask();
                               }
                             }} 
                             className="flex-1 h-10 sm:h-12 rounded-xl border border-slate-200 px-3 sm:px-4 text-[12px] sm:text-[13px] font-medium outline-none focus:border-blue-500 shadow-sm bg-white" 
@@ -1275,15 +1278,15 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                             />
                             <select 
                               value={newTaskAssignee} 
-                              onChange={(e) => setNewTaskAssignee(parseInt(e.target.value) || "")} 
+                              onChange={(e) => setNewTaskAssignee(e.target.value ? parseInt(e.target.value) : "")} 
                               className="w-full sm:w-40 h-10 sm:h-12 rounded-xl border border-slate-200 px-2 sm:px-3 text-[11px] sm:text-[13px] font-medium outline-none bg-white shadow-sm cursor-pointer"
                             >
-                              <option value="" disabled>-- Select Person --</option>
+                              <option value="">-- Unassigned --</option>
                               {(formData.assignee_ids || []).map(id => <option key={id} value={id}>{getAvatar(id)?.name || 'Unknown'}</option>)}
                             </select>
 
                             <AnimatePresence>
-                              {newTaskTitle.trim() !== "" && newTaskAssignee !== "" && newTaskDeadline !== "" && (
+                              {newTaskTitle.trim() !== "" && (
                                 <motion.div
                                   initial={{ opacity: 0, scale: 0.5, width: 0, marginLeft: -12 }}
                                   animate={{ opacity: 1, scale: 1, width: 'auto', marginLeft: 0 }}
@@ -1528,7 +1531,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                   </div>
                 )}
 
-                {/* MODIFIED: Fixed Modal Footer Alignment */}
                 <div className="p-4 sm:p-6 border-t border-slate-100 bg-[#FAFCFF] flex justify-end items-center gap-3 shrink-0 mt-auto">
                   {selectedProject && isAdminView && modalTab === 'details' && (
                     <button onClick={handleDeleteProject} disabled={isSaving} className="border border-rose-200 text-rose-600 bg-white hover:bg-rose-50 rounded-xl h-11 px-5 flex items-center justify-center shadow-sm mr-auto transition-colors shrink-0"><Trash2 className="h-4 w-4" /></button>
