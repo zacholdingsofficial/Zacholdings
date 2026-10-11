@@ -292,7 +292,9 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
         if (pendingTasks.length > 0) {
           const tasksToInsert = pendingTasks.map(t => ({ project_id: data.id, title: t.title, assignee_id: t.assignee_id, is_completed: t.is_completed, deadline: t.deadline }));
-          await supabase.from('project_tasks').insert(tasksToInsert);
+          const { error: taskError } = await supabase.from('project_tasks').insert(tasksToInsert);
+          // FIX: Explicitly check and throw task errors to prevent silent task failures
+          if (taskError) throw new Error(`Project saved, but tasks failed to attach: ${taskError.message}`);
         }
 
       } else {
@@ -370,7 +372,8 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     try {
       for (const empId of Object.keys(allocationsForm)) {
         const alloc = allocationsForm[parseInt(empId)];
-        await supabase.from('project_allocations').upsert({ project_id: selectedProject.id, employee_id: parseInt(empId), allocated_amount: alloc.allocated, incentive_amount: alloc.incentive }, { onConflict: 'project_id, employee_id' });
+        const { error } = await supabase.from('project_allocations').upsert({ project_id: selectedProject.id, employee_id: parseInt(empId), allocated_amount: alloc.allocated, incentive_amount: alloc.incentive }, { onConflict: 'project_id, employee_id' });
+        if (error) throw new Error(`Allocation Error: ${error.message}`);
       }
       alert("Allocations saved successfully.");
       await fetchAllData();
@@ -419,11 +422,13 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
       const currentEntries = Array.isArray(existingReport?.entries) ? existingReport.entries : [];
 
-      await supabase.from('project_reports').upsert({ 
+      const { error } = await supabase.from('project_reports').upsert({ 
         project_id: selectedProject.id, 
         employee_id: employeeId, 
         entries: [...currentEntries, newEntry] 
       }, { onConflict: 'project_id, employee_id' });
+      
+      if (error) throw new Error(`Failed to save report: ${error.message}`);
 
       setMyReportText(""); 
       await fetchAllData();
@@ -442,7 +447,8 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
         e.id === entryId ? { ...e, text: editingEntryText.trim() } : e
       );
 
-      await supabase.from('project_reports').update({ entries: updatedEntries }).eq('id', existingReport.id);
+      const { error } = await supabase.from('project_reports').update({ entries: updatedEntries }).eq('id', existingReport.id);
+      if (error) throw new Error(`Failed to update entry: ${error.message}`);
 
       setEditingEntryId(null);
       setEditingEntryText("");
@@ -459,7 +465,10 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
       const currentEntries = Array.isArray(existingReport?.entries) ? existingReport.entries : [];
       const updatedEntries = currentEntries.filter((e: any) => e.id !== entryId);
-      await supabase.from('project_reports').update({ entries: updatedEntries }).eq('id', existingReport.id);
+      
+      const { error } = await supabase.from('project_reports').update({ entries: updatedEntries }).eq('id', existingReport.id);
+      if (error) throw new Error(`Failed to delete entry: ${error.message}`);
+      
       await fetchAllData();
     } catch (e: any) { alert(e.message); } finally { setIsSaving(false); }
   };
@@ -481,11 +490,13 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
         return e;
       });
 
-      await supabase.from('project_reports').update({ entries: updatedEntries }).eq('id', existingReport.id);
+      const { error } = await supabase.from('project_reports').update({ entries: updatedEntries }).eq('id', existingReport.id);
+      if (error) throw new Error(`Failed to save feedback: ${error.message}`);
+      
       setReactionFormId(null);
       setReactionText("");
       await fetchAllData();
-    } catch (e: any) { alert("Failed to add reaction: " + e.message); } finally { setIsSaving(false); }
+    } catch (e: any) { alert(e.message); } finally { setIsSaving(false); }
   };
 
   const handleDeleteReaction = async (empId: number, entryId: string) => {
@@ -504,7 +515,9 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
         return e;
       });
 
-      await supabase.from('project_reports').update({ entries: updatedEntries }).eq('id', existingReport.id);
+      const { error } = await supabase.from('project_reports').update({ entries: updatedEntries }).eq('id', existingReport.id);
+      if (error) throw new Error(`Failed to remove feedback: ${error.message}`);
+      
       await fetchAllData();
     } catch (e: any) { alert(e.message); } finally { setIsSaving(false); }
   };
@@ -512,12 +525,18 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const handleDeleteProject = async () => {
     if (!window.confirm(`Delete "${selectedProject.name}"?`)) return;
     setIsSaving(true);
-    await supabase.from('projects').delete().eq('id', selectedProject.id);
-    await fetchAllData(); handleCloseModal(); setIsSaving(false);
+    
+    const { error } = await supabase.from('projects').delete().eq('id', selectedProject.id);
+    if (error) alert(`Error deleting project: ${error.message}`);
+    
+    await fetchAllData(); 
+    handleCloseModal(); 
+    setIsSaving(false);
   };
 
   const handleAddTask = async () => {
-    if (!newTaskTitle.trim()) return;
+    // STRICT CHECK: Disallow adding tasks without a title or an assigned employee
+    if (!newTaskTitle.trim() || newTaskAssignee === "") return;
     
     if (newTaskDeadline && formData.due_date && new Date(newTaskDeadline) > new Date(formData.due_date)) {
       alert(`Task deadline cannot exceed the project's main due date (${formData.due_date}).`);
@@ -525,12 +544,34 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     }
 
     if (selectedProject) {
-      await supabase.from('project_tasks').insert([{ project_id: selectedProject.id, title: newTaskTitle, assignee_id: newTaskAssignee || null, deadline: newTaskDeadline || null }]);
-      await fetchAllData();
+      setIsSaving(true);
+      try {
+        const { error } = await supabase.from('project_tasks').insert([{ 
+          project_id: selectedProject.id, 
+          title: newTaskTitle, 
+          assignee_id: newTaskAssignee, 
+          deadline: newTaskDeadline || null 
+        }]);
+        
+        // Catch the DB error so it doesn't fail silently and clear the inputs
+        if (error) throw new Error(`Database Error: ${error.message}`);
+        
+        await fetchAllData();
+        setNewTaskTitle(""); setNewTaskAssignee(""); setNewTaskDeadline("");
+      } catch (err: any) {
+        alert(`Failed to add task: ${err.message}`);
+      } finally {
+        setIsSaving(false);
+      }
     } else { 
-      setPendingTasks([...pendingTasks, { title: newTaskTitle, assignee_id: newTaskAssignee || null, is_completed: false, deadline: newTaskDeadline || null }]); 
+      setPendingTasks([...pendingTasks, { 
+        title: newTaskTitle, 
+        assignee_id: newTaskAssignee, 
+        is_completed: false, 
+        deadline: newTaskDeadline || null 
+      }]); 
+      setNewTaskTitle(""); setNewTaskAssignee(""); setNewTaskDeadline("");
     }
-    setNewTaskTitle(""); setNewTaskAssignee(""); setNewTaskDeadline("");
   };
 
   const handleUpdateTaskDeadline = async (task: any, index: number, newDeadline: string) => {
@@ -539,8 +580,9 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
       return;
     }
     if (selectedProject) {
-      await supabase.from('project_tasks').update({ deadline: newDeadline }).eq('id', task.id);
-      await fetchAllData();
+      const { error } = await supabase.from('project_tasks').update({ deadline: newDeadline || null }).eq('id', task.id);
+      if (error) alert(`Failed to update deadline: ${error.message}`);
+      else await fetchAllData();
     } else {
       const updated = [...pendingTasks]; 
       updated[index].deadline = newDeadline; 
@@ -551,8 +593,9 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const handleAdminToggleTask = async (task: any, index?: number) => {
     if (isUserView) return; 
     if (selectedProject) {
-      await supabase.from('project_tasks').update({ is_completed: !task.is_completed }).eq('id', task.id);
-      await fetchAllData();
+      const { error } = await supabase.from('project_tasks').update({ is_completed: !task.is_completed }).eq('id', task.id);
+      if (error) alert(`Failed to update task status: ${error.message}`);
+      else await fetchAllData();
     } else if (index !== undefined) {
       const updated = [...pendingTasks]; updated[index].is_completed = !updated[index].is_completed; setPendingTasks(updated);
     }
@@ -564,7 +607,8 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
     setIsSaving(true);
     try {
-      await supabase.from('project_tasks').update({ is_completed: true }).eq('id', taskToUpload.id);
+      const { error: taskError } = await supabase.from('project_tasks').update({ is_completed: true }).eq('id', taskToUpload.id);
+      if (taskError) throw new Error(`Failed to complete task: ${taskError.message}`);
 
       const existingReport = reports.find(r => r.project_id === selectedProject.id && r.employee_id === employeeId);
       const newEntry = {
@@ -576,11 +620,13 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
       };
       const currentEntries = Array.isArray(existingReport?.entries) ? existingReport.entries : [];
 
-      await supabase.from('project_reports').upsert({ 
+      const { error: reportError } = await supabase.from('project_reports').upsert({ 
         project_id: selectedProject.id, 
         employee_id: employeeId, 
         entries: [...currentEntries, newEntry] 
       }, { onConflict: 'project_id, employee_id' });
+      
+      if (reportError) throw new Error(`Failed to log upload: ${reportError.message}`);
 
       await fetchAllData();
       setIsUploadModalOpen(false);
@@ -1048,14 +1094,14 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
               initial={{ opacity: 0 }} 
               animate={{ opacity: 1 }} 
               exit={{ opacity: 0 }} 
-              onMouseDown={handleCloseModal} // Replaced onClick with onMouseDown for backdrop discard warning
+              onMouseDown={handleCloseModal}
               className="fixed inset-0 z-[9999] flex flex-col items-center justify-center max-sm:px-4 max-sm:pt-20 max-sm:pb-[110px] sm:p-4 bg-slate-900/40 backdrop-blur-sm print:hidden"
             >
               <motion.div 
                 initial={{ opacity: 0, y: 40, scale: 0.95 }} 
                 animate={{ opacity: 1, y: 0, scale: 1 }} 
                 exit={{ opacity: 0, y: 40, scale: 0.95 }} 
-                onMouseDown={(e) => e.stopPropagation()} // Prevent backdrop close when clicking inside the modal
+                onMouseDown={(e) => e.stopPropagation()}
                 className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-5xl h-full sm:h-[760px] sm:max-h-[90vh] flex flex-col overflow-hidden border border-slate-100 mt-auto sm:mt-0"
               >
 
@@ -1309,7 +1355,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
                                 e.preventDefault();
-                                if (newTaskTitle.trim() !== "") handleAddTask();
+                                if (newTaskTitle.trim() !== "" && newTaskAssignee !== "") handleAddTask();
                               }
                             }} 
                             className="flex-1 h-10 sm:h-12 rounded-xl border border-slate-200 px-3 sm:px-4 text-[12px] sm:text-[13px] font-medium outline-none focus:border-blue-500 shadow-sm bg-white" 
@@ -1334,12 +1380,12 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                               onChange={(e) => setNewTaskAssignee(e.target.value ? parseInt(e.target.value) : "")} 
                               className="w-full sm:w-40 h-10 sm:h-12 rounded-xl border border-slate-200 px-2 sm:px-3 text-[11px] sm:text-[13px] font-medium outline-none bg-white shadow-sm cursor-pointer text-slate-600"
                             >
-                              <option value="">-- Unassigned --</option>
+                              <option value="" disabled>-- Select Assignee --</option>
                               {(formData.assignee_ids || []).map(id => <option key={id} value={id}>{getAvatar(id)?.name || 'Unknown'}</option>)}
                             </select>
 
                             <AnimatePresence>
-                              {newTaskTitle.trim() !== "" && (
+                              {newTaskTitle.trim() !== "" && newTaskAssignee !== "" && (
                                 <motion.div
                                   initial={{ opacity: 0, scale: 0.5, width: 0, marginLeft: -12 }}
                                   animate={{ opacity: 1, scale: 1, width: 'auto', marginLeft: 0 }}
