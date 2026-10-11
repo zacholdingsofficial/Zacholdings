@@ -77,6 +77,10 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
   const [allocationsForm, setAllocationsForm] = useState<{[empId: number]: {allocated: number, incentive: number}}>({});
   const [paymentForm, setPaymentForm] = useState({ employee_id: "", amount: 0, payment_type: "Advance", notes: "" });
+  
+  // NEW: State for editing existing payment records inline
+  const [editingPaymentId, setEditingPaymentId] = useState<number | null>(null);
+  const [editPaymentForm, setEditPaymentForm] = useState({ amount: 0, payment_type: "Standard" });
 
   const currentCompany = companies.find((c: any) => c.id?.toString() === currentCompanyId?.toString());
   const showFinance = role === 'admin' || (role === 'head' && currentCompany?.allow_head_finance !== false);
@@ -87,7 +91,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const adminTimelineReport = (selectedProject && timelineModalEmpId) ? reports.find(r => r.project_id?.toString() === selectedProject.id?.toString() && r.employee_id?.toString() === timelineModalEmpId?.toString()) : null;
   const adminTimelineEntries = Array.isArray(adminTimelineReport?.entries) ? adminTimelineReport.entries : [];
 
-  const currentSnapshot = JSON.stringify({ formData, pendingTasks, customerType, newCustomer });
+  const currentSnapshot = JSON.stringify({ formData, pendingTasks: selectedProject ? [] : pendingTasks, customerType, newCustomer });
   const hasUnsavedChanges = initialSnapshot !== null && initialSnapshot !== currentSnapshot;
 
   const visibleProjects = projects.filter(p => {
@@ -139,6 +143,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     setIsModalOpen(false);
     setInitialSnapshot(null);
     setShowDiscardPrompt(false);
+    setEditingPaymentId(null);
     if (onClearOverride) onClearOverride();
   };
 
@@ -184,6 +189,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     setShowDriveHelp(false); 
     setShowDescription(false);
     setModalTab("details"); 
+    setEditingPaymentId(null);
     
     setInitialSnapshot(JSON.stringify({ 
       formData: defaultFormData, pendingTasks: [], customerType: "existing", newCustomer: { name: "", phone: "" } 
@@ -227,6 +233,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     setTimelineModalEmpId(null); 
     setReactionFormId(null);
     setShowDescription(!!project.description);
+    setEditingPaymentId(null);
 
     setInitialSnapshot(JSON.stringify({ 
       formData: loadedFormData, pendingTasks: [], customerType: loadedCustomerType, newCustomer: { name: "", phone: "" } 
@@ -438,6 +445,34 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     try {
       const { error } = await supabase.from('salary_payments').delete().eq('id', paymentId);
       if (error) throw new Error(`Delete Error: ${error.message}`);
+      await fetchAllData();
+    } catch (error: any) { alert(error.message); } finally { setIsSaving(false); }
+  };
+
+  const handleUpdateProjectPayment = async (paymentId: number, empId: number) => {
+    if (editPaymentForm.amount <= 0) return alert("Enter a valid amount.");
+    
+    const alloc = allocationsForm[empId] || { allocated: 0, incentive: 0 };
+    const maxAllowed = Number(alloc.allocated) + Number(alloc.incentive);
+    
+    const existingPayments = salaryPayments.filter(sp => sp.project_id?.toString() === selectedProject?.id?.toString() && sp.employee_id?.toString() === empId.toString() && sp.id !== paymentId);
+    const alreadyPaidOther = existingPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+    
+    if ((alreadyPaidOther + editPaymentForm.amount) > maxAllowed) {
+       alert(`Edit denied. The new amount exceeds the allocated budget.\nMaximum payable remaining: ₹${Math.max(0, maxAllowed - alreadyPaidOther).toLocaleString()}`);
+       return;
+    }
+
+    setIsSaving(true);
+    try {
+      const { error } = await supabase.from('salary_payments').update({
+        amount: editPaymentForm.amount,
+        payment_type: editPaymentForm.payment_type
+      }).eq('id', paymentId);
+      
+      if (error) throw new Error(`Update Error: ${error.message}`);
+      
+      setEditingPaymentId(null);
       await fetchAllData();
     } catch (error: any) { alert(error.message); } finally { setIsSaving(false); }
   };
@@ -851,7 +886,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                         {showFinance && (
                           <div className="flex flex-col items-end">
                             <span className="text-[8px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{isAcademyProj ? 'Batch Value' : 'Value'}</span>
-                            <span className="text-[12px] sm:text-sm font-black text-emerald-600">₹{(project.expected_amount || 0).toLocaleString()}</span>
+                            <span className="text-[12px] sm:text-sm font-black text-slate-700">₹{(project.expected_amount || 0).toLocaleString()}</span>
                           </div>
                         )}
                       </div>
@@ -894,7 +929,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                </div>
                <div className="px-6 py-5 flex justify-between border-b border-slate-100">
                   <span className="font-medium text-slate-700">Performance Incentive</span>
-                  <span className="font-bold text-emerald-600">+ ₹{(userAllocation?.incentive_amount || 0).toLocaleString()}</span>
+                  <span className="font-bold text-slate-700">+ ₹{(userAllocation?.incentive_amount || 0).toLocaleString()}</span>
                </div>
                <div className="px-6 py-5 bg-slate-50 flex justify-between">
                   <span className="font-bold text-slate-900 text-lg">Total Earnings</span>
@@ -1352,6 +1387,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                             <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 text-[12px] sm:text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 shadow-sm disabled:bg-slate-50" />
                           </div>
                           
+                          {/* STRICT FINANCE ACCESS LOCK */}
                           {showFinance && role === 'admin' && (
                             <div className="flex flex-col">
                               <label className="text-[9px] sm:text-[10px] font-bold text-slate-700 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1 whitespace-nowrap truncate">Expected Value (₹)</label>
@@ -1888,18 +1924,36 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                                            {isExpanded && (
                                               <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden bg-slate-50 border-t border-slate-200">
                                                  <div className="p-4 space-y-2">
-                                                    {empPayments.map(p => (
-                                                       <div key={p.id} className="flex items-center justify-between text-xs p-3 bg-white border border-slate-100 rounded-lg shadow-sm">
-                                                          <div className="flex items-center gap-4">
-                                                             <span className="font-bold text-slate-700">{new Date(p.payment_date).toLocaleDateString()}</span>
-                                                             <span className="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-600 uppercase tracking-wider font-bold rounded-md">{p.payment_type}</span>
+                                                    {empPayments.map(p => {
+                                                       const isEditingPayment = editingPaymentId === p.id;
+                                                       
+                                                       return isEditingPayment ? (
+                                                          <div key={p.id} className="flex flex-col sm:flex-row gap-2 text-xs p-3 bg-blue-50/50 border border-blue-100 rounded-lg shadow-sm">
+                                                             <input type="number" value={editPaymentForm.amount || ''} onChange={(e) => setEditPaymentForm({...editPaymentForm, amount: parseFloat(e.target.value) || 0})} className="w-full sm:w-28 h-8 rounded-md border border-blue-200 px-2 font-bold text-blue-900 outline-none focus:border-blue-500" placeholder="Amount" />
+                                                             <select value={editPaymentForm.payment_type} onChange={(e) => setEditPaymentForm({...editPaymentForm, payment_type: e.target.value})} className="w-full sm:w-28 h-8 rounded-md border border-blue-200 px-2 font-bold text-blue-900 outline-none focus:border-blue-500">
+                                                                <option value="Advance">Advance</option>
+                                                                <option value="Standard">Standard</option>
+                                                                <option value="Final">Final</option>
+                                                             </select>
+                                                             <div className="flex items-center gap-2 sm:ml-auto">
+                                                                <button type="button" onClick={() => setEditingPaymentId(null)} className="h-8 px-3 rounded-md text-[10px] font-bold text-slate-500 hover:bg-slate-200 uppercase tracking-wider transition-colors">Cancel</button>
+                                                                <button type="button" onClick={() => handleUpdateProjectPayment(p.id, empId)} disabled={isSaving} className="h-8 px-4 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold uppercase tracking-wider transition-colors disabled:opacity-50">Save</button>
+                                                             </div>
                                                           </div>
-                                                          <div className="flex items-center gap-4">
-                                                             <span className="font-black text-slate-900">₹{parseFloat(p.amount).toLocaleString()}</span>
-                                                             <button type="button" onClick={() => handleDeleteProjectPayment(p.id)} className="text-slate-400 hover:text-rose-600 transition-colors p-1"><Trash2 className="h-4 w-4" /></button>
+                                                       ) : (
+                                                          <div key={p.id} className="flex items-center justify-between text-xs p-3 bg-white border border-slate-100 rounded-lg shadow-sm group hover:border-slate-300 transition-all">
+                                                             <div className="flex items-center gap-4">
+                                                                <span className="font-bold text-slate-700">{new Date(p.payment_date).toLocaleDateString()}</span>
+                                                                <span className="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-600 uppercase tracking-wider font-bold rounded-md">{p.payment_type}</span>
+                                                             </div>
+                                                             <div className="flex items-center gap-2">
+                                                                <span className="font-black text-slate-900 mr-2">₹{parseFloat(p.amount).toLocaleString()}</span>
+                                                                <button type="button" onClick={() => { setEditingPaymentId(p.id); setEditPaymentForm({ amount: parseFloat(p.amount), payment_type: p.payment_type }); }} className="text-slate-400 hover:text-blue-600 transition-colors p-1.5 opacity-0 group-hover:opacity-100"><Edit2 className="h-3.5 w-3.5" /></button>
+                                                                <button type="button" onClick={() => handleDeleteProjectPayment(p.id)} className="text-slate-400 hover:text-rose-600 transition-colors p-1.5 opacity-0 group-hover:opacity-100"><Trash2 className="h-3.5 w-3.5" /></button>
+                                                             </div>
                                                           </div>
-                                                       </div>
-                                                    ))}
+                                                       );
+                                                    })}
                                                  </div>
                                               </motion.div>
                                            )}
