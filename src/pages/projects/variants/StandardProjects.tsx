@@ -27,6 +27,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const [modalTab, setModalTab] = useState<"details" | "team" | "tasks" | "progress" | "finance">("details");
   const [selectedProject, setSelectedProject] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [initialSnapshot, setInitialSnapshot] = useState<string | null>(null);
 
   const [viewMode, setViewMode] = useState<'admin' | 'user'>('admin');
   const [roleSelectProject, setRoleSelectProject] = useState<any>(null);
@@ -83,6 +84,9 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const adminTimelineReport = (selectedProject && timelineModalEmpId) ? reports.find(r => r.project_id === selectedProject.id && r.employee_id === timelineModalEmpId) : null;
   const adminTimelineEntries = Array.isArray(adminTimelineReport?.entries) ? adminTimelineReport.entries : [];
 
+  const currentSnapshot = JSON.stringify({ formData, pendingTasks, customerType, newCustomer });
+  const hasUnsavedChanges = initialSnapshot !== null && initialSnapshot !== currentSnapshot;
+
   const visibleProjects = projects.filter(p => {
     if (!p.name) return false;
 
@@ -121,7 +125,13 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   }, [autoOpenProjectId, projects, role]);
 
   const handleCloseModal = () => {
+    if (hasUnsavedChanges) {
+      if (!window.confirm("You have unsaved changes. Are you sure you want to discard them and close?")) {
+        return;
+      }
+    }
     setIsModalOpen(false);
+    setInitialSnapshot(null);
     if (onClearOverride) onClearOverride();
   };
 
@@ -146,10 +156,33 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const openNewProject = () => {
     setViewMode('admin');
     setSelectedProject(null);
-    setFormData({ name: "", description: "", priority: "Medium", status: "Planning", expected_amount: 0, approval_date: today, due_date: "", company_id: currentCompanyId?.toString() || "", customer_id: "", internal_company_id: "", drive_folder_url: "", assignee_ids: [], milestones: DEFAULT_MILESTONES });
-    setCustomerType("existing"); setNewCustomer({ name: "", phone: "" }); setPendingTasks([]); setNewTaskTitle(""); setNewTaskAssignee(""); setNewTaskDeadline("");
-    setAllocationsForm({}); setExpandedFinanceEmpId(null); setShowPayoutForm(false); setShowDriveHelp(false); setShowDescription(false);
-    setModalTab("details"); setIsModalOpen(true);
+    
+    const defaultFormData = { 
+      name: "", description: "", priority: "Medium", status: "Planning", expected_amount: 0, 
+      approval_date: today, due_date: "", company_id: currentCompanyId?.toString() || "", 
+      customer_id: "", internal_company_id: "", drive_folder_url: "", assignee_ids: [], 
+      milestones: DEFAULT_MILESTONES 
+    };
+
+    setFormData(defaultFormData);
+    setCustomerType("existing"); 
+    setNewCustomer({ name: "", phone: "" }); 
+    setPendingTasks([]); 
+    setNewTaskTitle(""); 
+    setNewTaskAssignee(""); 
+    setNewTaskDeadline("");
+    setAllocationsForm({}); 
+    setExpandedFinanceEmpId(null); 
+    setShowPayoutForm(false); 
+    setShowDriveHelp(false); 
+    setShowDescription(false);
+    setModalTab("details"); 
+    
+    setInitialSnapshot(JSON.stringify({ 
+      formData: defaultFormData, pendingTasks: [], customerType: "existing", newCustomer: { name: "", phone: "" } 
+    }));
+    
+    setIsModalOpen(true);
   };
 
   const openProjectDetails = (project: any, mode: 'admin' | 'user') => {
@@ -163,18 +196,34 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
       completed: { ...DEFAULT_MILESTONES.completed, ...(project.milestones?.completed || {}) }
     };
 
-    setFormData({
+    const loadedFormData = {
       name: project.name || "", description: project.description || "", priority: project.priority || "Medium", status: project.status || "Planning", 
       expected_amount: project.expected_amount || 0, approval_date: project.approval_date || today, due_date: project.due_date || "", 
       company_id: project.company_id?.toString() || "", customer_id: project.customer_id?.toString() || "", 
       internal_company_id: project.internal_company_id?.toString() || "", drive_folder_url: project.drive_folder_url || "", 
       assignee_ids: Array.isArray(project.assignee_ids) ? project.assignee_ids : [],
       milestones: safeMilestones
-    });
-    setCustomerType(project.internal_company_id ? "in_house" : project.customer_id ? "existing" : "in_house"); 
-    setNewCustomer({ name: "", phone: "" }); setPendingTasks([]); setNewTaskTitle(""); setNewTaskAssignee(""); setNewTaskDeadline("");
-    setExpandedFinanceEmpId(null); setShowPayoutForm(false); setShowDriveHelp(false); setTimelineModalEmpId(null); setReactionFormId(null);
+    };
+
+    const loadedCustomerType = project.internal_company_id ? "in_house" : project.customer_id ? "existing" : "in_house";
+
+    setFormData(loadedFormData);
+    setCustomerType(loadedCustomerType); 
+    setNewCustomer({ name: "", phone: "" }); 
+    setPendingTasks([]); 
+    setNewTaskTitle(""); 
+    setNewTaskAssignee(""); 
+    setNewTaskDeadline("");
+    setExpandedFinanceEmpId(null); 
+    setShowPayoutForm(false); 
+    setShowDriveHelp(false); 
+    setTimelineModalEmpId(null); 
+    setReactionFormId(null);
     setShowDescription(!!project.description);
+
+    setInitialSnapshot(JSON.stringify({ 
+      formData: loadedFormData, pendingTasks: [], customerType: loadedCustomerType, newCustomer: { name: "", phone: "" } 
+    }));
 
     const currentAlloc: any = {};
     if (Array.isArray(project.assignee_ids)) {
@@ -252,8 +301,16 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
       }
 
       await fetchAllData(); 
-      if(modalTab === 'details' || modalTab === 'tasks') handleCloseModal(); 
-      else alert(`Project updated successfully.`);
+      
+      const newSnapshot = JSON.stringify({ formData, pendingTasks, customerType, newCustomer });
+      setInitialSnapshot(newSnapshot);
+
+      if(modalTab === 'details' || modalTab === 'tasks') {
+        setIsModalOpen(false);
+        if (onClearOverride) onClearOverride();
+      } else {
+        alert(`Project updated successfully.`);
+      }
     } catch (error: any) { alert(error.message); } finally { setIsSaving(false); }
   };
 
@@ -459,10 +516,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     await fetchAllData(); handleCloseModal(); setIsSaving(false);
   };
 
-  // ----------------------------------------------------------------------
-  // LOGIC FIX: TASK ADDITION
-  // We no longer strictly require a deadline or assignee to add a task.
-  // ----------------------------------------------------------------------
   const handleAddTask = async () => {
     if (!newTaskTitle.trim()) return;
     
@@ -995,14 +1048,14 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
               initial={{ opacity: 0 }} 
               animate={{ opacity: 1 }} 
               exit={{ opacity: 0 }} 
-              onClick={handleCloseModal}
+              onMouseDown={handleCloseModal} // Replaced onClick with onMouseDown for backdrop discard warning
               className="fixed inset-0 z-[9999] flex flex-col items-center justify-center max-sm:px-4 max-sm:pt-20 max-sm:pb-[110px] sm:p-4 bg-slate-900/40 backdrop-blur-sm print:hidden"
             >
               <motion.div 
                 initial={{ opacity: 0, y: 40, scale: 0.95 }} 
                 animate={{ opacity: 1, y: 0, scale: 1 }} 
                 exit={{ opacity: 0, y: 40, scale: 0.95 }} 
-                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()} // Prevent backdrop close when clicking inside the modal
                 className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-5xl h-full sm:h-[760px] sm:max-h-[90vh] flex flex-col overflow-hidden border border-slate-100 mt-auto sm:mt-0"
               >
 
@@ -1264,7 +1317,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                           <div className="flex gap-2 sm:gap-3 w-full xl:w-auto">
                             <input 
                               type="date" 
-                              title="Task Deadline" 
+                              title="Optional Task Deadline" 
                               value={newTaskDeadline} 
                               max={formData.due_date || undefined}
                               onChange={(e) => {
@@ -1274,12 +1327,12 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                                 }
                                 setNewTaskDeadline(e.target.value);
                               }} 
-                              className="w-full sm:w-36 h-10 sm:h-12 rounded-xl border border-slate-200 px-2 sm:px-3 text-[11px] sm:text-[13px] font-medium outline-none shadow-sm bg-white" 
+                              className="w-full sm:w-36 h-10 sm:h-12 rounded-xl border border-slate-200 px-2 sm:px-3 text-[11px] sm:text-[13px] font-medium outline-none shadow-sm bg-white text-slate-500" 
                             />
                             <select 
                               value={newTaskAssignee} 
                               onChange={(e) => setNewTaskAssignee(e.target.value ? parseInt(e.target.value) : "")} 
-                              className="w-full sm:w-40 h-10 sm:h-12 rounded-xl border border-slate-200 px-2 sm:px-3 text-[11px] sm:text-[13px] font-medium outline-none bg-white shadow-sm cursor-pointer"
+                              className="w-full sm:w-40 h-10 sm:h-12 rounded-xl border border-slate-200 px-2 sm:px-3 text-[11px] sm:text-[13px] font-medium outline-none bg-white shadow-sm cursor-pointer text-slate-600"
                             >
                               <option value="">-- Unassigned --</option>
                               {(formData.assignee_ids || []).map(id => <option key={id} value={id}>{getAvatar(id)?.name || 'Unknown'}</option>)}
@@ -1327,7 +1380,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                                       {isAdminView ? (
                                         <input 
                                           type="date" 
-                                          title="Edit Deadline"
+                                          title="Edit Deadline (Optional)"
                                           value={task.deadline || ''} 
                                           max={formData.due_date || undefined}
                                           onChange={(e) => handleUpdateTaskDeadline(task, index, e.target.value)} 
@@ -1551,12 +1604,12 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                         </button>
                       )}
                       {!selectedProject && modalTab === 'tasks' && (
-                        <button onClick={handleSaveProject} disabled={isSaving} className="bg-gradient-to-r from-blue-900 to-indigo-800 text-white rounded-xl h-11 px-8 font-bold text-[13px] shadow-md shadow-blue-900/20 hover:shadow-lg hover:-translate-y-0.5 transition-all flex-1 sm:flex-none flex items-center justify-center">
+                        <button onClick={handleSaveProject} disabled={isSaving || !hasUnsavedChanges} className={`rounded-xl h-11 px-8 font-bold text-[13px] transition-all flex-1 sm:flex-none flex items-center justify-center ${(!hasUnsavedChanges || isSaving) ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-gradient-to-r from-blue-900 to-indigo-800 text-white shadow-md shadow-blue-900/20 hover:shadow-lg hover:-translate-y-0.5'}`}>
                           {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : "Finish & Create Project"}
                         </button>
                       )}
                       {selectedProject && (
-                        <button onClick={handleSaveProject} disabled={isSaving} className="bg-gradient-to-r from-blue-900 to-indigo-800 text-white rounded-xl h-11 px-8 font-bold text-[13px] shadow-md shadow-blue-900/20 hover:shadow-lg hover:-translate-y-0.5 transition-all flex-1 sm:flex-none flex items-center justify-center">
+                        <button onClick={handleSaveProject} disabled={isSaving || !hasUnsavedChanges} className={`rounded-xl h-11 px-8 font-bold text-[13px] transition-all flex-1 sm:flex-none flex items-center justify-center ${(!hasUnsavedChanges || isSaving) ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-gradient-to-r from-blue-900 to-indigo-800 text-white shadow-md shadow-blue-900/20 hover:shadow-lg hover:-translate-y-0.5'}`}>
                           {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : "Save Changes"}
                         </button>
                       )}
