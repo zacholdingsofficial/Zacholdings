@@ -293,7 +293,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
         if (pendingTasks.length > 0) {
           const tasksToInsert = pendingTasks.map(t => ({ project_id: data.id, title: t.title, assignee_id: t.assignee_id, is_completed: t.is_completed, deadline: t.deadline }));
           const { error: taskError } = await supabase.from('project_tasks').insert(tasksToInsert);
-          // FIX: Explicitly check and throw task errors to prevent silent task failures
+          // Catch and explicitly display task insertion errors
           if (taskError) throw new Error(`Project saved, but tasks failed to attach: ${taskError.message}`);
         }
 
@@ -702,7 +702,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
             <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-slate-900 mt-1 sm:mt-2">Projects.</h1>
           </div>
           {(role === 'admin' || role === 'head') && (
-            <button onClick={openNewProject} className="bg-gradient-to-r from-blue-900 to-indigo-800 text-white shadow-lg shadow-blue-900/20 hover:shadow-xl hover:-translate-y-0.5 px-4 sm:px-6 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl text-[11px] sm:text-[13px] font-bold transition-all flex items-center shrink-0">
+            <button type="button" onClick={openNewProject} className="bg-gradient-to-r from-blue-900 to-indigo-800 text-white shadow-lg shadow-blue-900/20 hover:shadow-xl hover:-translate-y-0.5 px-4 sm:px-6 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl text-[11px] sm:text-[13px] font-bold transition-all flex items-center shrink-0">
               <Plus className="h-4 w-4 mr-1.5 sm:mr-2" /> New Project
             </button>
           )}
@@ -917,15 +917,15 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                   <p className="text-xs font-medium text-slate-500 mb-6">You are assigned to tasks on <strong className="text-slate-800">{roleSelectProject.name}</strong>. How would you like to view it?</p>
 
                   <div className="space-y-3">
-                    <button onClick={() => openProjectDetails(roleSelectProject, 'admin')} className="w-full bg-slate-900 hover:bg-slate-800 text-white rounded-xl py-3.5 text-sm font-bold shadow-md transition-all flex items-center justify-center gap-2">
+                    <button type="button" onClick={() => openProjectDetails(roleSelectProject, 'admin')} className="w-full bg-slate-900 hover:bg-slate-800 text-white rounded-xl py-3.5 text-sm font-bold shadow-md transition-all flex items-center justify-center gap-2">
                        Manage Workspace (Admin)
                     </button>
-                    <button onClick={() => openProjectDetails(roleSelectProject, 'user')} className="w-full bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl py-3.5 text-sm font-bold shadow-sm transition-all flex items-center justify-center gap-2">
+                    <button type="button" onClick={() => openProjectDetails(roleSelectProject, 'user')} className="w-full bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl py-3.5 text-sm font-bold shadow-sm transition-all flex items-center justify-center gap-2">
                        My Tasks (User)
                     </button>
                   </div>
 
-                  <button onClick={() => setRoleSelectProject(null)} className="mt-5 w-full text-slate-400 hover:text-slate-600 font-bold text-xs uppercase tracking-wider transition-colors">Cancel</button>
+                  <button type="button" onClick={() => setRoleSelectProject(null)} className="mt-5 w-full text-slate-400 hover:text-slate-600 font-bold text-xs uppercase tracking-wider transition-colors">Cancel</button>
                </motion.div>
              </motion.div>
           )}
@@ -948,7 +948,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Timeline & Updates</p>
                        </div>
                     </div>
-                    <button onClick={() => {setTimelineModalEmpId(null); setReactionFormId(null);}} className="h-8 w-8 bg-slate-50 hover:bg-slate-100 rounded-full flex items-center justify-center text-slate-500 transition-colors"><X className="h-4 w-4" /></button>
+                    <button type="button" onClick={() => {setTimelineModalEmpId(null); setReactionFormId(null);}} className="h-8 w-8 bg-slate-50 hover:bg-slate-100 rounded-full flex items-center justify-center text-slate-500 transition-colors"><X className="h-4 w-4" /></button>
                  </div>
 
                  <div className="flex-1 overflow-y-auto p-6 space-y-5">
@@ -969,7 +969,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                                   <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-50">
                                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{new Date(entry.timestamp).toLocaleString()}</span>
                                      {!hasReaction && reactionFormId !== entry.id && (
-                                       <button onClick={() => setReactionFormId(entry.id)} className="text-[10px] font-bold text-blue-600 hover:text-blue-800 uppercase tracking-wider transition-colors flex items-center gap-1"><Plus className="h-3 w-3"/> Add Feedback</button>
+                                       <button type="button" onClick={() => setReactionFormId(entry.id)} className="text-[10px] font-bold text-blue-600 hover:text-blue-800 uppercase tracking-wider transition-colors flex items-center gap-1"><Plus className="h-3 w-3"/> Add Feedback</button>
                                      )}
                                   </div>
                                </div>
@@ -983,8 +983,8 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                                               <visual.icon className="h-3.5 w-3.5" /> {entry.reaction.status}
                                            </span>
                                            <div className="flex gap-2">
-                                              <button onClick={() => setReactionFormId(entry.id)} className={`text-[10px] font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity ${visual.text} hover:opacity-70`}><Edit2 className="h-3 w-3"/></button>
-                                              <button onClick={() => handleDeleteReaction(timelineModalEmpId, entry.id)} className={`text-[10px] font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity text-rose-500 hover:opacity-70`}><Trash2 className="h-3 w-3"/></button>
+                                              <button type="button" onClick={() => setReactionFormId(entry.id)} className={`text-[10px] font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity ${visual.text} hover:opacity-70`}><Edit2 className="h-3 w-3"/></button>
+                                              <button type="button" onClick={() => handleDeleteReaction(timelineModalEmpId, entry.id)} className={`text-[10px] font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity text-rose-500 hover:opacity-70`}><Trash2 className="h-3 w-3"/></button>
                                            </div>
                                         </div>
                                         {entry.reaction.text && <p className={`text-xs mt-1 ${visual.text} opacity-90`}>{entry.reaction.text}</p>}
@@ -998,12 +998,12 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                                      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-lg">
                                         <div className="flex items-center justify-between mb-3">
                                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Provide Feedback</span>
-                                           <button onClick={() => setReactionFormId(null)} className="text-slate-400 hover:text-slate-600"><X className="h-3.5 w-3.5" /></button>
+                                           <button type="button" onClick={() => setReactionFormId(null)} className="text-slate-400 hover:text-slate-600"><X className="h-3.5 w-3.5" /></button>
                                         </div>
                                         <div className="flex flex-wrap gap-2 mb-3">
-                                           <button onClick={() => handleAdminReact(timelineModalEmpId, entry.id, 'Approved', reactionText)} disabled={isSaving} className="flex-1 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors"><ThumbsUp className="h-3 w-3"/> Approve</button>
-                                           <button onClick={() => handleAdminReact(timelineModalEmpId, entry.id, 'Rejected', reactionText)} disabled={isSaving} className="flex-1 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors"><ThumbsDown className="h-3 w-3"/> Reject</button>
-                                           <button onClick={() => handleAdminReact(timelineModalEmpId, entry.id, 'Reviewed', reactionText)} disabled={isSaving} className="flex-1 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors"><Eye className="h-3 w-3"/> Seen</button>
+                                           <button type="button" onClick={() => handleAdminReact(timelineModalEmpId, entry.id, 'Approved', reactionText)} disabled={isSaving} className="flex-1 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors"><ThumbsUp className="h-3 w-3"/> Approve</button>
+                                           <button type="button" onClick={() => handleAdminReact(timelineModalEmpId, entry.id, 'Rejected', reactionText)} disabled={isSaving} className="flex-1 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors"><ThumbsDown className="h-3 w-3"/> Reject</button>
+                                           <button type="button" onClick={() => handleAdminReact(timelineModalEmpId, entry.id, 'Reviewed', reactionText)} disabled={isSaving} className="flex-1 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors"><Eye className="h-3 w-3"/> Seen</button>
                                         </div>
                                         <textarea 
                                            value={reactionText} 
@@ -1011,7 +1011,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                                            placeholder="Optional detailed comment..." 
                                            className="w-full h-16 rounded-lg border border-slate-200 p-2.5 text-xs outline-none focus:border-slate-400 resize-none mb-3 bg-slate-50"
                                         />
-                                        <button onClick={() => handleAdminReact(timelineModalEmpId, entry.id, 'Comment', reactionText)} disabled={isSaving || !reactionText.trim()} className="w-full h-9 bg-slate-900 text-white rounded-lg text-[11px] font-bold uppercase tracking-wider disabled:opacity-50">Submit Note</button>
+                                        <button type="button" onClick={() => handleAdminReact(timelineModalEmpId, entry.id, 'Comment', reactionText)} disabled={isSaving || !reactionText.trim()} className="w-full h-9 bg-slate-900 text-white rounded-lg text-[11px] font-bold uppercase tracking-wider disabled:opacity-50">Submit Note</button>
                                      </div>
                                   </div>
                                )}
@@ -1038,7 +1038,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
               <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
                 <div className="bg-gradient-to-r from-blue-900 to-indigo-800 p-6 sm:p-8 text-center relative">
-                  <button onClick={() => setIsUploadModalOpen(false)} className="absolute top-4 right-4 h-8 w-8 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white transition-colors"><X className="h-4 w-4" /></button>
+                  <button type="button" onClick={() => setIsUploadModalOpen(false)} className="absolute top-4 right-4 h-8 w-8 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white transition-colors"><X className="h-4 w-4" /></button>
                   <div className="h-16 w-16 bg-white/20 rounded-2xl mx-auto flex items-center justify-center mb-4 shadow-inner backdrop-blur-md">
                     <UploadCloud className="h-8 w-8 text-white" />
                   </div>
@@ -1076,7 +1076,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                     </div>
                   </div>
 
-                  <button onClick={handleEmployeeUploadComplete} disabled={isSaving || !selectedProject?.drive_folder_url} className="w-full h-12 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[13px] font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center disabled:opacity-50">
+                  <button type="button" onClick={handleEmployeeUploadComplete} disabled={isSaving || !selectedProject?.drive_folder_url} className="w-full h-12 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[13px] font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center disabled:opacity-50">
                     {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : taskToUpload.is_completed ? "Update Log & Confirm" : "Mark Task as Completed"}
                   </button>
                 </div>
@@ -1111,7 +1111,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                       <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-blue-600 bg-blue-50 px-2 sm:px-2.5 py-1 rounded-full">{isAdminView ? 'Admin Workspace' : 'User Workspace'}</span>
                       <h3 className="text-lg sm:text-2xl font-bold text-slate-900 tracking-tight mt-1.5 truncate">{selectedProject ? selectedProject.name : 'Create New Project'}</h3>
                     </div>
-                    <button onClick={handleCloseModal} className="h-8 w-8 sm:h-9 sm:w-9 bg-white border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm transition-colors shrink-0"><X className="h-3.5 w-3.5 sm:h-4 sm:w-4" /></button>
+                    <button type="button" onClick={handleCloseModal} className="h-8 w-8 sm:h-9 sm:w-9 bg-white border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm transition-colors shrink-0"><X className="h-3.5 w-3.5 sm:h-4 sm:w-4" /></button>
                   </div>
 
                   <div className="flex gap-4 sm:gap-8 overflow-x-auto max-sm:[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
@@ -1123,14 +1123,14 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                       </>
                     ) : (
                       <>
-                        <button onClick={() => setModalTab('details')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'details' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>1. Details</button>
-                        <button onClick={() => setModalTab('team')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'team' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>2. Team</button>
-                        <button onClick={() => setModalTab('tasks')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'tasks' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>3. Action Items</button>
-                        <button onClick={() => setModalTab('progress')} disabled={!selectedProject} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedProject ? 'opacity-30 cursor-not-allowed' : modalTab === 'progress' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>4. Timeline</button>
+                        <button type="button" onClick={() => setModalTab('details')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'details' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>1. Details</button>
+                        <button type="button" onClick={() => setModalTab('team')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'team' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>2. Team</button>
+                        <button type="button" onClick={() => setModalTab('tasks')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'tasks' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>3. Action Items</button>
+                        <button type="button" onClick={() => setModalTab('progress')} disabled={!selectedProject} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedProject ? 'opacity-30 cursor-not-allowed' : modalTab === 'progress' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>4. Timeline</button>
                         
                         {/* STRICT FINANCE ACCESS LOCK ON TABS */}
                         {showFinance && (
-                          <button onClick={() => setModalTab('finance')} disabled={!selectedProject} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedProject ? 'opacity-30 cursor-not-allowed' : modalTab === 'finance' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>5. Budget & Finances</button>
+                          <button type="button" onClick={() => setModalTab('finance')} disabled={!selectedProject} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedProject ? 'opacity-30 cursor-not-allowed' : modalTab === 'finance' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>5. Budget & Finances</button>
                         )}
                       </>
                     )}
@@ -1308,7 +1308,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                           {availableEmployees.map(emp => {
                             const isSelected = formData.assignee_ids.includes(emp.id);
                             return (
-                              <button key={emp.id} onClick={() => { if (isSelected) setFormData({...formData, assignee_ids: formData.assignee_ids.filter(id => id !== emp.id)}); else setFormData({...formData, assignee_ids: [...formData.assignee_ids, emp.id]}); }} className={`flex items-center gap-2 sm:gap-2.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl border text-[11px] sm:text-xs font-bold transition-all shadow-sm ${isSelected ? 'bg-gradient-to-r from-blue-900 to-indigo-800 text-white border-transparent' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'}`}>
+                              <button type="button" key={emp.id} onClick={() => { if (isSelected) setFormData({...formData, assignee_ids: formData.assignee_ids.filter(id => id !== emp.id)}); else setFormData({...formData, assignee_ids: [...formData.assignee_ids, emp.id]}); }} className={`flex items-center gap-2 sm:gap-2.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl border text-[11px] sm:text-xs font-bold transition-all shadow-sm ${isSelected ? 'bg-gradient-to-r from-blue-900 to-indigo-800 text-white border-transparent' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'}`}>
                                  {emp.profile_image_url ? <img src={emp.profile_image_url} alt="" className="h-4 w-4 sm:h-5 sm:w-5 rounded-full object-cover shadow-sm" /> : <User className="h-3 w-3 sm:h-4 sm:w-4 text-slate-400" />} {emp.name}
                               </button>
                             )
@@ -1392,7 +1392,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                                   exit={{ opacity: 0, scale: 0.5, width: 0, marginLeft: -12 }}
                                   className="shrink-0 overflow-hidden flex items-center"
                                 >
-                                  <button onClick={handleAddTask} className="h-10 w-10 sm:h-12 sm:w-12 bg-gradient-to-r from-blue-900 to-indigo-800 text-white rounded-xl flex items-center justify-center font-bold shadow-md hover:shadow-lg transition-all">
+                                  <button type="button" onClick={handleAddTask} className="cursor-pointer h-10 w-10 sm:h-12 sm:w-12 bg-gradient-to-r from-blue-900 to-indigo-800 text-white rounded-xl flex items-center justify-center font-bold shadow-md hover:shadow-lg transition-all">
                                     <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
                                   </button>
                                 </motion.div>
@@ -1444,7 +1444,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                                 </div>
 
                                 {isUserView && isMyTask && (
-                                  <button onClick={() => { setTaskToUpload(task); setIsUploadModalOpen(true); }} className={`shrink-0 w-full sm:w-auto h-9 sm:h-10 rounded-lg px-4 flex items-center justify-center gap-2 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider shadow-sm transition-colors ${task.is_completed ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200' : 'bg-slate-900 text-white hover:bg-slate-800'}`}>
+                                  <button type="button" onClick={() => { setTaskToUpload(task); setIsUploadModalOpen(true); }} className={`shrink-0 w-full sm:w-auto h-9 sm:h-10 rounded-lg px-4 flex items-center justify-center gap-2 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider shadow-sm transition-colors ${task.is_completed ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200' : 'bg-slate-900 text-white hover:bg-slate-800'}`}>
                                     <UploadCloud className="h-3.5 w-3.5" /> {task.is_completed ? 'Add More Files' : 'Upload Work'}
                                   </button>
                                 )}
@@ -1528,7 +1528,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                              <p className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 sm:mb-3">Add New Log Entry</p>
                              <textarea value={myReportText} onChange={e => setMyReportText(e.target.value)} placeholder="Type your latest progress update here..." className="w-full h-20 sm:h-24 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 text-[12px] sm:text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all resize-none mb-3 sm:mb-4 shadow-sm" />
                              <div className="flex justify-end">
-                               <button onClick={handleSaveMyReport} disabled={isSaving} className="w-full sm:w-auto bg-gradient-to-r from-blue-900 to-indigo-800 text-white rounded-xl h-10 sm:h-11 px-6 sm:px-8 text-[12px] sm:text-sm font-bold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all">
+                               <button type="button" onClick={handleSaveMyReport} disabled={isSaving} className="w-full sm:w-auto bg-gradient-to-r from-blue-900 to-indigo-800 text-white rounded-xl h-10 sm:h-11 px-6 sm:px-8 text-[12px] sm:text-sm font-bold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all">
                                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : "Submit Update"}
                                </button>
                              </div>
@@ -1548,8 +1548,8 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                                       <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm relative group transition-all hover:border-slate-300 z-10">
                                          {!isEditing && (
                                             <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                               <button onClick={() => { setEditingEntryId(entry.id); setEditingEntryText(entry.text); }} className="p-1.5 text-slate-400 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded-md transition-colors"><Edit2 className="h-3.5 w-3.5" /></button>
-                                               <button onClick={() => handleDeleteEntry(employeeId, entry.id)} className="p-1.5 text-slate-400 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-md transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
+                                               <button type="button" onClick={() => { setEditingEntryId(entry.id); setEditingEntryText(entry.text); }} className="p-1.5 text-slate-400 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded-md transition-colors"><Edit2 className="h-3.5 w-3.5" /></button>
+                                               <button type="button" onClick={() => handleDeleteEntry(employeeId, entry.id)} className="p-1.5 text-slate-400 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-md transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
                                             </div>
                                          )}
 
@@ -1563,8 +1563,8 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                                             <div className="mt-1">
                                                <textarea value={editingEntryText} onChange={e => setEditingEntryText(e.target.value)} className="w-full h-20 rounded-xl border border-blue-200 bg-blue-50/30 p-3 text-[12px] sm:text-[13px] outline-none focus:border-blue-500 mb-2 resize-none" />
                                                <div className="flex justify-end gap-2">
-                                                  <button onClick={() => setEditingEntryId(null)} className="px-3 py-1.5 rounded-lg text-[10px] font-bold text-slate-500 hover:bg-slate-100 uppercase tracking-wider">Cancel</button>
-                                                  <button onClick={() => handleEditUserEntry(entry.id)} disabled={isSaving} className="px-4 py-1.5 rounded-lg text-[10px] font-bold bg-blue-600 text-white uppercase tracking-wider hover:bg-blue-700 shadow-sm">{isSaving ? 'Saving...' : 'Save'}</button>
+                                                  <button type="button" onClick={() => setEditingEntryId(null)} className="px-3 py-1.5 rounded-lg text-[10px] font-bold text-slate-500 hover:bg-slate-100 uppercase tracking-wider">Cancel</button>
+                                                  <button type="button" onClick={() => handleEditUserEntry(entry.id)} disabled={isSaving} className="px-4 py-1.5 rounded-lg text-[10px] font-bold bg-blue-600 text-white uppercase tracking-wider hover:bg-blue-700 shadow-sm">{isSaving ? 'Saving...' : 'Save'}</button>
                                                </div>
                                             </div>
                                          ) : (
@@ -1618,7 +1618,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                                  <p className="text-[14px] sm:text-base font-black text-slate-900 tracking-tight">{emp?.name}</p>
                                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1 mb-4">{noteCount} Updates Logged</p>
 
-                                 <button onClick={() => setTimelineModalEmpId(empId)} className="w-full py-2.5 rounded-xl bg-slate-50 text-slate-700 text-[11px] font-bold uppercase tracking-wider border border-slate-200 group-hover:bg-blue-50 group-hover:text-blue-700 group-hover:border-blue-200 transition-colors">
+                                 <button type="button" onClick={() => setTimelineModalEmpId(empId)} className="w-full py-2.5 rounded-xl bg-slate-50 text-slate-700 text-[11px] font-bold uppercase tracking-wider border border-slate-200 group-hover:bg-blue-50 group-hover:text-blue-700 group-hover:border-blue-200 transition-colors">
                                    View Timeline
                                  </button>
                                </div>
@@ -1632,30 +1632,30 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
                 <div className="p-4 sm:p-6 border-t border-slate-100 bg-[#FAFCFF] flex justify-end items-center gap-3 shrink-0 mt-auto">
                   {selectedProject && isAdminView && modalTab === 'details' && (
-                    <button onClick={handleDeleteProject} disabled={isSaving} className="border border-rose-200 text-rose-600 bg-white hover:bg-rose-50 rounded-xl h-11 px-5 flex items-center justify-center shadow-sm mr-auto transition-colors shrink-0"><Trash2 className="h-4 w-4" /></button>
+                    <button type="button" onClick={handleDeleteProject} disabled={isSaving} className="border border-rose-200 text-rose-600 bg-white hover:bg-rose-50 rounded-xl h-11 px-5 flex items-center justify-center shadow-sm mr-auto transition-colors shrink-0"><Trash2 className="h-4 w-4" /></button>
                   )}
                   
-                  <button onClick={handleCloseModal} className="rounded-xl border border-slate-200 bg-white h-11 px-6 font-bold text-[13px] text-slate-600 hover:bg-slate-50 shadow-sm transition-colors flex-1 sm:flex-none">Cancel</button>
+                  <button type="button" onClick={handleCloseModal} className="rounded-xl border border-slate-200 bg-white h-11 px-6 font-bold text-[13px] text-slate-600 hover:bg-slate-50 shadow-sm transition-colors flex-1 sm:flex-none">Cancel</button>
 
                   {isAdminView && (
                     <>
                       {!selectedProject && modalTab === 'details' && (
-                        <button onClick={() => setModalTab('team')} className="bg-slate-900 text-white hover:bg-slate-800 rounded-xl h-11 px-8 font-bold text-[13px] shadow-md transition-all flex-1 sm:flex-none flex items-center justify-center">
+                        <button type="button" onClick={() => setModalTab('team')} className="bg-slate-900 text-white hover:bg-slate-800 rounded-xl h-11 px-8 font-bold text-[13px] shadow-md transition-all flex-1 sm:flex-none flex items-center justify-center">
                           Next: Assign Team
                         </button>
                       )}
                       {!selectedProject && modalTab === 'team' && (
-                        <button onClick={() => setModalTab('tasks')} className="bg-slate-900 text-white hover:bg-slate-800 rounded-xl h-11 px-8 font-bold text-[13px] shadow-md transition-all flex-1 sm:flex-none flex items-center justify-center">
+                        <button type="button" onClick={() => setModalTab('tasks')} className="bg-slate-900 text-white hover:bg-slate-800 rounded-xl h-11 px-8 font-bold text-[13px] shadow-md transition-all flex-1 sm:flex-none flex items-center justify-center">
                           Next: Action Items
                         </button>
                       )}
                       {!selectedProject && modalTab === 'tasks' && (
-                        <button onClick={handleSaveProject} disabled={isSaving || !hasUnsavedChanges} className={`rounded-xl h-11 px-8 font-bold text-[13px] transition-all flex-1 sm:flex-none flex items-center justify-center ${(!hasUnsavedChanges || isSaving) ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-gradient-to-r from-blue-900 to-indigo-800 text-white shadow-md shadow-blue-900/20 hover:shadow-lg hover:-translate-y-0.5'}`}>
+                        <button type="button" onClick={handleSaveProject} disabled={isSaving || !hasUnsavedChanges} className={`rounded-xl h-11 px-8 font-bold text-[13px] transition-all flex-1 sm:flex-none flex items-center justify-center ${(!hasUnsavedChanges || isSaving) ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-gradient-to-r from-blue-900 to-indigo-800 text-white shadow-md shadow-blue-900/20 hover:shadow-lg hover:-translate-y-0.5'}`}>
                           {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : "Finish & Create Project"}
                         </button>
                       )}
                       {selectedProject && (
-                        <button onClick={handleSaveProject} disabled={isSaving || !hasUnsavedChanges} className={`rounded-xl h-11 px-8 font-bold text-[13px] transition-all flex-1 sm:flex-none flex items-center justify-center ${(!hasUnsavedChanges || isSaving) ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-gradient-to-r from-blue-900 to-indigo-800 text-white shadow-md shadow-blue-900/20 hover:shadow-lg hover:-translate-y-0.5'}`}>
+                        <button type="button" onClick={handleSaveProject} disabled={isSaving || !hasUnsavedChanges} className={`rounded-xl h-11 px-8 font-bold text-[13px] transition-all flex-1 sm:flex-none flex items-center justify-center ${(!hasUnsavedChanges || isSaving) ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-gradient-to-r from-blue-900 to-indigo-800 text-white shadow-md shadow-blue-900/20 hover:shadow-lg hover:-translate-y-0.5'}`}>
                           {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : "Save Changes"}
                         </button>
                       )}
