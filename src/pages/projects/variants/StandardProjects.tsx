@@ -1,7 +1,7 @@
 import { useState, useRef, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Search, FolderKanban, CheckCircle2, AlertCircle, X, Check, User, Trash2, Clock, Download, Loader2, ChevronDown, ExternalLink, UploadCloud, Calendar, Info, Layers, FileText, Edit2, ThumbsUp, ThumbsDown, Eye, MessageCircle, CornerDownRight, Lock, BookOpen, ListTodo } from "lucide-react";
+import { Plus, Search, FolderKanban, CheckCircle2, AlertCircle, X, Check, User, Trash2, Clock, Download, Loader2, ChevronDown, ExternalLink, UploadCloud, Calendar, Info, Layers, FileText, Edit2, ThumbsUp, ThumbsDown, Eye, MessageCircle, CornerDownRight, Lock, BookOpen, ListTodo, MessageSquare } from "lucide-react";
 import { useAuthStore } from "../../../store/authStore";
 import { useDataStore } from "../../../store/dataStore";
 import { supabase } from "../../../supabase";
@@ -51,9 +51,9 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const [timelineModalEmpId, setTimelineModalEmpId] = useState<number | null>(null);
   const [taskRedirectPrompt, setTaskRedirectPrompt] = useState<any>(null);
   
-  // NEW: Unified Global Modals for Alerts & Confirms
   const [customAlert, setCustomAlert] = useState<{title: string, message: string, type: 'error' | 'success' | 'info'} | null>(null);
   const [confirmAction, setConfirmAction] = useState<{title: string, message: string, action: () => void} | null>(null);
+  const [showDiscardPrompt, setShowDiscardPrompt] = useState(false);
 
   const [reactionFormId, setReactionFormId] = useState<string | null>(null);
   const [reactionText, setReactionText] = useState("");
@@ -73,8 +73,9 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskAssignee, setNewTaskAssignee] = useState<number | "">("");
   const [newTaskDeadline, setNewTaskDeadline] = useState("");
-  const [pendingTasks, setPendingTasks] = useState<any[]>([]);
-
+  
+  // NEW: Unified staged tasks state. Actions here do NOT hit DB until "Save Changes" is clicked.
+  const [stagedTasks, setStagedTasks] = useState<any[]>([]);
   const [editingTaskKey, setEditingTaskKey] = useState<string | number | null>(null);
   const [editTaskForm, setEditTaskForm] = useState({ title: "", assignee_id: "", deadline: "" });
 
@@ -95,7 +96,9 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const adminTimelineReport = (selectedProject && timelineModalEmpId) ? reports.find(r => r.project_id?.toString() === selectedProject.id?.toString() && r.employee_id?.toString() === timelineModalEmpId?.toString()) : null;
   const adminTimelineEntries = Array.isArray(adminTimelineReport?.entries) ? adminTimelineReport.entries : [];
 
-  const currentSnapshot = JSON.stringify({ formData, pendingTasks: selectedProject ? [] : pendingTasks, customerType, newCustomer });
+  // Snapshot strictly tracks stagedTasks to light up the Save Changes button instantly
+  const taskSnapshot = stagedTasks.map(t => ({ id: t.id, title: t.title, assignee_id: t.assignee_id, deadline: t.deadline, is_completed: t.is_completed }));
+  const currentSnapshot = JSON.stringify({ formData, taskSnapshot, customerType, newCustomer });
   const hasUnsavedChanges = initialSnapshot !== null && initialSnapshot !== currentSnapshot;
 
   const visibleProjects = projects.filter(p => {
@@ -137,11 +140,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
   const handleCloseModal = () => {
     if (hasUnsavedChanges) {
-      setConfirmAction({
-        title: "Unsaved Changes",
-        message: "You have unsaved changes. Are you sure you want to discard them and close?",
-        action: executeClose
-      });
+      setShowDiscardPrompt(true);
       return;
     }
     executeClose();
@@ -150,6 +149,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const executeClose = () => {
     setIsModalOpen(false);
     setInitialSnapshot(null);
+    setShowDiscardPrompt(false);
     setEditingPaymentId(null);
     setEditingTaskKey(null);
     if (onClearOverride) onClearOverride();
@@ -187,7 +187,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     setFormData(defaultFormData);
     setCustomerType("existing"); 
     setNewCustomer({ name: "", phone: "" }); 
-    setPendingTasks([]); 
+    setStagedTasks([]); 
     setNewTaskTitle(""); 
     setNewTaskAssignee(""); 
     setNewTaskDeadline("");
@@ -201,7 +201,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     setEditingTaskKey(null);
     
     setInitialSnapshot(JSON.stringify({ 
-      formData: defaultFormData, pendingTasks: [], customerType: "existing", newCustomer: { name: "", phone: "" } 
+      formData: defaultFormData, taskSnapshot: [], customerType: "existing", newCustomer: { name: "", phone: "" } 
     }));
     
     setIsModalOpen(true);
@@ -228,11 +228,12 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     };
 
     const loadedCustomerType = project.internal_company_id ? "in_house" : project.customer_id ? "existing" : "in_house";
+    const loadedTasks = tasks.filter((t: any) => t.project_id?.toString() === project.id?.toString());
 
     setFormData(loadedFormData);
     setCustomerType(loadedCustomerType); 
     setNewCustomer({ name: "", phone: "" }); 
-    setPendingTasks([]); 
+    setStagedTasks(loadedTasks); 
     setNewTaskTitle(""); 
     setNewTaskAssignee(""); 
     setNewTaskDeadline("");
@@ -245,8 +246,10 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     setEditingPaymentId(null);
     setEditingTaskKey(null);
 
+    const initialTaskSnapshot = loadedTasks.map((t: any) => ({ id: t.id, title: t.title, assignee_id: t.assignee_id, deadline: t.deadline, is_completed: t.is_completed }));
+
     setInitialSnapshot(JSON.stringify({ 
-      formData: loadedFormData, pendingTasks: [], customerType: loadedCustomerType, newCustomer: { name: "", phone: "" } 
+      formData: loadedFormData, taskSnapshot: initialTaskSnapshot, customerType: loadedCustomerType, newCustomer: { name: "", phone: "" } 
     }));
 
     const currentAlloc: any = {};
@@ -321,23 +324,43 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
         if (error) throw new Error(error.message);
       }
 
-      if (pendingTasks.length > 0) {
-        const tasksToInsert = pendingTasks.map(t => ({ 
-          project_id: targetProjectId, 
-          title: t.title, 
-          assignee_id: t.assignee_id, 
-          is_completed: t.is_completed, 
-          deadline: t.deadline 
-        }));
-        const { error: taskError } = await supabase.from('project_tasks').insert(tasksToInsert);
-        if (taskError) throw new Error(`Project saved, but new tasks failed to attach: ${taskError.message}`);
+      // --- BULK PROCESS STAGED TASKS ---
+      const originalTasks = selectedProject ? tasks.filter((t: any) => t.project_id?.toString() === selectedProject.id?.toString()) : [];
+      
+      const tasksToInsert = stagedTasks.filter(t => !t.id).map(t => ({
+        project_id: targetProjectId, title: t.title, assignee_id: t.assignee_id, is_completed: t.is_completed, deadline: t.deadline
+      }));
+
+      const tasksToUpdate = stagedTasks.filter(st => {
+        if (!st.id) return false;
+        const ot = originalTasks.find(o => o.id === st.id);
+        if (!ot) return false;
+        return st.title !== ot.title || st.assignee_id !== ot.assignee_id || st.deadline !== ot.deadline || st.is_completed !== ot.is_completed;
+      });
+
+      const tasksToDelete = originalTasks.filter(ot => !stagedTasks.some(st => st.id === ot.id)).map(t => t.id);
+
+      if (tasksToInsert.length > 0) {
+        const { error } = await supabase.from('project_tasks').insert(tasksToInsert);
+        if (error) throw new Error(`Failed to insert tasks: ${error.message}`);
+      }
+      if (tasksToDelete.length > 0) {
+        const { error } = await supabase.from('project_tasks').delete().in('id', tasksToDelete);
+        if (error) throw new Error(`Failed to delete tasks: ${error.message}`);
+      }
+      for (const tu of tasksToUpdate) {
+        const { error } = await supabase.from('project_tasks').update({ title: tu.title, assignee_id: tu.assignee_id, is_completed: tu.is_completed, deadline: tu.deadline }).eq('id', tu.id);
+        if (error) throw new Error(`Failed to update task: ${error.message}`);
       }
 
       await fetchAllData(); 
-      setPendingTasks([]); 
       
-      const newSnapshot = JSON.stringify({ formData, pendingTasks: [], customerType, newCustomer });
-      setInitialSnapshot(newSnapshot);
+      // Update local snapshots cleanly so window stays open perfectly synced
+      const finalTasks = tasks.filter((t: any) => t.project_id?.toString() === targetProjectId?.toString());
+      setStagedTasks(finalTasks);
+      const newTaskSnapshot = finalTasks.map((t: any) => ({ id: t.id, title: t.title, assignee_id: t.assignee_id, deadline: t.deadline, is_completed: t.is_completed }));
+      
+      setInitialSnapshot(JSON.stringify({ formData, taskSnapshot: newTaskSnapshot, customerType, newCustomer }));
 
       if(modalTab === 'details' || modalTab === 'tasks') {
         setIsModalOpen(false);
@@ -442,7 +465,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   };
 
   const handleUpdateProjectPayment = async (paymentId: number, empId: number) => {
-    if (editPaymentForm.amount <= 0) return; // Silent return if empty, UI won't allow bad inputs
+    if (editPaymentForm.amount <= 0) return;
     setIsSaving(true);
     try {
       const { error } = await supabase.from('salary_payments').update({
@@ -575,56 +598,27 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
       return setCustomAlert({ title: "Invalid Deadline", message: `Task deadline cannot exceed the project's main due date (${formData.due_date}).`, type: "error" });
     }
 
-    setPendingTasks([...pendingTasks, { 
-      tempId: crypto.randomUUID(), title: newTaskTitle, assignee_id: newTaskAssignee, is_completed: false, deadline: newTaskDeadline || null 
-    }]); 
+    setStagedTasks([...stagedTasks, { tempId: crypto.randomUUID(), title: newTaskTitle, assignee_id: newTaskAssignee, is_completed: false, deadline: newTaskDeadline || null }]);
     setNewTaskTitle(""); setNewTaskAssignee(""); setNewTaskDeadline("");
   };
 
-  const handleDeleteTask = (task: any, index: number) => {
+  const handleDeleteTask = (task: any) => {
     setConfirmAction({
       title: "Delete Task",
-      message: `Are you sure you want to delete "${task.title}"?`,
-      action: async () => {
-        setIsSaving(true);
-        try {
-          if (task.id) {
-            const { error } = await supabase.from('project_tasks').delete().eq('id', task.id);
-            if (error) throw new Error(error.message);
-            await fetchAllData();
-          } else {
-            setPendingTasks(prev => prev.filter((_, i) => i !== index));
-          }
-        } catch (e: any) { setCustomAlert({ title: "Error", message: e.message, type: "error" }); } finally { setIsSaving(false); }
-      }
+      message: `Are you sure you want to remove "${task.title}"?`,
+      action: () => setStagedTasks(prev => prev.filter(t => t.id ? t.id !== task.id : t.tempId !== task.tempId))
     });
   };
 
-  const handleSaveTaskEdit = async (task: any) => {
+  const handleSaveTaskEdit = (task: any) => {
     if (!editTaskForm.title.trim() || !editTaskForm.assignee_id) return setCustomAlert({ title: "Missing Information", message: "Title and Assignee are required.", type: "error" });
-    setIsSaving(true);
-    try {
-      if (task.id) {
-        const { error } = await supabase.from('project_tasks').update({ title: editTaskForm.title, assignee_id: editTaskForm.assignee_id, deadline: editTaskForm.deadline || null }).eq('id', task.id);
-        if (error) throw new Error(error.message);
-        await fetchAllData();
-      } else {
-        setPendingTasks(prev => prev.map(pt => pt.tempId === task.tempId ? { ...pt, ...editTaskForm } : pt));
-      }
-      setEditingTaskKey(null);
-    } catch (e: any) { setCustomAlert({ title: "Error", message: e.message, type: "error" }); } finally { setIsSaving(false); }
+    setStagedTasks(prev => prev.map(t => (t.id ? t.id === task.id : t.tempId === task.tempId) ? { ...t, title: editTaskForm.title, assignee_id: editTaskForm.assignee_id, deadline: editTaskForm.deadline || null } : t));
+    setEditingTaskKey(null);
   };
 
-  const handleAdminToggleTask = async (task: any, pendingIndex?: number) => {
+  const handleAdminToggleTask = (task: any) => {
     if (isUserView && !isImpersonating) return; 
-    
-    if (task.id) {
-      const { error } = await supabase.from('project_tasks').update({ is_completed: !task.is_completed }).eq('id', task.id);
-      if (error) setCustomAlert({ title: "Error", message: error.message, type: "error" });
-      else await fetchAllData();
-    } else if (pendingIndex !== undefined) {
-      const updated = [...pendingTasks]; updated[pendingIndex].is_completed = !updated[pendingIndex].is_completed; setPendingTasks(updated);
-    }
+    setStagedTasks(prev => prev.map(t => (t.id ? t.id === task.id : t.tempId === task.tempId) ? { ...t, is_completed: !t.is_completed } : t));
   };
 
   const handleEmployeeUploadComplete = async () => {
@@ -643,6 +637,9 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
       const { error: reportError } = await supabase.from('project_reports').upsert({ project_id: selectedProject.id, employee_id: employeeId, entries: [...currentEntries, newEntry] }, { onConflict: 'project_id, employee_id' });
       if (reportError) throw new Error(reportError.message);
 
+      // Local optimistic update for the user view
+      setStagedTasks(prev => prev.map(t => t.id === taskToUpload.id ? { ...t, is_completed: true } : t));
+      
       await fetchAllData(); setIsUploadModalOpen(false); setTaskToUpload(null); setUploadNote("");
     } catch (e: any) { setCustomAlert({ title: "Error", message: e.message, type: "error" }); } finally { setIsSaving(false); }
   };
@@ -653,13 +650,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   };
 
   const getAvatar = (id: number) => employees.find(e => e.id?.toString() === id?.toString());
-
-  const displayTasks = selectedProject 
-    ? [
-        ...tasks.filter((t: any) => t.project_id?.toString() === selectedProject.id?.toString()),
-        ...pendingTasks
-      ].sort((a: any, b: any) => ((a.id || 0) > (b.id || 0) ? 1 : -1)) 
-    : pendingTasks;
 
   const getStatusStyle = (status: string) => {
     switch(status) {
@@ -973,15 +963,15 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                     
                     <div className="mb-6">
                       <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5"><ListTodo className="h-3.5 w-3.5" /> Assigned Tasks</h4>
-                      {displayTasks.filter(t => t.assignee_id?.toString() === timelineModalEmpId?.toString()).length === 0 ? (
+                      {stagedTasks.filter(t => t.assignee_id?.toString() === timelineModalEmpId?.toString()).length === 0 ? (
                          <p className="text-xs text-slate-500 italic">No tasks assigned to this member.</p>
                       ) : (
                          <div className="space-y-2">
-                           {displayTasks.filter(t => t.assignee_id?.toString() === timelineModalEmpId?.toString()).map((task, idx) => {
-                             const pendingIndex = pendingTasks.findIndex(pt => pt === task);
+                           {stagedTasks.filter(t => t.assignee_id?.toString() === timelineModalEmpId?.toString()).map((task, idx) => {
+                             const taskKey = task.id || task.tempId || idx;
                              return (
-                               <div key={task.id || task.tempId || idx} className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm transition-all hover:border-slate-300">
-                                  <button type="button" onClick={() => handleAdminToggleTask(task, pendingIndex !== -1 ? pendingIndex : undefined)} className={`h-5 w-5 rounded-full border flex items-center justify-center transition-colors cursor-pointer ${task.is_completed ? 'bg-emerald-500 border-emerald-500' : 'bg-slate-50 border-slate-300 hover:border-emerald-400'}`}>
+                               <div key={taskKey} className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm transition-all hover:border-slate-300">
+                                  <button type="button" onClick={() => handleAdminToggleTask(task)} className={`h-5 w-5 rounded-full border flex items-center justify-center transition-colors cursor-pointer ${task.is_completed ? 'bg-emerald-500 border-emerald-500' : 'bg-slate-50 border-slate-300 hover:border-emerald-400'}`}>
                                      {task.is_completed && <Check className="h-3 w-3 text-white" />}
                                   </button>
                                   <span className={`text-xs font-bold ${task.is_completed ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{task.title}</span>
@@ -1270,6 +1260,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                         <button type="button" onClick={() => setModalTab('tasks')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'tasks' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>3. Action Items</button>
                         <button type="button" onClick={() => setModalTab('progress')} disabled={!selectedProject} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedProject ? 'opacity-30 cursor-not-allowed' : modalTab === 'progress' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>4. Timeline</button>
                         
+                        {/* STRICT FINANCE ACCESS LOCK ON TABS */}
                         {showFinance && (
                           <button type="button" onClick={() => setModalTab('finance')} disabled={!selectedProject} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedProject ? 'opacity-30 cursor-not-allowed' : modalTab === 'finance' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>5. Budget & Finances</button>
                         )}
@@ -1615,7 +1606,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                                    {isAdminView && (
                                       <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity ml-2">
                                          <button type="button" onClick={() => { setEditingTaskKey(taskKey); setEditTaskForm({ title: task.title, assignee_id: task.assignee_id || "", deadline: task.deadline || "" }); }} className="p-2 text-slate-400 hover:text-blue-600 transition-colors"><Edit2 className="h-4 w-4" /></button>
-                                         <button type="button" onClick={() => handleDeleteTask(task, index)} className="p-2 text-slate-400 hover:text-rose-600 transition-colors"><Trash2 className="h-4 w-4" /></button>
+                                         <button type="button" onClick={() => handleDeleteTask(task)} className="p-2 text-slate-400 hover:text-rose-600 transition-colors"><Trash2 className="h-4 w-4" /></button>
                                       </div>
                                    )}
                                 </div>
@@ -1894,7 +1885,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                                     const selectedEmpId = e.target.value;
                                     let currentAmount = paymentForm.amount;
                                     
-                                    // Auto-clamp logic on employee select
                                     if (selectedEmpId) {
                                       const empId = parseInt(selectedEmpId);
                                       const alloc = allocationsForm[empId] || { allocated: 0, incentive: 0 };
@@ -1922,7 +1912,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                                     let val = parseFloat(e.target.value);
                                     if (isNaN(val) || val < 0) val = 0;
                                     
-                                    // Auto-clamp logic on amount typing
                                     if (paymentForm.employee_id) {
                                       const empId = parseInt(paymentForm.employee_id);
                                       const alloc = allocationsForm[empId] || { allocated: 0, incentive: 0 };
@@ -2000,7 +1989,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                                                                   let val = parseFloat(e.target.value);
                                                                   if (isNaN(val) || val < 0) val = 0;
                                                                   
-                                                                  // Auto-clamp logic for inline editing
                                                                   const existingPayments = salaryPayments.filter(sp => sp.project_id?.toString() === selectedProject?.id?.toString() && sp.employee_id?.toString() === empId.toString() && sp.id !== p.id);
                                                                   const alreadyPaidOther = existingPayments.reduce((sum, pay) => sum + parseFloat(pay.amount), 0);
                                                                   const remaining = Math.max(0, totalAlloc - alreadyPaidOther);
