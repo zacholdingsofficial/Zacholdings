@@ -78,13 +78,20 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const currentCompany = companies.find((c: any) => c.id?.toString() === currentCompanyId?.toString());
   const showFinance = role === 'admin' || (role === 'head' && currentCompany?.allow_head_finance !== false);
 
-  const myReport = selectedProject ? reports.find(r => r.project_id === selectedProject.id && r.employee_id === employeeId) : null;
+  const myReport = selectedProject ? reports.find(r => r.project_id?.toString() === selectedProject.id?.toString() && r.employee_id?.toString() === employeeId?.toString()) : null;
   const myEntries = Array.isArray(myReport?.entries) ? myReport.entries : [];
 
-  const adminTimelineReport = (selectedProject && timelineModalEmpId) ? reports.find(r => r.project_id === selectedProject.id && r.employee_id === timelineModalEmpId) : null;
+  const adminTimelineReport = (selectedProject && timelineModalEmpId) ? reports.find(r => r.project_id?.toString() === selectedProject.id?.toString() && r.employee_id?.toString() === timelineModalEmpId?.toString()) : null;
   const adminTimelineEntries = Array.isArray(adminTimelineReport?.entries) ? adminTimelineReport.entries : [];
 
-  const currentSnapshot = JSON.stringify({ formData, pendingTasks, customerType, newCustomer });
+  // FIX: Only track pendingTasks for unsaved changes if it's a NEW project. 
+  // Tasks added to existing projects save instantly, so they shouldn't trigger the "Discard Changes?" warning.
+  const currentSnapshot = JSON.stringify({ 
+    formData, 
+    pendingTasks: selectedProject ? [] : pendingTasks, 
+    customerType, 
+    newCustomer 
+  });
   const hasUnsavedChanges = initialSnapshot !== null && initialSnapshot !== currentSnapshot;
 
   const visibleProjects = projects.filter(p => {
@@ -228,7 +235,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     const currentAlloc: any = {};
     if (Array.isArray(project.assignee_ids)) {
       project.assignee_ids.forEach((id: number) => {
-        const a = projectAllocations.find(pa => pa.project_id === project.id && pa.employee_id === id);
+        const a = projectAllocations.find(pa => pa.project_id?.toString() === project.id?.toString() && pa.employee_id?.toString() === id.toString());
         currentAlloc[id] = { allocated: a?.allocated_amount || 0, incentive: a?.incentive_amount || 0 };
       });
     }
@@ -293,7 +300,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
         if (pendingTasks.length > 0) {
           const tasksToInsert = pendingTasks.map(t => ({ project_id: data.id, title: t.title, assignee_id: t.assignee_id, is_completed: t.is_completed, deadline: t.deadline }));
           const { error: taskError } = await supabase.from('project_tasks').insert(tasksToInsert);
-          // Catch and explicitly display task insertion errors
           if (taskError) throw new Error(`Project saved, but tasks failed to attach: ${taskError.message}`);
         }
 
@@ -304,7 +310,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
       await fetchAllData(); 
       
-      const newSnapshot = JSON.stringify({ formData, pendingTasks, customerType, newCustomer });
+      const newSnapshot = JSON.stringify({ formData, pendingTasks: [], customerType, newCustomer });
       setInitialSnapshot(newSnapshot);
 
       if(modalTab === 'details' || modalTab === 'tasks') {
@@ -411,7 +417,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     if (!selectedProject || !myReportText.trim()) return;
     setIsSaving(true);
     try {
-      const existingReport = reports.find(r => r.project_id === selectedProject.id && r.employee_id === employeeId);
+      const existingReport = reports.find(r => r.project_id?.toString() === selectedProject.id?.toString() && r.employee_id?.toString() === employeeId?.toString());
 
       const newEntry = {
         id: crypto.randomUUID(),
@@ -439,7 +445,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     if (!selectedProject || !editingEntryText.trim()) return;
     setIsSaving(true);
     try {
-      const existingReport = reports.find(r => r.project_id === selectedProject.id && r.employee_id === employeeId);
+      const existingReport = reports.find(r => r.project_id?.toString() === selectedProject.id?.toString() && r.employee_id?.toString() === employeeId?.toString());
       if (!existingReport) return;
 
       const currentEntries = Array.isArray(existingReport?.entries) ? existingReport.entries : [];
@@ -460,7 +466,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     if (!window.confirm("Delete this log entry?")) return;
     setIsSaving(true);
     try {
-      const existingReport = reports.find(r => r.project_id === selectedProject.id && r.employee_id === empId);
+      const existingReport = reports.find(r => r.project_id?.toString() === selectedProject.id?.toString() && r.employee_id?.toString() === empId?.toString());
       if (!existingReport) return;
 
       const currentEntries = Array.isArray(existingReport?.entries) ? existingReport.entries : [];
@@ -476,7 +482,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const handleAdminReact = async (empId: number, entryId: string, status: string, customText: string = "") => {
     setIsSaving(true);
     try {
-      const existingReport = reports.find(r => r.project_id === selectedProject.id && r.employee_id === empId);
+      const existingReport = reports.find(r => r.project_id?.toString() === selectedProject.id?.toString() && r.employee_id?.toString() === empId?.toString());
       if (!existingReport) return;
 
       const currentEntries = Array.isArray(existingReport?.entries) ? existingReport.entries : [];
@@ -503,7 +509,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     if (!window.confirm("Remove this feedback?")) return;
     setIsSaving(true);
     try {
-      const existingReport = reports.find(r => r.project_id === selectedProject.id && r.employee_id === empId);
+      const existingReport = reports.find(r => r.project_id?.toString() === selectedProject.id?.toString() && r.employee_id?.toString() === empId?.toString());
       if (!existingReport) return;
 
       const currentEntries = Array.isArray(existingReport?.entries) ? existingReport.entries : [];
@@ -535,7 +541,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   };
 
   const handleAddTask = async () => {
-    // STRICT CHECK: Disallow adding tasks without a title or an assigned employee
     if (!newTaskTitle.trim() || newTaskAssignee === "") return;
     
     if (newTaskDeadline && formData.due_date && new Date(newTaskDeadline) > new Date(formData.due_date)) {
@@ -546,17 +551,22 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     if (selectedProject) {
       setIsSaving(true);
       try {
-        const { error } = await supabase.from('project_tasks').insert([{ 
+        // FIX: Grab the inserted task data immediately using .select().single()
+        const { data, error } = await supabase.from('project_tasks').insert([{ 
           project_id: selectedProject.id, 
           title: newTaskTitle, 
           assignee_id: newTaskAssignee, 
           deadline: newTaskDeadline || null 
-        }]);
+        }]).select().single();
         
-        // Catch the DB error so it doesn't fail silently and clear the inputs
         if (error) throw new Error(`Database Error: ${error.message}`);
         
-        await fetchAllData();
+        // FIX: Inject it straight into local UI state so it appears instantly
+        setPendingTasks(prev => [...prev, data]);
+        
+        // Run background fetch to eventually sync the main store
+        fetchAllData();
+        
         setNewTaskTitle(""); setNewTaskAssignee(""); setNewTaskDeadline("");
       } catch (err: any) {
         alert(`Failed to add task: ${err.message}`);
@@ -582,7 +592,11 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     if (selectedProject) {
       const { error } = await supabase.from('project_tasks').update({ deadline: newDeadline || null }).eq('id', task.id);
       if (error) alert(`Failed to update deadline: ${error.message}`);
-      else await fetchAllData();
+      else {
+        // Optimistically update UI
+        setPendingTasks(prev => prev.map(pt => pt.id === task.id ? { ...pt, deadline: newDeadline || null } : pt));
+        await fetchAllData();
+      }
     } else {
       const updated = [...pendingTasks]; 
       updated[index].deadline = newDeadline; 
@@ -595,7 +609,11 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     if (selectedProject) {
       const { error } = await supabase.from('project_tasks').update({ is_completed: !task.is_completed }).eq('id', task.id);
       if (error) alert(`Failed to update task status: ${error.message}`);
-      else await fetchAllData();
+      else {
+        // Optimistically update UI
+        setPendingTasks(prev => prev.map(pt => pt.id === task.id ? { ...pt, is_completed: !task.is_completed } : pt));
+        await fetchAllData();
+      }
     } else if (index !== undefined) {
       const updated = [...pendingTasks]; updated[index].is_completed = !updated[index].is_completed; setPendingTasks(updated);
     }
@@ -610,7 +628,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
       const { error: taskError } = await supabase.from('project_tasks').update({ is_completed: true }).eq('id', taskToUpload.id);
       if (taskError) throw new Error(`Failed to complete task: ${taskError.message}`);
 
-      const existingReport = reports.find(r => r.project_id === selectedProject.id && r.employee_id === employeeId);
+      const existingReport = reports.find(r => r.project_id?.toString() === selectedProject.id?.toString() && r.employee_id?.toString() === employeeId?.toString());
       const newEntry = {
         id: crypto.randomUUID(),
         type: 'upload',
@@ -640,9 +658,15 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     setTimeout(() => { window.print(); setIsPrintingPayslip(false); }, 100);
   };
 
-  const getAvatar = (id: number) => employees.find(e => e.id === id);
+  const getAvatar = (id: number) => employees.find(e => e.id?.toString() === id?.toString());
 
-  const displayTasks = selectedProject ? tasks.filter(t => t.project_id === selectedProject.id).sort((a, b) => (a.id > b.id ? 1 : -1)) : pendingTasks;
+  // FIX: Merge store tasks AND optimistic local tasks, preventing ID mismatches
+  const displayTasks = selectedProject 
+    ? [
+        ...tasks.filter((t: any) => t.project_id?.toString() === selectedProject.id?.toString()),
+        ...pendingTasks.filter((pt: any) => pt.project_id?.toString() === selectedProject.id?.toString() && !tasks.find((t: any) => t.id?.toString() === pt.id?.toString()))
+      ].sort((a: any, b: any) => ((a.id || 0) > (b.id || 0) ? 1 : -1)) 
+    : pendingTasks;
 
   const getStatusStyle = (status: string) => {
     switch(status) {
@@ -676,15 +700,15 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     }
   };
 
-  const userAllocation = selectedProject ? projectAllocations.find(pa => pa.project_id === selectedProject.id && pa.employee_id === employeeId) : null;
-  const userProjectPayments = selectedProject ? salaryPayments.filter(sp => sp.project_id === selectedProject.id && sp.employee_id === employeeId) : [];
+  const userAllocation = selectedProject ? projectAllocations.find(pa => pa.project_id?.toString() === selectedProject.id?.toString() && pa.employee_id?.toString() === employeeId?.toString()) : null;
+  const userProjectPayments = selectedProject ? salaryPayments.filter(sp => sp.project_id?.toString() === selectedProject.id?.toString() && sp.employee_id?.toString() === employeeId?.toString()) : [];
   const userTotalEarned = userProjectPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
   const userTotalAllocated = (userAllocation?.allocated_amount || 0) + (userAllocation?.incentive_amount || 0);
   const userBalanceDue = Math.max(0, userTotalAllocated - userTotalEarned);
 
   const hasAllocationChanges = selectedProject && (Array.isArray(formData.assignee_ids) ? formData.assignee_ids : []).some(empId => {
     const formAlloc = allocationsForm[empId] || { allocated: 0, incentive: 0 };
-    const originalAlloc = projectAllocations.find(pa => pa.project_id === selectedProject.id && pa.employee_id === empId);
+    const originalAlloc = projectAllocations.find(pa => pa.project_id?.toString() === selectedProject.id?.toString() && pa.employee_id?.toString() === empId.toString());
     return Number(formAlloc.allocated) !== Number(originalAlloc?.allocated_amount || 0) || Number(formAlloc.incentive) !== Number(originalAlloc?.incentive_amount || 0);
   });
 
@@ -747,15 +771,16 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
           ) : (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-5">
               {visibleProjects.map(project => {
-                const projectTasks = tasks.filter(t => t.project_id === project.id);
-                const completedTasks = projectTasks.filter(t => t.is_completed).length;
+                // FIX: Use optional chaining and toString() to prevent 0/0 counting errors
+                const projectTasks = tasks.filter((t: any) => t.project_id?.toString() === project.id?.toString());
+                const completedTasks = projectTasks.filter((t: any) => t.is_completed).length;
                 const totalTasks = projectTasks.length;
                 const progressPct = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
                 const radius = 18; const circumference = 2 * Math.PI * radius; const progressOffset = circumference - (progressPct / 100) * circumference;
 
                 const dueStatus = project.status !== 'Completed' ? getDueDateStatus(project.due_date) : null;
                 
-                const projComp = companies.find(c => c.id === project.company_id);
+                const projComp = companies.find(c => c.id?.toString() === project.company_id?.toString());
                 const isAcademyProj = projComp?.business_type === 'academy' || ['Course', 'Workshop', 'Internship'].includes(project.metadata?.type);
                 const owningCompanyName = projComp?.name;
 
@@ -789,7 +814,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                           </h3>
                           <p className="text-[9px] sm:text-[11px] text-slate-400 font-bold uppercase tracking-wider mt-0.5 sm:mt-1 truncate w-full">
                             {!isGlobalAdmin && (owningCompanyName || 'Network')} 
-                            {project.customer_id && ` • ${customers.find(c => c.id === project.customer_id)?.name}`}
+                            {project.customer_id && ` • ${customers.find(c => c.id?.toString() === project.customer_id?.toString())?.name}`}
                             {project.internal_company_id && ` • Internal`}
                           </p>
                         </div>
@@ -1152,7 +1177,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 pt-6 border-t border-slate-200">
                             <div>
                               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Client</p>
-                              <p className="text-[13px] font-bold text-slate-800">{customerType === 'existing' ? customers.find(c => c.id.toString() === formData.customer_id)?.name : 'Internal Node'}</p>
+                              <p className="text-[13px] font-bold text-slate-800">{customerType === 'existing' ? customers.find(c => c.id?.toString() === formData.customer_id?.toString())?.name : 'Internal Node'}</p>
                             </div>
                             <div>
                               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Due Date</p>
@@ -1606,7 +1631,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
                            {(formData.assignee_ids || []).map(empId => {
                              const emp = getAvatar(empId);
-                             const empReport = reports.find(r => r.project_id === selectedProject?.id && r.employee_id === empId);
+                             const empReport = reports.find(r => r.project_id?.toString() === selectedProject?.id?.toString() && r.employee_id?.toString() === empId?.toString());
                              
                              const noteCount = Array.isArray(empReport?.entries) ? empReport.entries.length : 0;
 
