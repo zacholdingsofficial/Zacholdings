@@ -1,7 +1,7 @@
 import { useState, useRef, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Search, FolderKanban, CheckCircle2, AlertCircle, X, Check, User, Trash2, Clock, Download, Loader2, ChevronDown, ExternalLink, UploadCloud, Calendar, Info, Layers, FileText, Edit2, ThumbsUp, ThumbsDown, Eye, MessageCircle, CornerDownRight, Lock, BookOpen, ListTodo, MessageSquare } from "lucide-react";
+import { Plus, Search, FolderKanban, CheckCircle2, AlertCircle, X, Check, User, Trash2, Clock, Download, Loader2, ChevronDown, ExternalLink, UploadCloud, Calendar, Info, Layers, FileText, Edit2, ThumbsUp, ThumbsDown, Eye, MessageCircle, CornerDownRight, Lock, BookOpen, ListTodo } from "lucide-react";
 import { useAuthStore } from "../../../store/authStore";
 import { useDataStore } from "../../../store/dataStore";
 import { supabase } from "../../../supabase";
@@ -73,9 +73,8 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskAssignee, setNewTaskAssignee] = useState<number | "">("");
   const [newTaskDeadline, setNewTaskDeadline] = useState("");
-  
-  // NEW: Unified staged tasks state. Actions here do NOT hit DB until "Save Changes" is clicked.
-  const [stagedTasks, setStagedTasks] = useState<any[]>([]);
+  const [pendingTasks, setPendingTasks] = useState<any[]>([]);
+
   const [editingTaskKey, setEditingTaskKey] = useState<string | number | null>(null);
   const [editTaskForm, setEditTaskForm] = useState({ title: "", assignee_id: "", deadline: "" });
 
@@ -96,9 +95,8 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const adminTimelineReport = (selectedProject && timelineModalEmpId) ? reports.find(r => r.project_id?.toString() === selectedProject.id?.toString() && r.employee_id?.toString() === timelineModalEmpId?.toString()) : null;
   const adminTimelineEntries = Array.isArray(adminTimelineReport?.entries) ? adminTimelineReport.entries : [];
 
-  // Snapshot strictly tracks stagedTasks to light up the Save Changes button instantly
-  const taskSnapshot = stagedTasks.map(t => ({ id: t.id, title: t.title, assignee_id: t.assignee_id, deadline: t.deadline, is_completed: t.is_completed }));
-  const currentSnapshot = JSON.stringify({ formData, taskSnapshot, customerType, newCustomer });
+  const taskSnapshot = stagedTasks => stagedTasks.map((t: any) => ({ id: t.id, title: t.title, assignee_id: t.assignee_id, deadline: t.deadline, is_completed: t.is_completed }));
+  const currentSnapshot = JSON.stringify({ formData, taskSnapshot: taskSnapshot(selectedProject ? pendingTasks : pendingTasks), customerType, newCustomer });
   const hasUnsavedChanges = initialSnapshot !== null && initialSnapshot !== currentSnapshot;
 
   const visibleProjects = projects.filter(p => {
@@ -187,7 +185,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     setFormData(defaultFormData);
     setCustomerType("existing"); 
     setNewCustomer({ name: "", phone: "" }); 
-    setStagedTasks([]); 
+    setPendingTasks([]); 
     setNewTaskTitle(""); 
     setNewTaskAssignee(""); 
     setNewTaskDeadline("");
@@ -233,7 +231,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     setFormData(loadedFormData);
     setCustomerType(loadedCustomerType); 
     setNewCustomer({ name: "", phone: "" }); 
-    setStagedTasks(loadedTasks); 
+    setPendingTasks(loadedTasks); 
     setNewTaskTitle(""); 
     setNewTaskAssignee(""); 
     setNewTaskDeadline("");
@@ -327,18 +325,18 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
       // --- BULK PROCESS STAGED TASKS ---
       const originalTasks = selectedProject ? tasks.filter((t: any) => t.project_id?.toString() === selectedProject.id?.toString()) : [];
       
-      const tasksToInsert = stagedTasks.filter(t => !t.id).map(t => ({
+      const tasksToInsert = pendingTasks.filter(t => !t.id).map(t => ({
         project_id: targetProjectId, title: t.title, assignee_id: t.assignee_id, is_completed: t.is_completed, deadline: t.deadline
       }));
 
-      const tasksToUpdate = stagedTasks.filter(st => {
+      const tasksToUpdate = pendingTasks.filter(st => {
         if (!st.id) return false;
         const ot = originalTasks.find(o => o.id === st.id);
         if (!ot) return false;
         return st.title !== ot.title || st.assignee_id !== ot.assignee_id || st.deadline !== ot.deadline || st.is_completed !== ot.is_completed;
       });
 
-      const tasksToDelete = originalTasks.filter(ot => !stagedTasks.some(st => st.id === ot.id)).map(t => t.id);
+      const tasksToDelete = originalTasks.filter(ot => !pendingTasks.some(st => st.id === ot.id)).map(t => t.id);
 
       if (tasksToInsert.length > 0) {
         const { error } = await supabase.from('project_tasks').insert(tasksToInsert);
@@ -357,7 +355,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
       
       // Update local snapshots cleanly so window stays open perfectly synced
       const finalTasks = tasks.filter((t: any) => t.project_id?.toString() === targetProjectId?.toString());
-      setStagedTasks(finalTasks);
+      setPendingTasks(finalTasks);
       const newTaskSnapshot = finalTasks.map((t: any) => ({ id: t.id, title: t.title, assignee_id: t.assignee_id, deadline: t.deadline, is_completed: t.is_completed }));
       
       setInitialSnapshot(JSON.stringify({ formData, taskSnapshot: newTaskSnapshot, customerType, newCustomer }));
@@ -465,7 +463,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   };
 
   const handleUpdateProjectPayment = async (paymentId: number, empId: number) => {
-    if (editPaymentForm.amount <= 0) return;
+    if (editPaymentForm.amount <= 0) return; // Silent return if empty, UI won't allow bad inputs
     setIsSaving(true);
     try {
       const { error } = await supabase.from('salary_payments').update({
@@ -598,7 +596,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
       return setCustomAlert({ title: "Invalid Deadline", message: `Task deadline cannot exceed the project's main due date (${formData.due_date}).`, type: "error" });
     }
 
-    setStagedTasks([...stagedTasks, { tempId: crypto.randomUUID(), title: newTaskTitle, assignee_id: newTaskAssignee, is_completed: false, deadline: newTaskDeadline || null }]);
+    setPendingTasks([...pendingTasks, { tempId: crypto.randomUUID(), title: newTaskTitle, assignee_id: newTaskAssignee, is_completed: false, deadline: newTaskDeadline || null }]);
     setNewTaskTitle(""); setNewTaskAssignee(""); setNewTaskDeadline("");
   };
 
@@ -606,19 +604,21 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     setConfirmAction({
       title: "Delete Task",
       message: `Are you sure you want to remove "${task.title}"?`,
-      action: () => setStagedTasks(prev => prev.filter(t => t.id ? t.id !== task.id : t.tempId !== task.tempId))
+      action: () => {
+        setPendingTasks(prev => prev.filter(t => t.id ? t.id !== task.id : t.tempId !== task.tempId));
+      }
     });
   };
 
   const handleSaveTaskEdit = (task: any) => {
     if (!editTaskForm.title.trim() || !editTaskForm.assignee_id) return setCustomAlert({ title: "Missing Information", message: "Title and Assignee are required.", type: "error" });
-    setStagedTasks(prev => prev.map(t => (t.id ? t.id === task.id : t.tempId === task.tempId) ? { ...t, title: editTaskForm.title, assignee_id: editTaskForm.assignee_id, deadline: editTaskForm.deadline || null } : t));
+    setPendingTasks(prev => prev.map(t => (t.id ? t.id === task.id : t.tempId === task.tempId) ? { ...t, title: editTaskForm.title, assignee_id: editTaskForm.assignee_id, deadline: editTaskForm.deadline || null } : t));
     setEditingTaskKey(null);
   };
 
   const handleAdminToggleTask = (task: any) => {
     if (isUserView && !isImpersonating) return; 
-    setStagedTasks(prev => prev.map(t => (t.id ? t.id === task.id : t.tempId === task.tempId) ? { ...t, is_completed: !t.is_completed } : t));
+    setPendingTasks(prev => prev.map(t => (t.id ? t.id === task.id : t.tempId === task.tempId) ? { ...t, is_completed: !t.is_completed } : t));
   };
 
   const handleEmployeeUploadComplete = async () => {
@@ -637,8 +637,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
       const { error: reportError } = await supabase.from('project_reports').upsert({ project_id: selectedProject.id, employee_id: employeeId, entries: [...currentEntries, newEntry] }, { onConflict: 'project_id, employee_id' });
       if (reportError) throw new Error(reportError.message);
 
-      // Local optimistic update for the user view
-      setStagedTasks(prev => prev.map(t => t.id === taskToUpload.id ? { ...t, is_completed: true } : t));
+      setPendingTasks(prev => prev.map(t => t.id === taskToUpload.id ? { ...t, is_completed: true } : t));
       
       await fetchAllData(); setIsUploadModalOpen(false); setTaskToUpload(null); setUploadNote("");
     } catch (e: any) { setCustomAlert({ title: "Error", message: e.message, type: "error" }); } finally { setIsSaving(false); }
@@ -650,6 +649,11 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   };
 
   const getAvatar = (id: number) => employees.find(e => e.id?.toString() === id?.toString());
+
+  // FIX: This restores the displayTasks missing variable for Action Items and Timeline views
+  const displayTasks = selectedProject 
+    ? pendingTasks.sort((a: any, b: any) => ((a.id || 0) > (b.id || 0) ? 1 : -1)) 
+    : pendingTasks;
 
   const getStatusStyle = (status: string) => {
     switch(status) {
@@ -963,11 +967,11 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                     
                     <div className="mb-6">
                       <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5"><ListTodo className="h-3.5 w-3.5" /> Assigned Tasks</h4>
-                      {stagedTasks.filter(t => t.assignee_id?.toString() === timelineModalEmpId?.toString()).length === 0 ? (
+                      {displayTasks.filter(t => t.assignee_id?.toString() === timelineModalEmpId?.toString()).length === 0 ? (
                          <p className="text-xs text-slate-500 italic">No tasks assigned to this member.</p>
                       ) : (
                          <div className="space-y-2">
-                           {stagedTasks.filter(t => t.assignee_id?.toString() === timelineModalEmpId?.toString()).map((task, idx) => {
+                           {displayTasks.filter(t => t.assignee_id?.toString() === timelineModalEmpId?.toString()).map((task, idx) => {
                              const taskKey = task.id || task.tempId || idx;
                              return (
                                <div key={taskKey} className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm transition-all hover:border-slate-300">
