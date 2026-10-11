@@ -627,8 +627,11 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
     setIsSaving(true);
     try {
-      const { error: taskError } = await supabase.from('project_tasks').update({ is_completed: true }).eq('id', taskToUpload.id);
-      if (taskError) throw new Error(taskError.message);
+      // If it is an actual task, mark it as completed. If it's just a general document upload, skip this part.
+      if (taskToUpload.id !== 'general') {
+        const { error: taskError } = await supabase.from('project_tasks').update({ is_completed: true }).eq('id', taskToUpload.id);
+        if (taskError) throw new Error(taskError.message);
+      }
 
       const existingReport = reports.find(r => r.project_id?.toString() === selectedProject.id?.toString() && r.employee_id?.toString() === employeeId?.toString());
       const newEntry = { id: crypto.randomUUID(), type: 'upload', task_title: taskToUpload.title, text: uploadNote.trim(), timestamp: new Date().toISOString() };
@@ -637,7 +640,10 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
       const { error: reportError } = await supabase.from('project_reports').upsert({ project_id: selectedProject.id, employee_id: employeeId, entries: [...currentEntries, newEntry] }, { onConflict: 'project_id, employee_id' });
       if (reportError) throw new Error(reportError.message);
 
-      setPendingTasks(prev => prev.map(t => t.id === taskToUpload.id ? { ...t, is_completed: true } : t));
+      // Local optimistic update
+      if (taskToUpload.id !== 'general') {
+        setPendingTasks(prev => prev.map(t => t.id === taskToUpload.id ? { ...t, is_completed: true } : t));
+      }
       
       await fetchAllData(); setIsUploadModalOpen(false); setTaskToUpload(null); setUploadNote("");
     } catch (e: any) { setCustomAlert({ title: "Error", message: e.message, type: "error" }); } finally { setIsSaving(false); }
@@ -1260,12 +1266,18 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                     ) : (
                       <>
                         <button type="button" onClick={() => setModalTab('details')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'details' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>1. Details</button>
-                        <button type="button" onClick={() => setModalTab('team')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'team' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>2. Team</button>
-                        <button type="button" onClick={() => setModalTab('tasks')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'tasks' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>3. Action Items</button>
-                        <button type="button" onClick={() => setModalTab('progress')} disabled={!selectedProject} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedProject ? 'opacity-30 cursor-not-allowed' : modalTab === 'progress' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>4. Timeline</button>
+                        
+                        {!isUserView && (
+                          <>
+                            <button type="button" onClick={() => setModalTab('team')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'team' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>2. Team</button>
+                            <button type="button" onClick={() => setModalTab('tasks')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'tasks' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>3. Action Items</button>
+                          </>
+                        )}
+
+                        <button type="button" onClick={() => setModalTab('progress')} disabled={!selectedProject} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedProject ? 'opacity-30 cursor-not-allowed' : modalTab === 'progress' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>{isUserView ? '2. Timeline' : '4. Timeline'}</button>
                         
                         {/* STRICT FINANCE ACCESS LOCK ON TABS */}
-                        {showFinance && (
+                        {showFinance && !isUserView && (
                           <button type="button" onClick={() => setModalTab('finance')} disabled={!selectedProject} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedProject ? 'opacity-30 cursor-not-allowed' : modalTab === 'finance' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>5. Budget & Finances</button>
                         )}
                       </>
@@ -1693,17 +1705,27 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                            <div className="flex flex-col shrink-0">
                              <p className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 sm:mb-3">Add New Log Entry</p>
                              <textarea value={myReportText} onChange={e => setMyReportText(e.target.value)} placeholder="Type your latest progress update here..." className="w-full h-20 sm:h-24 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 text-[12px] sm:text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all resize-none mb-3 sm:mb-4 shadow-sm" />
-                             <div className="flex justify-end">
-                               <button type="button" onClick={handleSaveMyReport} disabled={isSaving} className="w-full sm:w-auto bg-gradient-to-r from-blue-900 to-indigo-800 text-white rounded-xl h-10 sm:h-11 px-6 sm:px-8 text-[12px] sm:text-sm font-bold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all">
+                             <div className="flex flex-col sm:flex-row justify-end gap-3">
+                               <button type="button" onClick={() => {
+                                  if (!selectedProject?.drive_folder_url) {
+                                     setCustomAlert({ title: "No Drive Link", message: "There is no Google Drive link associated with this project. Please contact your administrator.", type: 'error' });
+                                     return;
+                                  }
+                                  setTaskToUpload({ title: "General Document Upload", id: "general" });
+                                  setIsUploadModalOpen(true);
+                               }} className="w-full sm:w-auto bg-white border border-slate-200 text-slate-700 rounded-xl h-10 sm:h-11 px-4 sm:px-6 text-[12px] sm:text-sm font-bold shadow-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-2">
+                                 <UploadCloud className="h-4 w-4" /> Upload Document
+                               </button>
+                               <button type="button" onClick={handleSaveMyReport} disabled={isSaving || !myReportText.trim()} className="w-full sm:w-auto bg-gradient-to-r from-blue-900 to-indigo-800 text-white rounded-xl h-10 sm:h-11 px-6 sm:px-8 text-[12px] sm:text-sm font-bold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:hover:translate-y-0">
                                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : "Submit Update"}
                                </button>
                              </div>
                            </div>
 
-                           <div className="flex-1 overflow-y-auto min-h-0 pt-5 sm:pt-6 border-t border-slate-100">
+                           <div className={`flex-1 min-h-0 pt-5 sm:pt-6 border-t border-slate-100 ${myEntries.length > 0 ? 'overflow-y-auto' : ''}`}>
                              <h4 className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 sm:mb-4">My Previous Updates</h4>
 
-                             <div className="space-y-4">
+                             <div className="space-y-4 pr-2">
                                {myEntries.map((entry: any) => {
                                  const isEditing = editingEntryId === entry.id;
                                  const hasReaction = !!entry.reaction;
@@ -1713,9 +1735,9 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                                    <div key={entry.id} className="relative">
                                       <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm relative group transition-all hover:border-slate-300 z-10">
                                          {!isEditing && (
-                                            <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                               <button type="button" onClick={() => { setEditingEntryId(entry.id); setEditingEntryText(entry.text); }} className="p-1.5 text-slate-400 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded-md transition-colors"><Edit2 className="h-3.5 w-3.5" /></button>
-                                               <button type="button" onClick={() => handleDeleteEntry(employeeId, entry.id)} className="p-1.5 text-slate-400 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-md transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
+                                            <div className="absolute top-3 right-3 flex items-center gap-1 opacity-60 hover:opacity-100 transition-opacity">
+                                               <button type="button" onClick={() => { setEditingEntryId(entry.id); setEditingEntryText(entry.text); }} className="p-1.5 text-slate-500 hover:text-blue-600 bg-slate-100 hover:bg-blue-50 rounded-md transition-colors"><Edit2 className="h-3.5 w-3.5" /></button>
+                                               <button type="button" onClick={() => handleDeleteEntry(employeeId, entry.id)} className="p-1.5 text-slate-500 hover:text-rose-600 bg-slate-100 hover:bg-rose-50 rounded-md transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
                                             </div>
                                          )}
 
