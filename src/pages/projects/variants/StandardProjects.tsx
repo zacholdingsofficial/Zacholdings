@@ -72,13 +72,15 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const [newTaskDeadline, setNewTaskDeadline] = useState("");
   const [pendingTasks, setPendingTasks] = useState<any[]>([]);
 
+  // NEW: State for Inline Task Editing
+  const [editingTaskKey, setEditingTaskKey] = useState<string | number | null>(null);
+  const [editTaskForm, setEditTaskForm] = useState({ title: "", assignee_id: "", deadline: "" });
+
   const [myReportText, setMyReportText] = useState("");
   const [isPrintingPayslip, setIsPrintingPayslip] = useState(false);
 
   const [allocationsForm, setAllocationsForm] = useState<{[empId: number]: {allocated: number, incentive: number}}>({});
   const [paymentForm, setPaymentForm] = useState({ employee_id: "", amount: 0, payment_type: "Advance", notes: "" });
-  
-  // NEW: State for editing existing payment records inline
   const [editingPaymentId, setEditingPaymentId] = useState<number | null>(null);
   const [editPaymentForm, setEditPaymentForm] = useState({ amount: 0, payment_type: "Standard" });
 
@@ -144,6 +146,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     setInitialSnapshot(null);
     setShowDiscardPrompt(false);
     setEditingPaymentId(null);
+    setEditingTaskKey(null);
     if (onClearOverride) onClearOverride();
   };
 
@@ -190,6 +193,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     setShowDescription(false);
     setModalTab("details"); 
     setEditingPaymentId(null);
+    setEditingTaskKey(null);
     
     setInitialSnapshot(JSON.stringify({ 
       formData: defaultFormData, pendingTasks: [], customerType: "existing", newCustomer: { name: "", phone: "" } 
@@ -234,6 +238,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     setReactionFormId(null);
     setShowDescription(!!project.description);
     setEditingPaymentId(null);
+    setEditingTaskKey(null);
 
     setInitialSnapshot(JSON.stringify({ 
       formData: loadedFormData, pendingTasks: [], customerType: loadedCustomerType, newCustomer: { name: "", phone: "" } 
@@ -613,6 +618,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     }
 
     setPendingTasks([...pendingTasks, { 
+      tempId: crypto.randomUUID(), // NEW: Temporary ID for editing before saving
       title: newTaskTitle, 
       assignee_id: newTaskAssignee, 
       is_completed: false, 
@@ -621,20 +627,37 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     setNewTaskTitle(""); setNewTaskAssignee(""); setNewTaskDeadline("");
   };
 
-  const handleUpdateTaskDeadline = async (task: any, index: number, newDeadline: string) => {
-    if (formData.due_date && new Date(newDeadline) > new Date(formData.due_date)) {
-      alert(`Task deadline cannot exceed the project's main due date (${formData.due_date}).`);
-      return;
-    }
-    if (task.id) {
-      const { error } = await supabase.from('project_tasks').update({ deadline: newDeadline || null }).eq('id', task.id);
-      if (error) alert(`Failed to update deadline: ${error.message}`);
-      else await fetchAllData();
-    } else {
-      const updated = [...pendingTasks]; 
-      updated[index].deadline = newDeadline; 
-      setPendingTasks(updated);
-    }
+  const handleDeleteTask = async (task: any, index: number) => {
+    if (!window.confirm(`Delete task "${task.title}"?`)) return;
+    setIsSaving(true);
+    try {
+      if (task.id) {
+        const { error } = await supabase.from('project_tasks').delete().eq('id', task.id);
+        if (error) throw new Error(error.message);
+        await fetchAllData();
+      } else {
+        setPendingTasks(prev => prev.filter((_, i) => i !== index));
+      }
+    } catch (e: any) { alert(`Error: ${e.message}`); } finally { setIsSaving(false); }
+  };
+
+  const handleSaveTaskEdit = async (task: any) => {
+    if (!editTaskForm.title.trim() || !editTaskForm.assignee_id) return alert("Title and Assignee are required.");
+    setIsSaving(true);
+    try {
+      if (task.id) {
+        const { error } = await supabase.from('project_tasks').update({
+          title: editTaskForm.title,
+          assignee_id: editTaskForm.assignee_id,
+          deadline: editTaskForm.deadline || null
+        }).eq('id', task.id);
+        if (error) throw new Error(error.message);
+        await fetchAllData();
+      } else {
+        setPendingTasks(prev => prev.map(pt => pt.tempId === task.tempId ? { ...pt, ...editTaskForm } : pt));
+      }
+      setEditingTaskKey(null);
+    } catch (e: any) { alert(`Error: ${e.message}`); } finally { setIsSaving(false); }
   };
 
   const handleAdminToggleTask = async (task: any, pendingIndex?: number) => {
@@ -1018,7 +1041,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                            {displayTasks.filter(t => t.assignee_id?.toString() === timelineModalEmpId?.toString()).map((task, idx) => {
                              const pendingIndex = pendingTasks.findIndex(pt => pt === task);
                              return (
-                               <div key={task.id || idx} className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm transition-all hover:border-slate-300">
+                               <div key={task.id || task.tempId || idx} className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm transition-all hover:border-slate-300">
                                   <button type="button" onClick={() => handleAdminToggleTask(task, pendingIndex !== -1 ? pendingIndex : undefined)} className={`h-5 w-5 rounded-full border flex items-center justify-center transition-colors cursor-pointer ${task.is_completed ? 'bg-emerald-500 border-emerald-500' : 'bg-slate-50 border-slate-300 hover:border-emerald-400'}`}>
                                      {task.is_completed && <Check className="h-3 w-3 text-white" />}
                                   </button>
@@ -1032,11 +1055,13 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
                     <div>
                       <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5"><MessageSquare className="h-3.5 w-3.5" /> Activity Log</h4>
-                      {adminTimelineEntries.length > 0 ? (
+                      
+                      {/* CRASH FIX: Ensure we only map valid objects */}
+                      {adminTimelineEntries.filter(e => e && typeof e === 'object').length > 0 ? (
                          <div className="space-y-5">
-                           {adminTimelineEntries.map((entry: any) => {
-                              const hasReaction = !!entry.reaction;
-                              const visual = getReactionVisuals(entry.reaction?.status);
+                           {adminTimelineEntries.filter(e => e && typeof e === 'object').map((entry: any) => {
+                              const hasReaction = !!entry?.reaction;
+                              const visual = getReactionVisuals(entry?.reaction?.status);
                               const VisualIcon = visual.icon || MessageCircle;
 
                               return (
@@ -1047,9 +1072,9 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                                            <FileText className="h-3 w-3" /> Attached File: {entry.task_title || "Unknown"}
                                       </span>
                                       )}
-                                      <p className="text-[13px] text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">{entry.text}</p>
+                                      <p className="text-[13px] text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">{entry.text || ''}</p>
                                       <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-50">
-                                         <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{new Date(entry.timestamp).toLocaleString()}</span>
+                                         <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{entry.timestamp ? new Date(entry.timestamp).toLocaleString() : 'Just now'}</span>
                                          {!hasReaction && reactionFormId !== entry.id && (
                                            <button type="button" onClick={() => setReactionFormId(entry.id)} className="text-[10px] font-bold text-blue-600 hover:text-blue-800 uppercase tracking-wider transition-colors flex items-center gap-1"><Plus className="h-3 w-3"/> Add Feedback</button>
                                          )}
@@ -1062,14 +1087,14 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                                          <div className={`p-3.5 rounded-xl border ${visual.bg || 'bg-slate-50'} ${visual.border || 'border-slate-200'}`}>
                                             <div className="flex items-center justify-between mb-1.5">
                                                <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest ${visual.text || 'text-slate-700'}`}>
-                                                  <VisualIcon className="h-3.5 w-3.5" /> {entry.reaction.status}
+                                                  <VisualIcon className="h-3.5 w-3.5" /> {entry.reaction?.status}
                                                </span>
                                                <div className="flex gap-2">
                                                   <button type="button" onClick={() => setReactionFormId(entry.id)} className={`text-[10px] font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity ${visual.text || 'text-slate-700'} hover:opacity-70`}><Edit2 className="h-3 w-3"/></button>
                                                   <button type="button" onClick={() => handleDeleteReaction(timelineModalEmpId, entry.id)} className={`text-[10px] font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity text-rose-500 hover:opacity-70`}><Trash2 className="h-3 w-3"/></button>
                                                </div>
                                             </div>
-                                            {entry.reaction.text && <p className={`text-xs mt-1 ${visual.text || 'text-slate-700'} opacity-90`}>{entry.reaction.text}</p>}
+                                            {entry.reaction?.text && <p className={`text-xs mt-1 ${visual.text || 'text-slate-700'} opacity-90`}>{entry.reaction.text}</p>}
                                          </div>
                                       </div>
                                    )}
@@ -1544,9 +1569,25 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                           displayTasks.map((task, index) => {
                             const deadlineStat = !task.is_completed ? getDueDateStatus(task.deadline) : null;
                             const isMyTask = task.assignee_id === employeeId || !task.assignee_id;
+                            
+                            const taskKey = task.id || task.tempId || index;
+                            const isEditingTask = editingTaskKey === taskKey;
 
-                            return (
-                              <div key={task.id || index} className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl sm:rounded-2xl border transition-all ${task.is_completed ? 'bg-slate-50 border-slate-100' : 'bg-white border-slate-200 shadow-sm'}`}>
+                            return isEditingTask ? (
+                               <div key={taskKey} className="flex flex-col sm:flex-row gap-3 w-full p-3 bg-blue-50/50 rounded-2xl border border-blue-100 shadow-sm animate-in fade-in">
+                                  <input type="text" value={editTaskForm.title} onChange={e => setEditTaskForm({...editTaskForm, title: e.target.value})} className="flex-1 h-10 rounded-xl border border-blue-200 px-3 text-xs font-bold outline-none focus:border-blue-500" placeholder="Task title..." />
+                                  <select value={editTaskForm.assignee_id} onChange={e => setEditTaskForm({...editTaskForm, assignee_id: e.target.value})} className="w-full sm:w-36 h-10 rounded-xl border border-blue-200 px-3 text-xs font-bold outline-none focus:border-blue-500">
+                                    <option value="" disabled>-- Assignee --</option>
+                                    {(formData.assignee_ids || []).map(id => <option key={id} value={id}>{getAvatar(id)?.name || 'Unknown'}</option>)}
+                                  </select>
+                                  <input type="date" value={editTaskForm.deadline} onChange={e => setEditTaskForm({...editTaskForm, deadline: e.target.value})} className="w-full sm:w-36 h-10 rounded-xl border border-blue-200 px-3 text-xs font-bold outline-none focus:border-blue-500" />
+                                  <div className="flex gap-2 shrink-0 items-center justify-end w-full sm:w-auto">
+                                      <button type="button" onClick={() => setEditingTaskKey(null)} className="h-10 px-4 rounded-xl text-[10px] font-bold text-slate-500 hover:bg-slate-200 uppercase tracking-wider transition-colors">Cancel</button>
+                                      <button type="button" onClick={() => handleSaveTaskEdit(task)} disabled={isSaving} className="h-10 px-5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold uppercase tracking-wider transition-colors disabled:opacity-50 shadow-md">Save</button>
+                                  </div>
+                               </div>
+                            ) : (
+                              <div key={taskKey} className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl sm:rounded-2xl border transition-all ${task.is_completed ? 'bg-slate-50 border-slate-100' : 'bg-white border-slate-200 shadow-sm group hover:border-slate-300'}`}>
                                 <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
                                   
                                   <div onClick={() => {
@@ -1571,32 +1612,30 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                                     <p className={`text-[12px] sm:text-[13px] font-bold leading-relaxed break-words ${task.is_completed ? 'text-slate-500' : 'text-slate-700'}`}>{task.title}</p>
                                     <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1.5">
                                       {task.assignee_id && <span className="text-[9px] sm:text-[10px] font-bold text-blue-600 uppercase tracking-wider truncate">{getAvatar(task.assignee_id)?.name}</span>}
-
-                                      {isAdminView ? (
-                                        <input 
-                                          type="date" 
-                                          title="Edit Deadline (Optional)"
-                                          value={task.deadline || ''} 
-                                          max={formData.due_date || undefined}
-                                          onChange={(e) => handleUpdateTaskDeadline(task, index, e.target.value)} 
-                                          className="h-6 sm:h-7 rounded-md border border-slate-200 px-2 text-[9px] sm:text-[10px] font-bold text-slate-600 bg-white hover:bg-slate-50 outline-none focus:border-blue-500 cursor-pointer shadow-sm"
-                                        />
-                                      ) : (
-                                        deadlineStat && (
-                                          <span className={`flex items-center gap-1 text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border ${deadlineStat.style}`}>
-                                            <div className={`h-1.5 w-1.5 rounded-full ${deadlineStat.dot}`} /> {deadlineStat.label}
-                                          </span>
-                                        )
+                                      
+                                      {deadlineStat && (
+                                        <span className={`flex items-center gap-1 text-[8px] sm:text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border ${deadlineStat.style}`}>
+                                          <div className={`h-1.5 w-1.5 rounded-full ${deadlineStat.dot}`} /> {deadlineStat.label}
+                                        </span>
                                       )}
                                     </div>
                                   </div>
                                 </div>
 
-                                {isUserView && isMyTask && (
-                                  <button type="button" onClick={() => { setTaskToUpload(task); setIsUploadModalOpen(true); }} className={`shrink-0 w-full sm:w-auto h-9 sm:h-10 rounded-lg px-4 flex items-center justify-center gap-2 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider shadow-sm transition-colors ${task.is_completed ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200' : 'bg-slate-900 text-white hover:bg-slate-800'}`}>
-                                    <UploadCloud className="h-3.5 w-3.5" /> {task.is_completed ? 'Add More Files' : 'Upload Work'}
-                                  </button>
-                                )}
+                                <div className="flex items-center gap-1 shrink-0">
+                                   {isUserView && isMyTask && (
+                                     <button type="button" onClick={() => { setTaskToUpload(task); setIsUploadModalOpen(true); }} className={`w-full sm:w-auto h-9 sm:h-10 rounded-lg px-4 flex items-center justify-center gap-2 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider shadow-sm transition-colors ${task.is_completed ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200' : 'bg-slate-900 text-white hover:bg-slate-800'}`}>
+                                       <UploadCloud className="h-3.5 w-3.5" /> {task.is_completed ? 'Add More Files' : 'Upload Work'}
+                                     </button>
+                                   )}
+                                   
+                                   {isAdminView && (
+                                      <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+                                         <button type="button" onClick={() => { setEditingTaskKey(taskKey); setEditTaskForm({ title: task.title, assignee_id: task.assignee_id || "", deadline: task.deadline || "" }); }} className="p-2 text-slate-400 hover:text-blue-600 transition-colors"><Edit2 className="h-4 w-4" /></button>
+                                         <button type="button" onClick={() => handleDeleteTask(task, index)} className="p-2 text-slate-400 hover:text-rose-600 transition-colors"><Trash2 className="h-4 w-4" /></button>
+                                      </div>
+                                   )}
+                                </div>
                               </div>
                             )
                           })
