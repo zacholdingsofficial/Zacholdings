@@ -1,7 +1,7 @@
 import { useState, useRef, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Search, FolderKanban, CheckCircle2, AlertCircle, X, Check, User, Trash2, Clock, Download, Loader2, ChevronDown, ExternalLink, UploadCloud, Calendar, Info, Layers, FileText, Edit2, ThumbsUp, ThumbsDown, Eye, MessageCircle, CornerDownRight, Lock, BookOpen } from "lucide-react";
+import { Plus, Search, FolderKanban, CheckCircle2, AlertCircle, X, Check, User, Trash2, Clock, Download, Loader2, ChevronDown, ExternalLink, UploadCloud, Calendar, Info, Layers, FileText, Edit2, ThumbsUp, ThumbsDown, Eye, MessageCircle, CornerDownRight, Lock, BookOpen, ListTodo } from "lucide-react";
 import { useAuthStore } from "../../../store/authStore";
 import { useDataStore } from "../../../store/dataStore";
 import { supabase } from "../../../supabase";
@@ -67,6 +67,8 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskAssignee, setNewTaskAssignee] = useState<number | "">("");
   const [newTaskDeadline, setNewTaskDeadline] = useState("");
+  
+  // pendingTasks now acts as the staging area for ALL new tasks before "Save Changes" is clicked
   const [pendingTasks, setPendingTasks] = useState<any[]>([]);
 
   const [myReportText, setMyReportText] = useState("");
@@ -84,14 +86,8 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const adminTimelineReport = (selectedProject && timelineModalEmpId) ? reports.find(r => r.project_id?.toString() === selectedProject.id?.toString() && r.employee_id?.toString() === timelineModalEmpId?.toString()) : null;
   const adminTimelineEntries = Array.isArray(adminTimelineReport?.entries) ? adminTimelineReport.entries : [];
 
-  // FIX: Only track pendingTasks for unsaved changes if it's a NEW project. 
-  // Tasks added to existing projects save instantly, so they shouldn't trigger the "Discard Changes?" warning.
-  const currentSnapshot = JSON.stringify({ 
-    formData, 
-    pendingTasks: selectedProject ? [] : pendingTasks, 
-    customerType, 
-    newCustomer 
-  });
+  // Snapshot strictly monitors pendingTasks to light up the Save Button
+  const currentSnapshot = JSON.stringify({ formData, pendingTasks, customerType, newCustomer });
   const hasUnsavedChanges = initialSnapshot !== null && initialSnapshot !== currentSnapshot;
 
   const visibleProjects = projects.filter(p => {
@@ -293,22 +289,32 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
         milestones: formData.milestones
       };
 
+      let targetProjectId = selectedProject?.id;
+
       if (!selectedProject) {
         const { data, error } = await supabase.from('projects').insert([payload]).select().single();
         if (error) throw new Error(`Database Error: ${error.message}`);
-
-        if (pendingTasks.length > 0) {
-          const tasksToInsert = pendingTasks.map(t => ({ project_id: data.id, title: t.title, assignee_id: t.assignee_id, is_completed: t.is_completed, deadline: t.deadline }));
-          const { error: taskError } = await supabase.from('project_tasks').insert(tasksToInsert);
-          if (taskError) throw new Error(`Project saved, but tasks failed to attach: ${taskError.message}`);
-        }
-
+        targetProjectId = data.id;
       } else {
         const { error } = await supabase.from('projects').update(payload).eq('id', selectedProject.id);
         if (error) throw new Error(`Update Error: ${error.message}`);
       }
 
+      // STAGED TASKS: Now we push all the accumulated pending tasks to the database in bulk
+      if (pendingTasks.length > 0) {
+        const tasksToInsert = pendingTasks.map(t => ({ 
+          project_id: targetProjectId, 
+          title: t.title, 
+          assignee_id: t.assignee_id, 
+          is_completed: t.is_completed, 
+          deadline: t.deadline 
+        }));
+        const { error: taskError } = await supabase.from('project_tasks').insert(tasksToInsert);
+        if (taskError) throw new Error(`Project saved, but new tasks failed to attach: ${taskError.message}`);
+      }
+
       await fetchAllData(); 
+      setPendingTasks([]); // Clear the staging area after saving
       
       const newSnapshot = JSON.stringify({ formData, pendingTasks: [], customerType, newCustomer });
       setInitialSnapshot(newSnapshot);
@@ -540,7 +546,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     setIsSaving(false);
   };
 
-  const handleAddTask = async () => {
+  const handleAddTask = () => {
     if (!newTaskTitle.trim() || newTaskAssignee === "") return;
     
     if (newTaskDeadline && formData.due_date && new Date(newTaskDeadline) > new Date(formData.due_date)) {
@@ -548,40 +554,14 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
       return;
     }
 
-    if (selectedProject) {
-      setIsSaving(true);
-      try {
-        // FIX: Grab the inserted task data immediately using .select().single()
-        const { data, error } = await supabase.from('project_tasks').insert([{ 
-          project_id: selectedProject.id, 
-          title: newTaskTitle, 
-          assignee_id: newTaskAssignee, 
-          deadline: newTaskDeadline || null 
-        }]).select().single();
-        
-        if (error) throw new Error(`Database Error: ${error.message}`);
-        
-        // FIX: Inject it straight into local UI state so it appears instantly
-        setPendingTasks(prev => [...prev, data]);
-        
-        // Run background fetch to eventually sync the main store
-        fetchAllData();
-        
-        setNewTaskTitle(""); setNewTaskAssignee(""); setNewTaskDeadline("");
-      } catch (err: any) {
-        alert(`Failed to add task: ${err.message}`);
-      } finally {
-        setIsSaving(false);
-      }
-    } else { 
-      setPendingTasks([...pendingTasks, { 
-        title: newTaskTitle, 
-        assignee_id: newTaskAssignee, 
-        is_completed: false, 
-        deadline: newTaskDeadline || null 
-      }]); 
-      setNewTaskTitle(""); setNewTaskAssignee(""); setNewTaskDeadline("");
-    }
+    // STAGING LOGIC: We only push it into pendingTasks. It won't hit the DB until "Save Changes".
+    setPendingTasks([...pendingTasks, { 
+      title: newTaskTitle, 
+      assignee_id: newTaskAssignee, 
+      is_completed: false, 
+      deadline: newTaskDeadline || null 
+    }]); 
+    setNewTaskTitle(""); setNewTaskAssignee(""); setNewTaskDeadline("");
   };
 
   const handleUpdateTaskDeadline = async (task: any, index: number, newDeadline: string) => {
@@ -589,14 +569,11 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
       alert(`Task deadline cannot exceed the project's main due date (${formData.due_date}).`);
       return;
     }
-    if (selectedProject) {
+    // If it has an ID, it's a real DB task
+    if (task.id) {
       const { error } = await supabase.from('project_tasks').update({ deadline: newDeadline || null }).eq('id', task.id);
       if (error) alert(`Failed to update deadline: ${error.message}`);
-      else {
-        // Optimistically update UI
-        setPendingTasks(prev => prev.map(pt => pt.id === task.id ? { ...pt, deadline: newDeadline || null } : pt));
-        await fetchAllData();
-      }
+      else await fetchAllData();
     } else {
       const updated = [...pendingTasks]; 
       updated[index].deadline = newDeadline; 
@@ -604,18 +581,18 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     }
   };
 
-  const handleAdminToggleTask = async (task: any, index?: number) => {
-    if (isUserView) return; 
-    if (selectedProject) {
+  const handleAdminToggleTask = async (task: any, pendingIndex?: number) => {
+    // Only toggle if we are in admin view (Timeline modal handles the click now)
+    if (isUserView && !isImpersonating) return; 
+    
+    if (task.id) {
       const { error } = await supabase.from('project_tasks').update({ is_completed: !task.is_completed }).eq('id', task.id);
       if (error) alert(`Failed to update task status: ${error.message}`);
-      else {
-        // Optimistically update UI
-        setPendingTasks(prev => prev.map(pt => pt.id === task.id ? { ...pt, is_completed: !task.is_completed } : pt));
-        await fetchAllData();
-      }
-    } else if (index !== undefined) {
-      const updated = [...pendingTasks]; updated[index].is_completed = !updated[index].is_completed; setPendingTasks(updated);
+      else await fetchAllData();
+    } else if (pendingIndex !== undefined) {
+      const updated = [...pendingTasks]; 
+      updated[pendingIndex].is_completed = !updated[pendingIndex].is_completed; 
+      setPendingTasks(updated);
     }
   };
 
@@ -660,11 +637,11 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
   const getAvatar = (id: number) => employees.find(e => e.id?.toString() === id?.toString());
 
-  // FIX: Merge store tasks AND optimistic local tasks, preventing ID mismatches
+  // Combines saved tasks + newly staged tasks
   const displayTasks = selectedProject 
     ? [
         ...tasks.filter((t: any) => t.project_id?.toString() === selectedProject.id?.toString()),
-        ...pendingTasks.filter((pt: any) => pt.project_id?.toString() === selectedProject.id?.toString() && !tasks.find((t: any) => t.id?.toString() === pt.id?.toString()))
+        ...pendingTasks
       ].sort((a: any, b: any) => ((a.id || 0) > (b.id || 0) ? 1 : -1)) 
     : pendingTasks;
 
@@ -771,7 +748,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
           ) : (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-5">
               {visibleProjects.map(project => {
-                // FIX: Use optional chaining and toString() to prevent 0/0 counting errors
                 const projectTasks = tasks.filter((t: any) => t.project_id?.toString() === project.id?.toString());
                 const completedTasks = projectTasks.filter((t: any) => t.is_completed).length;
                 const totalTasks = projectTasks.length;
@@ -976,79 +952,108 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                     <button type="button" onClick={() => {setTimelineModalEmpId(null); setReactionFormId(null);}} className="h-8 w-8 bg-slate-50 hover:bg-slate-100 rounded-full flex items-center justify-center text-slate-500 transition-colors"><X className="h-4 w-4" /></button>
                  </div>
 
-                 <div className="flex-1 overflow-y-auto p-6 space-y-5">
-                    {adminTimelineEntries.length > 0 ? (
-                       adminTimelineEntries.map((entry: any) => {
-                          const hasReaction = !!entry.reaction;
-                          const visual = getReactionVisuals(entry.reaction?.status);
-
-                          return (
-                            <div key={entry.id} className="flex flex-col relative group">
-                               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm z-10 relative">
-                                  {entry.type === 'upload' && (
-                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-100 text-[9px] font-bold uppercase tracking-wider rounded-lg mb-3">
-                                       <FileText className="h-3 w-3" /> Attached File: {entry.task_title}
-                                    </span>
-                                  )}
-                                  <p className="text-[13px] text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">{entry.text}</p>
-                                  <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-50">
-                                     <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{new Date(entry.timestamp).toLocaleString()}</span>
-                                     {!hasReaction && reactionFormId !== entry.id && (
-                                       <button type="button" onClick={() => setReactionFormId(entry.id)} className="text-[10px] font-bold text-blue-600 hover:text-blue-800 uppercase tracking-wider transition-colors flex items-center gap-1"><Plus className="h-3 w-3"/> Add Feedback</button>
-                                     )}
-                                  </div>
+                 <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                    
+                    {/* NEW TIMELINE SECTION: Task Completion Checkbox UI */}
+                    <div className="mb-6">
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5"><ListTodo className="h-3.5 w-3.5" /> Assigned Tasks</h4>
+                      {displayTasks.filter(t => t.assignee_id?.toString() === timelineModalEmpId?.toString()).length === 0 ? (
+                         <p className="text-xs text-slate-500 italic">No tasks assigned to this member.</p>
+                      ) : (
+                         <div className="space-y-2">
+                           {displayTasks.filter(t => t.assignee_id?.toString() === timelineModalEmpId?.toString()).map((task, idx) => {
+                             const pendingIndex = pendingTasks.findIndex(pt => pt === task);
+                             return (
+                               <div key={task.id || idx} className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm transition-all hover:border-slate-300">
+                                  <button type="button" onClick={() => handleAdminToggleTask(task, pendingIndex !== -1 ? pendingIndex : undefined)} className={`h-5 w-5 rounded-full border flex items-center justify-center transition-colors cursor-pointer ${task.is_completed ? 'bg-emerald-500 border-emerald-500' : 'bg-slate-50 border-slate-300 hover:border-emerald-400'}`}>
+                                     {task.is_completed && <Check className="h-3 w-3 text-white" />}
+                                  </button>
+                                  <span className={`text-xs font-bold ${task.is_completed ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{task.title}</span>
                                </div>
+                             );
+                           })}
+                         </div>
+                      )}
+                    </div>
+                    {/* END NEW TIMELINE SECTION */}
 
-                               {hasReaction && reactionFormId !== entry.id && (
-                                  <div className="ml-6 sm:ml-10 mt-2 relative">
-                                     <CornerDownRight className="absolute -left-5 top-3 h-4 w-4 text-slate-300" />
-                                     <div className={`p-3.5 rounded-xl border ${visual.bg} ${visual.border}`}>
-                                        <div className="flex items-center justify-between mb-1.5">
-                                           <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest ${visual.text}`}>
-                                              <visual.icon className="h-3.5 w-3.5" /> {entry.reaction.status}
-                                           </span>
-                                           <div className="flex gap-2">
-                                              <button type="button" onClick={() => setReactionFormId(entry.id)} className={`text-[10px] font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity ${visual.text} hover:opacity-70`}><Edit2 className="h-3 w-3"/></button>
-                                              <button type="button" onClick={() => handleDeleteReaction(timelineModalEmpId, entry.id)} className={`text-[10px] font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity text-rose-500 hover:opacity-70`}><Trash2 className="h-3 w-3"/></button>
-                                           </div>
-                                        </div>
-                                        {entry.reaction.text && <p className={`text-xs mt-1 ${visual.text} opacity-90`}>{entry.reaction.text}</p>}
-                                     </div>
-                                  </div>
-                               )}
+                    <div>
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5"><MessageSquare className="h-3.5 w-3.5" /> Activity Log</h4>
+                      {adminTimelineEntries.length > 0 ? (
+                         <div className="space-y-5">
+                           {adminTimelineEntries.map((entry: any) => {
+                              const hasReaction = !!entry.reaction;
+                              const visual = getReactionVisuals(entry.reaction?.status);
 
-                               {reactionFormId === entry.id && (
-                                  <div className="ml-6 sm:ml-10 mt-3 relative animate-in fade-in slide-in-from-top-2">
-                                     <CornerDownRight className="absolute -left-5 top-3 h-4 w-4 text-slate-300" />
-                                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-lg">
-                                        <div className="flex items-center justify-between mb-3">
-                                           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Provide Feedback</span>
-                                           <button type="button" onClick={() => setReactionFormId(null)} className="text-slate-400 hover:text-slate-600"><X className="h-3.5 w-3.5" /></button>
-                                        </div>
-                                        <div className="flex flex-wrap gap-2 mb-3">
-                                           <button type="button" onClick={() => handleAdminReact(timelineModalEmpId, entry.id, 'Approved', reactionText)} disabled={isSaving} className="flex-1 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors"><ThumbsUp className="h-3 w-3"/> Approve</button>
-                                           <button type="button" onClick={() => handleAdminReact(timelineModalEmpId, entry.id, 'Rejected', reactionText)} disabled={isSaving} className="flex-1 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors"><ThumbsDown className="h-3 w-3"/> Reject</button>
-                                           <button type="button" onClick={() => handleAdminReact(timelineModalEmpId, entry.id, 'Reviewed', reactionText)} disabled={isSaving} className="flex-1 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors"><Eye className="h-3 w-3"/> Seen</button>
-                                        </div>
-                                        <textarea 
-                                           value={reactionText} 
-                                           onChange={(e) => setReactionText(e.target.value)}
-                                           placeholder="Optional detailed comment..." 
-                                           className="w-full h-16 rounded-lg border border-slate-200 p-2.5 text-xs outline-none focus:border-slate-400 resize-none mb-3 bg-slate-50"
-                                        />
-                                        <button type="button" onClick={() => handleAdminReact(timelineModalEmpId, entry.id, 'Comment', reactionText)} disabled={isSaving || !reactionText.trim()} className="w-full h-9 bg-slate-900 text-white rounded-lg text-[11px] font-bold uppercase tracking-wider disabled:opacity-50">Submit Note</button>
-                                     </div>
-                                  </div>
-                               )}
-                            </div>
-                          )
-                       })
-                    ) : (
-                       <div className="h-full flex flex-col items-center justify-center text-center p-8 opacity-50">
-                          <Clock className="h-10 w-10 text-slate-400 mb-3" />
-                          <p className="text-sm font-bold text-slate-600 uppercase tracking-widest">No entries yet.</p>
-                       </div>
-                    )}
+                              return (
+                                <div key={entry.id} className="flex flex-col relative group">
+                                   <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm z-10 relative">
+                                      {entry.type === 'upload' && (
+                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-100 text-[9px] font-bold uppercase tracking-wider rounded-lg mb-3">
+                                           <FileText className="h-3 w-3" /> Attached File: {entry.task_title}
+                                      </span>
+                                      )}
+                                      <p className="text-[13px] text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">{entry.text}</p>
+                                      <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-50">
+                                         <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{new Date(entry.timestamp).toLocaleString()}</span>
+                                         {!hasReaction && reactionFormId !== entry.id && (
+                                           <button type="button" onClick={() => setReactionFormId(entry.id)} className="text-[10px] font-bold text-blue-600 hover:text-blue-800 uppercase tracking-wider transition-colors flex items-center gap-1"><Plus className="h-3 w-3"/> Add Feedback</button>
+                                         )}
+                                      </div>
+                                   </div>
+
+                                   {hasReaction && reactionFormId !== entry.id && (
+                                      <div className="ml-6 sm:ml-10 mt-2 relative">
+                                         <CornerDownRight className="absolute -left-5 top-3 h-4 w-4 text-slate-300" />
+                                         <div className={`p-3.5 rounded-xl border ${visual.bg} ${visual.border}`}>
+                                            <div className="flex items-center justify-between mb-1.5">
+                                               <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest ${visual.text}`}>
+                                                  <visual.icon className="h-3.5 w-3.5" /> {entry.reaction.status}
+                                               </span>
+                                               <div className="flex gap-2">
+                                                  <button type="button" onClick={() => setReactionFormId(entry.id)} className={`text-[10px] font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity ${visual.text} hover:opacity-70`}><Edit2 className="h-3 w-3"/></button>
+                                                  <button type="button" onClick={() => handleDeleteReaction(timelineModalEmpId, entry.id)} className={`text-[10px] font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity text-rose-500 hover:opacity-70`}><Trash2 className="h-3 w-3"/></button>
+                                               </div>
+                                            </div>
+                                            {entry.reaction.text && <p className={`text-xs mt-1 ${visual.text} opacity-90`}>{entry.reaction.text}</p>}
+                                         </div>
+                                      </div>
+                                   )}
+
+                                   {reactionFormId === entry.id && (
+                                      <div className="ml-6 sm:ml-10 mt-3 relative animate-in fade-in slide-in-from-top-2">
+                                         <CornerDownRight className="absolute -left-5 top-3 h-4 w-4 text-slate-300" />
+                                         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-lg">
+                                            <div className="flex items-center justify-between mb-3">
+                                               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Provide Feedback</span>
+                                               <button type="button" onClick={() => setReactionFormId(null)} className="text-slate-400 hover:text-slate-600"><X className="h-3.5 w-3.5" /></button>
+                                            </div>
+                                            <div className="flex flex-wrap gap-2 mb-3">
+                                               <button type="button" onClick={() => handleAdminReact(timelineModalEmpId, entry.id, 'Approved', reactionText)} disabled={isSaving} className="flex-1 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors"><ThumbsUp className="h-3 w-3"/> Approve</button>
+                                               <button type="button" onClick={() => handleAdminReact(timelineModalEmpId, entry.id, 'Rejected', reactionText)} disabled={isSaving} className="flex-1 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors"><ThumbsDown className="h-3 w-3"/> Reject</button>
+                                               <button type="button" onClick={() => handleAdminReact(timelineModalEmpId, entry.id, 'Reviewed', reactionText)} disabled={isSaving} className="flex-1 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors"><Eye className="h-3 w-3"/> Seen</button>
+                                            </div>
+                                            <textarea 
+                                               value={reactionText} 
+                                               onChange={(e) => setReactionText(e.target.value)}
+                                               placeholder="Optional detailed comment..." 
+                                               className="w-full h-16 rounded-lg border border-slate-200 p-2.5 text-xs outline-none focus:border-slate-400 resize-none mb-3 bg-slate-50"
+                                            />
+                                            <button type="button" onClick={() => handleAdminReact(timelineModalEmpId, entry.id, 'Comment', reactionText)} disabled={isSaving || !reactionText.trim()} className="w-full h-9 bg-slate-900 text-white rounded-lg text-[11px] font-bold uppercase tracking-wider disabled:opacity-50">Submit Note</button>
+                                         </div>
+                                      </div>
+                                   )}
+                                </div>
+                              );
+                           })}
+                         </div>
+                      ) : (
+                         <div className="flex flex-col items-center justify-center text-center p-8 opacity-50 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                            <Clock className="h-10 w-10 text-slate-400 mb-3" />
+                            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">No entries yet.</p>
+                         </div>
+                      )}
+                    </div>
                  </div>
               </motion.div>
             </motion.div>
@@ -1438,9 +1443,10 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                             const isMyTask = task.assignee_id === employeeId || !task.assignee_id;
 
                             return (
-                              <div key={task.id || index} className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl sm:rounded-2xl border transition-all ${task.is_completed ? 'bg-slate-50 border-slate-100' : 'bg-white border-slate-200 hover:border-blue-200 shadow-sm'}`}>
+                              <div key={task.id || index} className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl sm:rounded-2xl border transition-all ${task.is_completed ? 'bg-slate-50 border-slate-100' : 'bg-white border-slate-200 shadow-sm'}`}>
                                 <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
-                                  <div onClick={() => isAdminView ? handleAdminToggleTask(task, index) : null} className={`mt-0.5 h-4 w-4 sm:h-5 sm:w-5 rounded-full border flex items-center justify-center shrink-0 transition-colors ${isAdminView ? 'cursor-pointer' : 'opacity-70'} ${task.is_completed ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-slate-300'}`}>
+                                  {/* READ ONLY INDICATOR: completion toggle has been removed from this view */}
+                                  <div className={`mt-0.5 h-4 w-4 sm:h-5 sm:w-5 rounded-full border flex items-center justify-center shrink-0 transition-colors ${task.is_completed ? 'bg-emerald-500 border-emerald-500' : 'bg-slate-50 border-slate-300'}`}>
                                     {task.is_completed && <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-white" />}
                                   </div>
                                   <div className="flex-1 min-w-0">
@@ -1479,178 +1485,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                         )}
                       </div>
 
-                    </div>
-                  </div>
-                )}
-
-                {/* TAB 4: TIMELINE & MILESTONES */}
-                {modalTab === 'progress' && (
-                  <div className="flex-1 overflow-y-auto min-h-0 overscroll-contain p-5 sm:p-8 flex flex-col sm:[&::-webkit-scrollbar]:w-1.5 sm:[&::-webkit-scrollbar-thumb]:bg-slate-300 sm:[&::-webkit-scrollbar-thumb]:rounded-full sm:[&::-webkit-scrollbar-track]:bg-transparent max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none] max-sm:[scrollbar-width:none]">
-
-                    {isAdminView && (
-                      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 sm:p-6 mb-6 shadow-sm">
-                        <div className="flex justify-between items-center mb-4">
-                          <div>
-                            <h4 className="text-sm font-bold text-slate-800 uppercase tracking-widest">Project Milestones</h4>
-                            <p className="text-[11px] text-slate-500 mt-1">Check prerequisites to automatically level up project status.</p>
-                          </div>
-                          <div className={`px-4 py-1.5 rounded-xl text-xs font-bold shadow-sm uppercase tracking-wider border ${getStatusStyle(formData.status)}`}>
-                            {formData.status}
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
-                            <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 border-b pb-2">To "In Progress"</h5>
-                            <div className="space-y-2">
-                              {Object.entries({ drive_created: "Drive Folder Created", team_briefed: "Team Briefed", budget_cleared: "Budget Cleared" }).map(([key, label]) => (
-                                <label key={key} className="flex items-center gap-3 cursor-pointer group">
-                                  <div className={`h-5 w-5 rounded-md border flex items-center justify-center transition-colors ${formData.milestones?.in_progress?.[key as keyof typeof formData.milestones.in_progress] ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-slate-300 group-hover:border-blue-400'}`}>
-                                    {formData.milestones?.in_progress?.[key as keyof typeof formData.milestones.in_progress] && <Check className="h-3.5 w-3.5 text-white" />}
-                                  </div>
-                                  <span className={`text-xs font-semibold ${formData.milestones?.in_progress?.[key as keyof typeof formData.milestones.in_progress] ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{label}</span>
-                                  <input type="checkbox" className="hidden" checked={!!formData.milestones?.in_progress?.[key as keyof typeof formData.milestones.in_progress]} onChange={() => handleMilestoneToggle('in_progress', key)} />
-                                </label>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm opacity-90 hover:opacity-100 transition-opacity">
-                            <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 border-b pb-2">To "Review"</h5>
-                            <div className="space-y-2">
-                              {Object.entries({ all_tasks_done: "All Tasks Completed", internal_qa: "Internal QA Passed" }).map(([key, label]) => (
-                                <label key={key} className="flex items-center gap-3 cursor-pointer group">
-                                  <div className={`h-5 w-5 rounded-md border flex items-center justify-center transition-colors ${formData.milestones?.review?.[key as keyof typeof formData.milestones.review] ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-slate-300 group-hover:border-blue-400'}`}>
-                                    {formData.milestones?.review?.[key as keyof typeof formData.milestones.review] && <Check className="h-3.5 w-3.5 text-white" />}
-                                  </div>
-                                  <span className={`text-xs font-semibold ${formData.milestones?.review?.[key as keyof typeof formData.milestones.review] ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{label}</span>
-                                  <input type="checkbox" className="hidden" checked={!!formData.milestones?.review?.[key as keyof typeof formData.milestones.review]} onChange={() => handleMilestoneToggle('review', key)} />
-                                </label>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm opacity-90 hover:opacity-100 transition-opacity">
-                            <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 border-b pb-2">To "Completed"</h5>
-                            <div className="space-y-2">
-                              {Object.entries({ client_approved: "Client Approved", final_handover: "Final Handover" }).map(([key, label]) => (
-                                <label key={key} className="flex items-center gap-3 cursor-pointer group">
-                                  <div className={`h-5 w-5 rounded-md border flex items-center justify-center transition-colors ${formData.milestones?.completed?.[key as keyof typeof formData.milestones.completed] ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-slate-300 group-hover:border-blue-400'}`}>
-                                    {formData.milestones?.completed?.[key as keyof typeof formData.milestones.completed] && <Check className="h-3.5 w-3.5 text-white" />}
-                                  </div>
-                                  <span className={`text-xs font-semibold ${formData.milestones?.completed?.[key as keyof typeof formData.milestones.completed] ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{label}</span>
-                                  <input type="checkbox" className="hidden" checked={!!formData.milestones?.completed?.[key as keyof typeof formData.milestones.completed]} onChange={() => handleMilestoneToggle('completed', key)} />
-                                </label>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="w-full flex flex-col h-full gap-6">
-                       {isUserView ? (
-                         <>
-                           <div className="flex flex-col shrink-0">
-                             <p className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 sm:mb-3">Add New Log Entry</p>
-                             <textarea value={myReportText} onChange={e => setMyReportText(e.target.value)} placeholder="Type your latest progress update here..." className="w-full h-20 sm:h-24 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 text-[12px] sm:text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all resize-none mb-3 sm:mb-4 shadow-sm" />
-                             <div className="flex justify-end">
-                               <button type="button" onClick={handleSaveMyReport} disabled={isSaving} className="w-full sm:w-auto bg-gradient-to-r from-blue-900 to-indigo-800 text-white rounded-xl h-10 sm:h-11 px-6 sm:px-8 text-[12px] sm:text-sm font-bold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all">
-                                 {isSaving ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : "Submit Update"}
-                               </button>
-                             </div>
-                           </div>
-
-                           <div className="flex-1 overflow-y-auto min-h-0 pt-5 sm:pt-6 border-t border-slate-100">
-                             <h4 className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 sm:mb-4">My Previous Updates</h4>
-
-                             <div className="space-y-4">
-                               {myEntries.map((entry: any) => {
-                                 const isEditing = editingEntryId === entry.id;
-                                 const hasReaction = !!entry.reaction;
-                                 const visual = getReactionVisuals(entry.reaction?.status);
-
-                                 return (
-                                   <div key={entry.id} className="relative">
-                                      <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm relative group transition-all hover:border-slate-300 z-10">
-                                         {!isEditing && (
-                                            <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                               <button type="button" onClick={() => { setEditingEntryId(entry.id); setEditingEntryText(entry.text); }} className="p-1.5 text-slate-400 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded-md transition-colors"><Edit2 className="h-3.5 w-3.5" /></button>
-                                               <button type="button" onClick={() => handleDeleteEntry(employeeId, entry.id)} className="p-1.5 text-slate-400 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-md transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
-                                            </div>
-                                         )}
-
-                                         {entry.type === 'upload' && (
-                                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-100 text-[9px] font-bold uppercase tracking-wider rounded-lg mb-3">
-                                              <FileText className="h-3 w-3" /> Attached File: {entry.task_title}
-                                           </span>
-                                         )}
-
-                                         {isEditing ? (
-                                            <div className="mt-1">
-                                               <textarea value={editingEntryText} onChange={e => setEditingEntryText(e.target.value)} className="w-full h-20 rounded-xl border border-blue-200 bg-blue-50/30 p-3 text-[12px] sm:text-[13px] outline-none focus:border-blue-500 mb-2 resize-none" />
-                                               <div className="flex justify-end gap-2">
-                                                  <button type="button" onClick={() => setEditingEntryId(null)} className="px-3 py-1.5 rounded-lg text-[10px] font-bold text-slate-500 hover:bg-slate-100 uppercase tracking-wider">Cancel</button>
-                                                  <button type="button" onClick={() => handleEditUserEntry(entry.id)} disabled={isSaving} className="px-4 py-1.5 rounded-lg text-[10px] font-bold bg-blue-600 text-white uppercase tracking-wider hover:bg-blue-700 shadow-sm">{isSaving ? 'Saving...' : 'Save'}</button>
-                                               </div>
-                                            </div>
-                                         ) : (
-                                            <p className="text-[13px] text-slate-700 whitespace-pre-wrap font-sans leading-relaxed pr-16">{entry.text}</p>
-                                         )}
-                                         <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-3 block">{new Date(entry.timestamp).toLocaleString()}</span>
-                                      </div>
-
-                                      {hasReaction && (
-                                         <div className="ml-6 sm:ml-10 mt-2 relative">
-                                            <CornerDownRight className="absolute -left-5 top-3 h-4 w-4 text-slate-300" />
-                                            <div className={`p-3.5 rounded-xl border ${visual.bg} ${visual.border}`}>
-                                               <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest ${visual.text} mb-1`}>
-                                                  <visual.icon className="h-3.5 w-3.5" /> {entry.reaction.status}
-                                               </span>
-                                               {entry.reaction.text && <p className={`text-xs ${visual.text} opacity-90`}>{entry.reaction.text}</p>}
-                                            </div>
-                                         </div>
-                                      )}
-                                   </div>
-                                 )
-                               })}
-
-                               {myReport?.report_text && myEntries.length === 0 && (
-                                 <pre className="text-[12px] sm:text-[13px] text-slate-700 whitespace-pre-wrap font-sans leading-relaxed bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm">
-                                   {myReport.report_text}
-                                 </pre>
-                               )}
-
-                               {myEntries.length === 0 && !myReport?.report_text && (
-                                 <p className="text-[12px] sm:text-sm italic text-slate-400 py-6">No updates submitted yet.</p>
-                               )}
-                             </div>
-                           </div>
-                         </>
-                       ) : (
-                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-                           {(formData.assignee_ids || []).length === 0 && <p className="text-[12px] sm:text-sm text-slate-400 italic md:col-span-2">No team members assigned.</p>}
-
-                           {(formData.assignee_ids || []).map(empId => {
-                             const emp = getAvatar(empId);
-                             const empReport = reports.find(r => r.project_id?.toString() === selectedProject?.id?.toString() && r.employee_id?.toString() === empId?.toString());
-                             
-                             const noteCount = Array.isArray(empReport?.entries) ? empReport.entries.length : 0;
-
-                             return (
-                               <div key={empId} className="bg-white border border-slate-200 hover:border-blue-300 rounded-2xl p-5 shadow-sm flex flex-col items-center text-center transition-all group">
-                                 <div className="h-12 w-12 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center text-sm font-bold text-slate-600 overflow-hidden shrink-0 mb-3 shadow-sm">
-                                    {emp?.profile_image_url ? <img src={emp.profile_image_url} alt="" className="h-full w-full object-cover" /> : (emp?.name || 'U').charAt(0).toUpperCase()}
-                                 </div>
-                                 <p className="text-[14px] sm:text-base font-black text-slate-900 tracking-tight">{emp?.name}</p>
-                                 <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1 mb-4">{noteCount} Updates Logged</p>
-
-                                 <button type="button" onClick={() => setTimelineModalEmpId(empId)} className="w-full py-2.5 rounded-xl bg-slate-50 text-slate-700 text-[11px] font-bold uppercase tracking-wider border border-slate-200 group-hover:bg-blue-50 group-hover:text-blue-700 group-hover:border-blue-200 transition-colors">
-                                   View Timeline
-                                 </button>
-                               </div>
-                             )
-                           })}
-                         </div>
-                       )}
                     </div>
                   </div>
                 )}
