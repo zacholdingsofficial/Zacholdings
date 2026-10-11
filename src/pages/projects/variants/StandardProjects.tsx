@@ -67,8 +67,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskAssignee, setNewTaskAssignee] = useState<number | "">("");
   const [newTaskDeadline, setNewTaskDeadline] = useState("");
-  
-  // pendingTasks now acts as the staging area for ALL new tasks before "Save Changes" is clicked
   const [pendingTasks, setPendingTasks] = useState<any[]>([]);
 
   const [myReportText, setMyReportText] = useState("");
@@ -86,8 +84,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const adminTimelineReport = (selectedProject && timelineModalEmpId) ? reports.find(r => r.project_id?.toString() === selectedProject.id?.toString() && r.employee_id?.toString() === timelineModalEmpId?.toString()) : null;
   const adminTimelineEntries = Array.isArray(adminTimelineReport?.entries) ? adminTimelineReport.entries : [];
 
-  // Snapshot strictly monitors pendingTasks to light up the Save Button
-  const currentSnapshot = JSON.stringify({ formData, pendingTasks, customerType, newCustomer });
+  const currentSnapshot = JSON.stringify({ formData, pendingTasks: selectedProject ? [] : pendingTasks, customerType, newCustomer });
   const hasUnsavedChanges = initialSnapshot !== null && initialSnapshot !== currentSnapshot;
 
   const visibleProjects = projects.filter(p => {
@@ -300,7 +297,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
         if (error) throw new Error(`Update Error: ${error.message}`);
       }
 
-      // STAGED TASKS: Now we push all the accumulated pending tasks to the database in bulk
       if (pendingTasks.length > 0) {
         const tasksToInsert = pendingTasks.map(t => ({ 
           project_id: targetProjectId, 
@@ -314,7 +310,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
       }
 
       await fetchAllData(); 
-      setPendingTasks([]); // Clear the staging area after saving
+      setPendingTasks([]); 
       
       const newSnapshot = JSON.stringify({ formData, pendingTasks: [], customerType, newCustomer });
       setInitialSnapshot(newSnapshot);
@@ -554,7 +550,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
       return;
     }
 
-    // STAGING LOGIC: We only push it into pendingTasks. It won't hit the DB until "Save Changes".
     setPendingTasks([...pendingTasks, { 
       title: newTaskTitle, 
       assignee_id: newTaskAssignee, 
@@ -569,7 +564,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
       alert(`Task deadline cannot exceed the project's main due date (${formData.due_date}).`);
       return;
     }
-    // If it has an ID, it's a real DB task
     if (task.id) {
       const { error } = await supabase.from('project_tasks').update({ deadline: newDeadline || null }).eq('id', task.id);
       if (error) alert(`Failed to update deadline: ${error.message}`);
@@ -582,7 +576,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   };
 
   const handleAdminToggleTask = async (task: any, pendingIndex?: number) => {
-    // Only toggle if we are in admin view (Timeline modal handles the click now)
     if (isUserView && !isImpersonating) return; 
     
     if (task.id) {
@@ -637,7 +630,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
   const getAvatar = (id: number) => employees.find(e => e.id?.toString() === id?.toString());
 
-  // Combines saved tasks + newly staged tasks
   const displayTasks = selectedProject 
     ? [
         ...tasks.filter((t: any) => t.project_id?.toString() === selectedProject.id?.toString()),
@@ -954,7 +946,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
                  <div className="flex-1 overflow-y-auto p-6 space-y-6">
                     
-                    {/* NEW TIMELINE SECTION: Task Completion Checkbox UI */}
+                    {/* TIMELINE SECTION: Task Completion Checkbox UI */}
                     <div className="mb-6">
                       <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5"><ListTodo className="h-3.5 w-3.5" /> Assigned Tasks</h4>
                       {displayTasks.filter(t => t.assignee_id?.toString() === timelineModalEmpId?.toString()).length === 0 ? (
@@ -975,7 +967,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                          </div>
                       )}
                     </div>
-                    {/* END NEW TIMELINE SECTION */}
+                    {/* END TIMELINE SECTION */}
 
                     <div>
                       <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5"><MessageSquare className="h-3.5 w-3.5" /> Activity Log</h4>
@@ -1158,7 +1150,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                         <button type="button" onClick={() => setModalTab('tasks')} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${modalTab === 'tasks' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>3. Action Items</button>
                         <button type="button" onClick={() => setModalTab('progress')} disabled={!selectedProject} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedProject ? 'opacity-30 cursor-not-allowed' : modalTab === 'progress' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>4. Timeline</button>
                         
-                        {/* STRICT FINANCE ACCESS LOCK ON TABS */}
+                        {/* SAFE FINANCE TAB CHECK */}
                         {showFinance && (
                           <button type="button" onClick={() => setModalTab('finance')} disabled={!selectedProject} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedProject ? 'opacity-30 cursor-not-allowed' : modalTab === 'finance' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>5. Budget & Finances</button>
                         )}
@@ -1486,6 +1478,185 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                       </div>
 
                     </div>
+                  </div>
+                )}
+
+                {/* TAB 4: TIMELINE & MILESTONES */}
+                {modalTab === 'progress' && (
+                  <div className="flex-1 overflow-y-auto min-h-0 overscroll-contain p-5 sm:p-8 flex flex-col sm:[&::-webkit-scrollbar]:w-1.5 sm:[&::-webkit-scrollbar-thumb]:bg-slate-300 sm:[&::-webkit-scrollbar-thumb]:rounded-full sm:[&::-webkit-scrollbar-track]:bg-transparent max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none] max-sm:[scrollbar-width:none]">
+
+                    {isAdminView && (
+                      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 sm:p-6 mb-6 shadow-sm">
+                        <div className="flex justify-between items-center mb-4">
+                          <div>
+                            <h4 className="text-sm font-bold text-slate-800 uppercase tracking-widest">Project Milestones</h4>
+                            <p className="text-[11px] text-slate-500 mt-1">Check prerequisites to automatically level up project status.</p>
+                          </div>
+                          <div className={`px-4 py-1.5 rounded-xl text-xs font-bold shadow-sm uppercase tracking-wider border ${getStatusStyle(formData.status)}`}>
+                            {formData.status}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                            <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 border-b pb-2">To "In Progress"</h5>
+                            <div className="space-y-2">
+                              {Object.entries({ drive_created: "Drive Folder Created", team_briefed: "Team Briefed", budget_cleared: "Budget Cleared" }).map(([key, label]) => (
+                                <label key={key} className="flex items-center gap-3 cursor-pointer group">
+                                  <div className={`h-5 w-5 rounded-md border flex items-center justify-center transition-colors ${formData.milestones?.in_progress?.[key as keyof typeof formData.milestones.in_progress] ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-slate-300 group-hover:border-blue-400'}`}>
+                                    {formData.milestones?.in_progress?.[key as keyof typeof formData.milestones.in_progress] && <Check className="h-3.5 w-3.5 text-white" />}
+                                  </div>
+                                  <span className={`text-xs font-semibold ${formData.milestones?.in_progress?.[key as keyof typeof formData.milestones.in_progress] ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{label}</span>
+                                  <input type="checkbox" className="hidden" checked={!!formData.milestones?.in_progress?.[key as keyof typeof formData.milestones.in_progress]} onChange={() => handleMilestoneToggle('in_progress', key)} />
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm opacity-90 hover:opacity-100 transition-opacity">
+                            <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 border-b pb-2">To "Review"</h5>
+                            <div className="space-y-2">
+                              {Object.entries({ all_tasks_done: "All Tasks Completed", internal_qa: "Internal QA Passed" }).map(([key, label]) => (
+                                <label key={key} className="flex items-center gap-3 cursor-pointer group">
+                                  <div className={`h-5 w-5 rounded-md border flex items-center justify-center transition-colors ${formData.milestones?.review?.[key as keyof typeof formData.milestones.review] ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-slate-300 group-hover:border-blue-400'}`}>
+                                    {formData.milestones?.review?.[key as keyof typeof formData.milestones.review] && <Check className="h-3.5 w-3.5 text-white" />}
+                                  </div>
+                                  <span className={`text-xs font-semibold ${formData.milestones?.review?.[key as keyof typeof formData.milestones.review] ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{label}</span>
+                                  <input type="checkbox" className="hidden" checked={!!formData.milestones?.review?.[key as keyof typeof formData.milestones.review]} onChange={() => handleMilestoneToggle('review', key)} />
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm opacity-90 hover:opacity-100 transition-opacity">
+                            <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 border-b pb-2">To "Completed"</h5>
+                            <div className="space-y-2">
+                              {Object.entries({ client_approved: "Client Approved", final_handover: "Final Handover" }).map(([key, label]) => (
+                                <label key={key} className="flex items-center gap-3 cursor-pointer group">
+                                  <div className={`h-5 w-5 rounded-md border flex items-center justify-center transition-colors ${formData.milestones?.completed?.[key as keyof typeof formData.milestones.completed] ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-slate-300 group-hover:border-blue-400'}`}>
+                                    {formData.milestones?.completed?.[key as keyof typeof formData.milestones.completed] && <Check className="h-3.5 w-3.5 text-white" />}
+                                  </div>
+                                  <span className={`text-xs font-semibold ${formData.milestones?.completed?.[key as keyof typeof formData.milestones.completed] ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{label}</span>
+                                  <input type="checkbox" className="hidden" checked={!!formData.milestones?.completed?.[key as keyof typeof formData.milestones.completed]} onChange={() => handleMilestoneToggle('completed', key)} />
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="w-full flex flex-col h-full gap-6">
+                       {isUserView ? (
+                         <>
+                           <div className="flex flex-col shrink-0">
+                             <p className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 sm:mb-3">Add New Log Entry</p>
+                             <textarea value={myReportText} onChange={e => setMyReportText(e.target.value)} placeholder="Type your latest progress update here..." className="w-full h-20 sm:h-24 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 text-[12px] sm:text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all resize-none mb-3 sm:mb-4 shadow-sm" />
+                             <div className="flex justify-end">
+                               <button type="button" onClick={handleSaveMyReport} disabled={isSaving} className="w-full sm:w-auto bg-gradient-to-r from-blue-900 to-indigo-800 text-white rounded-xl h-10 sm:h-11 px-6 sm:px-8 text-[12px] sm:text-sm font-bold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all">
+                                 {isSaving ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : "Submit Update"}
+                               </button>
+                             </div>
+                           </div>
+
+                           <div className="flex-1 overflow-y-auto min-h-0 pt-5 sm:pt-6 border-t border-slate-100">
+                             <h4 className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 sm:mb-4">My Previous Updates</h4>
+
+                             <div className="space-y-4">
+                               {myEntries.map((entry: any) => {
+                                 const isEditing = editingEntryId === entry.id;
+                                 const hasReaction = !!entry.reaction;
+                                 const visual = getReactionVisuals(entry.reaction?.status);
+
+                                 return (
+                                   <div key={entry.id} className="relative">
+                                      <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm relative group transition-all hover:border-slate-300 z-10">
+                                         {!isEditing && (
+                                            <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                               <button type="button" onClick={() => { setEditingEntryId(entry.id); setEditingEntryText(entry.text); }} className="p-1.5 text-slate-400 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded-md transition-colors"><Edit2 className="h-3.5 w-3.5" /></button>
+                                               <button type="button" onClick={() => handleDeleteEntry(employeeId, entry.id)} className="p-1.5 text-slate-400 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-md transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
+                                            </div>
+                                         )}
+
+                                         {entry.type === 'upload' && (
+                                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-100 text-[9px] font-bold uppercase tracking-wider rounded-lg mb-3">
+                                              <FileText className="h-3 w-3" /> Attached File: {entry.task_title}
+                                           </span>
+                                         )}
+
+                                         {isEditing ? (
+                                            <div className="mt-1">
+                                               <textarea value={editingEntryText} onChange={e => setEditingEntryText(e.target.value)} className="w-full h-20 rounded-xl border border-blue-200 bg-blue-50/30 p-3 text-[12px] sm:text-[13px] outline-none focus:border-blue-500 mb-2 resize-none" />
+                                               <div className="flex justify-end gap-2">
+                                                  <button type="button" onClick={() => setEditingEntryId(null)} className="px-3 py-1.5 rounded-lg text-[10px] font-bold text-slate-500 hover:bg-slate-100 uppercase tracking-wider">Cancel</button>
+                                                  <button type="button" onClick={() => handleEditUserEntry(entry.id)} disabled={isSaving} className="px-4 py-1.5 rounded-lg text-[10px] font-bold bg-blue-600 text-white uppercase tracking-wider hover:bg-blue-700 shadow-sm">{isSaving ? 'Saving...' : 'Save'}</button>
+                                               </div>
+                                            </div>
+                                         ) : (
+                                            <p className="text-[13px] text-slate-700 whitespace-pre-wrap font-sans leading-relaxed pr-16">{entry.text}</p>
+                                         )}
+                                         <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-3 block">{new Date(entry.timestamp).toLocaleString()}</span>
+                                      </div>
+
+                                      {hasReaction && (
+                                         <div className="ml-6 sm:ml-10 mt-2 relative">
+                                            <CornerDownRight className="absolute -left-5 top-3 h-4 w-4 text-slate-300" />
+                                            <div className={`p-3.5 rounded-xl border ${visual.bg} ${visual.border}`}>
+                                               <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest ${visual.text} mb-1`}>
+                                                  <visual.icon className="h-3.5 w-3.5" /> {entry.reaction.status}
+                                               </span>
+                                               {entry.reaction.text && <p className={`text-xs ${visual.text} opacity-90`}>{entry.reaction.text}</p>}
+                                            </div>
+                                         </div>
+                                      )}
+                                   </div>
+                                 )
+                               })}
+
+                               {myReport?.report_text && myEntries.length === 0 && (
+                                 <pre className="text-[12px] sm:text-[13px] text-slate-700 whitespace-pre-wrap font-sans leading-relaxed bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm">
+                                   {myReport.report_text}
+                                 </pre>
+                               )}
+
+                               {myEntries.length === 0 && !myReport?.report_text && (
+                                 <p className="text-[12px] sm:text-sm italic text-slate-400 py-6">No updates submitted yet.</p>
+                               )}
+                             </div>
+                           </div>
+                         </>
+                       ) : (
+                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+                           {(formData.assignee_ids || []).length === 0 && <p className="text-[12px] sm:text-sm text-slate-400 italic md:col-span-2">No team members assigned.</p>}
+
+                           {(formData.assignee_ids || []).map(empId => {
+                             const emp = getAvatar(empId);
+                             const empReport = reports.find(r => r.project_id?.toString() === selectedProject?.id?.toString() && r.employee_id?.toString() === empId?.toString());
+                             
+                             const noteCount = Array.isArray(empReport?.entries) ? empReport.entries.length : 0;
+
+                             return (
+                               <div key={empId} className="bg-white border border-slate-200 hover:border-blue-300 rounded-2xl p-5 shadow-sm flex flex-col items-center text-center transition-all group">
+                                 <div className="h-12 w-12 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center text-sm font-bold text-slate-600 overflow-hidden shrink-0 mb-3 shadow-sm">
+                                    {emp?.profile_image_url ? <img src={emp.profile_image_url} alt="" className="h-full w-full object-cover" /> : (emp?.name || 'U').charAt(0).toUpperCase()}
+                                 </div>
+                                 <p className="text-[14px] sm:text-base font-black text-slate-900 tracking-tight">{emp?.name}</p>
+                                 <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1 mb-4">{noteCount} Updates Logged</p>
+
+                                 <button type="button" onClick={() => setTimelineModalEmpId(empId)} className="w-full py-2.5 rounded-xl bg-slate-50 text-slate-700 text-[11px] font-bold uppercase tracking-wider border border-slate-200 group-hover:bg-blue-50 group-hover:text-blue-700 group-hover:border-blue-200 transition-colors">
+                                   View Timeline
+                                 </button>
+                               </div>
+                             )
+                           })}
+                         </div>
+                       )}
+                    </div>
+                  </div>
+                )}
+                
+                {/* TAB 5: FINANCE PLACEHOLDER */}
+                {showFinance && modalTab === 'finance' && (
+                  <div className="flex-1 overflow-y-auto min-h-0 overscroll-contain p-5 sm:p-8 flex flex-col items-center justify-center text-slate-400">
+                    <p className="font-bold uppercase tracking-wider">Finance module placeholder</p>
                   </div>
                 )}
 
