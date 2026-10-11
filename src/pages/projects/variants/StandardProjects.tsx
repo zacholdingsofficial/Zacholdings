@@ -50,7 +50,10 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
   const [timelineModalEmpId, setTimelineModalEmpId] = useState<number | null>(null);
   const [taskRedirectPrompt, setTaskRedirectPrompt] = useState<any>(null);
-  const [showDiscardPrompt, setShowDiscardPrompt] = useState(false);
+  
+  // NEW: Unified Global Modals for Alerts & Confirms
+  const [customAlert, setCustomAlert] = useState<{title: string, message: string, type: 'error' | 'success' | 'info'} | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{title: string, message: string, action: () => void} | null>(null);
 
   const [reactionFormId, setReactionFormId] = useState<string | null>(null);
   const [reactionText, setReactionText] = useState("");
@@ -72,7 +75,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const [newTaskDeadline, setNewTaskDeadline] = useState("");
   const [pendingTasks, setPendingTasks] = useState<any[]>([]);
 
-  // NEW: State for Inline Task Editing
   const [editingTaskKey, setEditingTaskKey] = useState<string | number | null>(null);
   const [editTaskForm, setEditTaskForm] = useState({ title: "", assignee_id: "", deadline: "" });
 
@@ -135,7 +137,11 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
   const handleCloseModal = () => {
     if (hasUnsavedChanges) {
-      setShowDiscardPrompt(true);
+      setConfirmAction({
+        title: "Unsaved Changes",
+        message: "You have unsaved changes. Are you sure you want to discard them and close?",
+        action: executeClose
+      });
       return;
     }
     executeClose();
@@ -144,7 +150,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const executeClose = () => {
     setIsModalOpen(false);
     setInitialSnapshot(null);
-    setShowDiscardPrompt(false);
     setEditingPaymentId(null);
     setEditingTaskKey(null);
     if (onClearOverride) onClearOverride();
@@ -281,8 +286,8 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   };
 
   const handleSaveProject = async () => {
-    if (!formData.name.trim()) { setModalTab('details'); return alert(`Project name is required.`); }
-    if (!formData.company_id) { setModalTab('details'); return alert(`Please select an Owning Subsidiary for this project.`); }
+    if (!formData.name.trim()) { setModalTab('details'); return setCustomAlert({ title: "Validation Error", message: "Project name is required.", type: "error" }); }
+    if (!formData.company_id) { setModalTab('details'); return setCustomAlert({ title: "Validation Error", message: "Please select an Owning Subsidiary for this project.", type: "error" }); }
 
     let finalCustomerId: number | null = formData.customer_id ? parseInt(formData.customer_id) : null;
     let finalInternalId: number | null = null;
@@ -309,11 +314,11 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
       if (!selectedProject) {
         const { data, error } = await supabase.from('projects').insert([payload]).select().single();
-        if (error) throw new Error(`Database Error: ${error.message}`);
+        if (error) throw new Error(error.message);
         targetProjectId = data.id;
       } else {
         const { error } = await supabase.from('projects').update(payload).eq('id', selectedProject.id);
-        if (error) throw new Error(`Update Error: ${error.message}`);
+        if (error) throw new Error(error.message);
       }
 
       if (pendingTasks.length > 0) {
@@ -338,25 +343,22 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
         setIsModalOpen(false);
         if (onClearOverride) onClearOverride();
       } else {
-        alert(`Project updated successfully.`);
+        setCustomAlert({ title: "Success", message: "Project updated successfully.", type: "success" });
       }
-    } catch (error: any) { alert(error.message); } finally { setIsSaving(false); }
+    } catch (error: any) { setCustomAlert({ title: "Error", message: error.message, type: "error" }); } finally { setIsSaving(false); }
   };
 
   const handleGenerateInvoice = async () => {
     if (!selectedProject) return;
-    if (formData.expected_amount <= 0) return alert("Expected Value must be greater than 0 to generate an invoice.");
+    if (formData.expected_amount <= 0) return setCustomAlert({ title: "Invalid Amount", message: "Expected Value must be greater than 0 to generate an invoice.", type: "error" });
 
     setIsSaving(true);
     try {
-      const { data: existingInvoices, error: checkError } = await supabase
-        .from('invoices')
-        .select('id')
-        .eq('project_id', selectedProject.id);
+      const { data: existingInvoices, error: checkError } = await supabase.from('invoices').select('id').eq('project_id', selectedProject.id);
 
       if (checkError) throw checkError;
       if (existingInvoices && existingInvoices.length > 0) {
-        return alert(`An invoice has already been generated for this project.`);
+        return setCustomAlert({ title: "Duplicate Invoice", message: "An invoice has already been generated for this project.", type: "error" });
       }
 
       const invPayload = {
@@ -372,25 +374,17 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
       };
 
       const { data: invData, error: invError } = await supabase.from('invoices').insert([invPayload]).select().single();
-      if (invError) throw new Error(`Auto-Invoice Error: ${invError.message}`);
+      if (invError) throw new Error(invError.message);
 
       if (invData) {
         const { error: itemError } = await supabase.from('invoice_items').insert([{ 
-          invoice_id: invData.id, 
-          description: `Project: ${selectedProject.name}`, 
-          quantity: 1, 
-          rate: formData.expected_amount, 
-          total: formData.expected_amount 
+          invoice_id: invData.id, description: `Project: ${selectedProject.name}`, quantity: 1, rate: formData.expected_amount, total: formData.expected_amount 
         }]);
-        if (itemError) throw new Error(`Invoice Line Item Error: ${itemError.message}`);
+        if (itemError) throw new Error(itemError.message);
       }
 
-      alert("Invoice generated and approved successfully!");
-    } catch (error: any) {
-      alert(error.message);
-    } finally {
-      setIsSaving(false);
-    }
+      setCustomAlert({ title: "Invoice Generated", message: "Invoice generated and approved successfully!", type: "success" });
+    } catch (error: any) { setCustomAlert({ title: "Error", message: error.message, type: "error" }); } finally { setIsSaving(false); }
   };
 
   const handleSaveAllocations = async () => {
@@ -403,71 +397,52 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
         
         if (existing) {
           const { error } = await supabase.from('project_allocations').update({ allocated_amount: alloc.allocated, incentive_amount: alloc.incentive }).eq('id', existing.id);
-          if (error) throw new Error(`Allocation Update Error: ${error.message}`);
+          if (error) throw new Error(error.message);
         } else {
           const { error } = await supabase.from('project_allocations').insert([{ project_id: selectedProject.id, employee_id: parseInt(empId), allocated_amount: alloc.allocated, incentive_amount: alloc.incentive }]);
-          if (error) throw new Error(`Allocation Insert Error: ${error.message}`);
+          if (error) throw new Error(error.message);
         }
       }
-      alert("Allocations saved successfully.");
+      setCustomAlert({ title: "Allocations Saved", message: "Team allocations have been successfully updated.", type: "success" });
       await fetchAllData();
-    } catch (error: any) { alert(error.message); } finally { setIsSaving(false); }
+    } catch (error: any) { setCustomAlert({ title: "Error", message: error.message, type: "error" }); } finally { setIsSaving(false); }
   };
 
   const handleRecordProjectPayment = async () => {
-    if (!paymentForm.employee_id || paymentForm.amount <= 0) return alert("Select an employee and enter a valid amount.");
+    if (!paymentForm.employee_id || paymentForm.amount <= 0) return setCustomAlert({ title: "Invalid Input", message: "Select an employee and enter an amount greater than 0.", type: "error" });
     
-    const empId = parseInt(paymentForm.employee_id);
-    const alloc = allocationsForm[empId] || { allocated: 0, incentive: 0 };
-    const maxAllowed = Number(alloc.allocated) + Number(alloc.incentive);
-    
-    const existingPayments = salaryPayments.filter(sp => sp.project_id?.toString() === selectedProject?.id?.toString() && sp.employee_id?.toString() === empId.toString());
-    const alreadyPaid = existingPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
-    
-    if ((alreadyPaid + paymentForm.amount) > maxAllowed) {
-       alert(`Payment denied. The amount exceeds the allocated budget for this employee.\nMaximum payable remaining: ₹${Math.max(0, maxAllowed - alreadyPaid).toLocaleString()}`);
-       return;
-    }
-
     setIsSaving(true);
     try {
       const { error } = await supabase.from('salary_payments').insert([{
-        employee_id: empId, company_id: selectedProject.company_id, project_id: selectedProject.id,
+        employee_id: parseInt(paymentForm.employee_id), company_id: selectedProject.company_id, project_id: selectedProject.id,
         amount: paymentForm.amount, payment_type: paymentForm.payment_type, payment_date: today, payment_month: today.substring(0, 7), notes: paymentForm.notes
       }]);
-      if (error) throw new Error(`Database Error: ${error.message}`);
+      if (error) throw new Error(error.message);
 
       setPaymentForm({ employee_id: "", amount: 0, payment_type: "Advance", notes: "" });
-      setExpandedFinanceEmpId(empId); 
+      setExpandedFinanceEmpId(parseInt(paymentForm.employee_id)); 
       setShowPayoutForm(false); 
       await fetchAllData();
-    } catch (error: any) { alert(error.message); } finally { setIsSaving(false); }
+    } catch (error: any) { setCustomAlert({ title: "Error", message: error.message, type: "error" }); } finally { setIsSaving(false); }
   };
 
-  const handleDeleteProjectPayment = async (paymentId: number) => {
-    if (!window.confirm("Remove this payment record?")) return;
-    setIsSaving(true);
-    try {
-      const { error } = await supabase.from('salary_payments').delete().eq('id', paymentId);
-      if (error) throw new Error(`Delete Error: ${error.message}`);
-      await fetchAllData();
-    } catch (error: any) { alert(error.message); } finally { setIsSaving(false); }
+  const handleDeleteProjectPayment = (paymentId: number) => {
+    setConfirmAction({
+      title: "Remove Payment",
+      message: "Are you sure you want to remove this payment record? This action cannot be undone.",
+      action: async () => {
+        setIsSaving(true);
+        try {
+          const { error } = await supabase.from('salary_payments').delete().eq('id', paymentId);
+          if (error) throw new Error(error.message);
+          await fetchAllData();
+        } catch (error: any) { setCustomAlert({ title: "Error", message: error.message, type: "error" }); } finally { setIsSaving(false); }
+      }
+    });
   };
 
   const handleUpdateProjectPayment = async (paymentId: number, empId: number) => {
-    if (editPaymentForm.amount <= 0) return alert("Enter a valid amount.");
-    
-    const alloc = allocationsForm[empId] || { allocated: 0, incentive: 0 };
-    const maxAllowed = Number(alloc.allocated) + Number(alloc.incentive);
-    
-    const existingPayments = salaryPayments.filter(sp => sp.project_id?.toString() === selectedProject?.id?.toString() && sp.employee_id?.toString() === empId.toString() && sp.id !== paymentId);
-    const alreadyPaidOther = existingPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
-    
-    if ((alreadyPaidOther + editPaymentForm.amount) > maxAllowed) {
-       alert(`Edit denied. The new amount exceeds the allocated budget.\nMaximum payable remaining: ₹${Math.max(0, maxAllowed - alreadyPaidOther).toLocaleString()}`);
-       return;
-    }
-
+    if (editPaymentForm.amount <= 0) return; // Silent return if empty, UI won't allow bad inputs
     setIsSaving(true);
     try {
       const { error } = await supabase.from('salary_payments').update({
@@ -475,11 +450,11 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
         payment_type: editPaymentForm.payment_type
       }).eq('id', paymentId);
       
-      if (error) throw new Error(`Update Error: ${error.message}`);
+      if (error) throw new Error(error.message);
       
       setEditingPaymentId(null);
       await fetchAllData();
-    } catch (error: any) { alert(error.message); } finally { setIsSaving(false); }
+    } catch (error: any) { setCustomAlert({ title: "Error", message: error.message, type: "error" }); } finally { setIsSaving(false); }
   };
 
   const handleSaveMyReport = async () => {
@@ -487,27 +462,15 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     setIsSaving(true);
     try {
       const existingReport = reports.find(r => r.project_id?.toString() === selectedProject.id?.toString() && r.employee_id?.toString() === employeeId?.toString());
-
-      const newEntry = {
-        id: crypto.randomUUID(),
-        type: 'note',
-        text: myReportText.trim(),
-        timestamp: new Date().toISOString()
-      };
-
+      const newEntry = { id: crypto.randomUUID(), type: 'note', text: myReportText.trim(), timestamp: new Date().toISOString() };
       const currentEntries = Array.isArray(existingReport?.entries) ? existingReport.entries : [];
 
-      const { error } = await supabase.from('project_reports').upsert({ 
-        project_id: selectedProject.id, 
-        employee_id: employeeId, 
-        entries: [...currentEntries, newEntry] 
-      }, { onConflict: 'project_id, employee_id' });
-      
-      if (error) throw new Error(`Failed to save report: ${error.message}`);
+      const { error } = await supabase.from('project_reports').upsert({ project_id: selectedProject.id, employee_id: employeeId, entries: [...currentEntries, newEntry] }, { onConflict: 'project_id, employee_id' });
+      if (error) throw new Error(error.message);
 
       setMyReportText(""); 
       await fetchAllData();
-    } catch (e: any) { alert(e.message); } finally { setIsSaving(false); }
+    } catch (e: any) { setCustomAlert({ title: "Error", message: e.message, type: "error" }); } finally { setIsSaving(false); }
   };
 
   const handleEditUserEntry = async (entryId: string) => {
@@ -518,34 +481,35 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
       if (!existingReport) return;
 
       const currentEntries = Array.isArray(existingReport?.entries) ? existingReport.entries : [];
-      const updatedEntries = currentEntries.map((e: any) => 
-        e.id === entryId ? { ...e, text: editingEntryText.trim() } : e
-      );
+      const updatedEntries = currentEntries.map((e: any) => e.id === entryId ? { ...e, text: editingEntryText.trim() } : e);
 
       const { error } = await supabase.from('project_reports').update({ entries: updatedEntries }).eq('id', existingReport.id);
-      if (error) throw new Error(`Failed to update entry: ${error.message}`);
+      if (error) throw new Error(error.message);
 
-      setEditingEntryId(null);
-      setEditingEntryText("");
+      setEditingEntryId(null); setEditingEntryText("");
       await fetchAllData();
-    } catch (e: any) { alert(e.message); } finally { setIsSaving(false); }
+    } catch (e: any) { setCustomAlert({ title: "Error", message: e.message, type: "error" }); } finally { setIsSaving(false); }
   };
 
-  const handleDeleteEntry = async (empId: number, entryId: string) => {
-    if (!window.confirm("Delete this log entry?")) return;
-    setIsSaving(true);
-    try {
-      const existingReport = reports.find(r => r.project_id?.toString() === selectedProject.id?.toString() && r.employee_id?.toString() === empId?.toString());
-      if (!existingReport) return;
-
-      const currentEntries = Array.isArray(existingReport?.entries) ? existingReport.entries : [];
-      const updatedEntries = currentEntries.filter((e: any) => e.id !== entryId);
-      
-      const { error } = await supabase.from('project_reports').update({ entries: updatedEntries }).eq('id', existingReport.id);
-      if (error) throw new Error(`Failed to delete entry: ${error.message}`);
-      
-      await fetchAllData();
-    } catch (e: any) { alert(e.message); } finally { setIsSaving(false); }
+  const handleDeleteEntry = (empId: number, entryId: string) => {
+    setConfirmAction({
+      title: "Delete Log",
+      message: "Are you sure you want to delete this log entry?",
+      action: async () => {
+        setIsSaving(true);
+        try {
+          const existingReport = reports.find(r => r.project_id?.toString() === selectedProject.id?.toString() && r.employee_id?.toString() === empId?.toString());
+          if (!existingReport) return;
+          const currentEntries = Array.isArray(existingReport?.entries) ? existingReport.entries : [];
+          const updatedEntries = currentEntries.filter((e: any) => e.id !== entryId);
+          
+          const { error } = await supabase.from('project_reports').update({ entries: updatedEntries }).eq('id', existingReport.id);
+          if (error) throw new Error(error.message);
+          
+          await fetchAllData();
+        } catch (e: any) { setCustomAlert({ title: "Error", message: e.message, type: "error" }); } finally { setIsSaving(false); }
+      }
+    });
   };
 
   const handleAdminReact = async (empId: number, entryId: string, status: string, customText: string = "") => {
@@ -556,108 +520,99 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
       const currentEntries = Array.isArray(existingReport?.entries) ? existingReport.entries : [];
       const updatedEntries = currentEntries.map((e: any) => {
-        if (e.id === entryId) {
-          return {
-            ...e,
-            reaction: { status, text: customText.trim(), timestamp: new Date().toISOString() }
-          };
-        }
+        if (e.id === entryId) return { ...e, reaction: { status, text: customText.trim(), timestamp: new Date().toISOString() } };
         return e;
       });
 
       const { error } = await supabase.from('project_reports').update({ entries: updatedEntries }).eq('id', existingReport.id);
-      if (error) throw new Error(`Failed to save feedback: ${error.message}`);
+      if (error) throw new Error(error.message);
       
-      setReactionFormId(null);
-      setReactionText("");
+      setReactionFormId(null); setReactionText("");
       await fetchAllData();
-    } catch (e: any) { alert(e.message); } finally { setIsSaving(false); }
+    } catch (e: any) { setCustomAlert({ title: "Error", message: e.message, type: "error" }); } finally { setIsSaving(false); }
   };
 
-  const handleDeleteReaction = async (empId: number, entryId: string) => {
-    if (!window.confirm("Remove this feedback?")) return;
-    setIsSaving(true);
-    try {
-      const existingReport = reports.find(r => r.project_id?.toString() === selectedProject.id?.toString() && r.employee_id?.toString() === empId?.toString());
-      if (!existingReport) return;
+  const handleDeleteReaction = (empId: number, entryId: string) => {
+    setConfirmAction({
+      title: "Remove Feedback",
+      message: "Are you sure you want to remove this feedback?",
+      action: async () => {
+        setIsSaving(true);
+        try {
+          const existingReport = reports.find(r => r.project_id?.toString() === selectedProject.id?.toString() && r.employee_id?.toString() === empId?.toString());
+          if (!existingReport) return;
+          const currentEntries = Array.isArray(existingReport?.entries) ? existingReport.entries : [];
+          const updatedEntries = currentEntries.map((e: any) => {
+            if (e.id === entryId) { const { reaction, ...rest } = e; return rest; }
+            return e;
+          });
 
-      const currentEntries = Array.isArray(existingReport?.entries) ? existingReport.entries : [];
-      const updatedEntries = currentEntries.map((e: any) => {
-        if (e.id === entryId) {
-          const { reaction, ...rest } = e; 
-          return rest;
-        }
-        return e;
-      });
-
-      const { error } = await supabase.from('project_reports').update({ entries: updatedEntries }).eq('id', existingReport.id);
-      if (error) throw new Error(`Failed to remove feedback: ${error.message}`);
-      
-      await fetchAllData();
-    } catch (e: any) { alert(e.message); } finally { setIsSaving(false); }
+          const { error } = await supabase.from('project_reports').update({ entries: updatedEntries }).eq('id', existingReport.id);
+          if (error) throw new Error(error.message);
+          
+          await fetchAllData();
+        } catch (e: any) { setCustomAlert({ title: "Error", message: e.message, type: "error" }); } finally { setIsSaving(false); }
+      }
+    });
   };
 
-  const handleDeleteProject = async () => {
-    if (!window.confirm(`Delete "${selectedProject.name}"?`)) return;
-    setIsSaving(true);
-    
-    const { error } = await supabase.from('projects').delete().eq('id', selectedProject.id);
-    if (error) alert(`Error deleting project: ${error.message}`);
-    
-    await fetchAllData(); 
-    executeClose(); 
-    setIsSaving(false);
+  const handleDeleteProject = () => {
+    setConfirmAction({
+      title: "Delete Project",
+      message: `Are you sure you want to delete "${selectedProject.name}"? This action cannot be undone.`,
+      action: async () => {
+        setIsSaving(true);
+        const { error } = await supabase.from('projects').delete().eq('id', selectedProject.id);
+        if (error) setCustomAlert({ title: "Error", message: error.message, type: "error" });
+        await fetchAllData(); executeClose(); setIsSaving(false);
+      }
+    });
   };
 
   const handleAddTask = () => {
     if (!newTaskTitle.trim() || newTaskAssignee === "") return;
-    
     if (newTaskDeadline && formData.due_date && new Date(newTaskDeadline) > new Date(formData.due_date)) {
-      alert(`Task deadline cannot exceed the project's main due date (${formData.due_date}).`);
-      return;
+      return setCustomAlert({ title: "Invalid Deadline", message: `Task deadline cannot exceed the project's main due date (${formData.due_date}).`, type: "error" });
     }
 
     setPendingTasks([...pendingTasks, { 
-      tempId: crypto.randomUUID(), // NEW: Temporary ID for editing before saving
-      title: newTaskTitle, 
-      assignee_id: newTaskAssignee, 
-      is_completed: false, 
-      deadline: newTaskDeadline || null 
+      tempId: crypto.randomUUID(), title: newTaskTitle, assignee_id: newTaskAssignee, is_completed: false, deadline: newTaskDeadline || null 
     }]); 
     setNewTaskTitle(""); setNewTaskAssignee(""); setNewTaskDeadline("");
   };
 
-  const handleDeleteTask = async (task: any, index: number) => {
-    if (!window.confirm(`Delete task "${task.title}"?`)) return;
-    setIsSaving(true);
-    try {
-      if (task.id) {
-        const { error } = await supabase.from('project_tasks').delete().eq('id', task.id);
-        if (error) throw new Error(error.message);
-        await fetchAllData();
-      } else {
-        setPendingTasks(prev => prev.filter((_, i) => i !== index));
+  const handleDeleteTask = (task: any, index: number) => {
+    setConfirmAction({
+      title: "Delete Task",
+      message: `Are you sure you want to delete "${task.title}"?`,
+      action: async () => {
+        setIsSaving(true);
+        try {
+          if (task.id) {
+            const { error } = await supabase.from('project_tasks').delete().eq('id', task.id);
+            if (error) throw new Error(error.message);
+            await fetchAllData();
+          } else {
+            setPendingTasks(prev => prev.filter((_, i) => i !== index));
+          }
+        } catch (e: any) { setCustomAlert({ title: "Error", message: e.message, type: "error" }); } finally { setIsSaving(false); }
       }
-    } catch (e: any) { alert(`Error: ${e.message}`); } finally { setIsSaving(false); }
+    });
   };
 
   const handleSaveTaskEdit = async (task: any) => {
-    if (!editTaskForm.title.trim() || !editTaskForm.assignee_id) return alert("Title and Assignee are required.");
+    if (!editTaskForm.title.trim() || !editTaskForm.assignee_id) return setCustomAlert({ title: "Missing Information", message: "Title and Assignee are required.", type: "error" });
     setIsSaving(true);
     try {
       if (task.id) {
-        const { error } = await supabase.from('project_tasks').update({
-          title: editTaskForm.title,
-          assignee_id: editTaskForm.assignee_id,
-          deadline: editTaskForm.deadline || null
-        }).eq('id', task.id);
+        const { error } = await supabase.from('project_tasks').update({ title: editTaskForm.title, assignee_id: editTaskForm.assignee_id, deadline: editTaskForm.deadline || null }).eq('id', task.id);
         if (error) throw new Error(error.message);
         await fetchAllData();
       } else {
         setPendingTasks(prev => prev.map(pt => pt.tempId === task.tempId ? { ...pt, ...editTaskForm } : pt));
       }
       setEditingTaskKey(null);
-    } catch (e: any) { alert(`Error: ${e.message}`); } finally { setIsSaving(false); }
+    } catch (e: any) { setCustomAlert({ title: "Error", message: e.message, type: "error" }); } finally { setIsSaving(false); }
   };
 
   const handleAdminToggleTask = async (task: any, pendingIndex?: number) => {
@@ -665,47 +620,31 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     
     if (task.id) {
       const { error } = await supabase.from('project_tasks').update({ is_completed: !task.is_completed }).eq('id', task.id);
-      if (error) alert(`Failed to update task status: ${error.message}`);
+      if (error) setCustomAlert({ title: "Error", message: error.message, type: "error" });
       else await fetchAllData();
     } else if (pendingIndex !== undefined) {
-      const updated = [...pendingTasks]; 
-      updated[pendingIndex].is_completed = !updated[pendingIndex].is_completed; 
-      setPendingTasks(updated);
+      const updated = [...pendingTasks]; updated[pendingIndex].is_completed = !updated[pendingIndex].is_completed; setPendingTasks(updated);
     }
   };
 
   const handleEmployeeUploadComplete = async () => {
     if (!taskToUpload || !selectedProject) return;
-    if (!uploadNote.trim()) return alert("Please provide a brief note detailing what you uploaded or updated.");
+    if (!uploadNote.trim()) return setCustomAlert({ title: "Missing Note", message: "Please provide a brief note detailing what you uploaded or updated.", type: "error" });
 
     setIsSaving(true);
     try {
       const { error: taskError } = await supabase.from('project_tasks').update({ is_completed: true }).eq('id', taskToUpload.id);
-      if (taskError) throw new Error(`Failed to complete task: ${taskError.message}`);
+      if (taskError) throw new Error(taskError.message);
 
       const existingReport = reports.find(r => r.project_id?.toString() === selectedProject.id?.toString() && r.employee_id?.toString() === employeeId?.toString());
-      const newEntry = {
-        id: crypto.randomUUID(),
-        type: 'upload',
-        task_title: taskToUpload.title,
-        text: uploadNote.trim(),
-        timestamp: new Date().toISOString()
-      };
+      const newEntry = { id: crypto.randomUUID(), type: 'upload', task_title: taskToUpload.title, text: uploadNote.trim(), timestamp: new Date().toISOString() };
       const currentEntries = Array.isArray(existingReport?.entries) ? existingReport.entries : [];
 
-      const { error: reportError } = await supabase.from('project_reports').upsert({ 
-        project_id: selectedProject.id, 
-        employee_id: employeeId, 
-        entries: [...currentEntries, newEntry] 
-      }, { onConflict: 'project_id, employee_id' });
-      
-      if (reportError) throw new Error(`Failed to log upload: ${reportError.message}`);
+      const { error: reportError } = await supabase.from('project_reports').upsert({ project_id: selectedProject.id, employee_id: employeeId, entries: [...currentEntries, newEntry] }, { onConflict: 'project_id, employee_id' });
+      if (reportError) throw new Error(reportError.message);
 
-      await fetchAllData();
-      setIsUploadModalOpen(false);
-      setTaskToUpload(null);
-      setUploadNote("");
-    } catch (e: any) { alert(e.message); } finally { setIsSaving(false); }
+      await fetchAllData(); setIsUploadModalOpen(false); setTaskToUpload(null); setUploadNote("");
+    } catch (e: any) { setCustomAlert({ title: "Error", message: e.message, type: "error" }); } finally { setIsSaving(false); }
   };
 
   const handlePrintPayslip = () => {
@@ -1056,7 +995,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                     <div>
                       <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5"><MessageSquare className="h-3.5 w-3.5" /> Activity Log</h4>
                       
-                      {/* CRASH FIX: Ensure we only map valid objects */}
                       {adminTimelineEntries.filter(e => e && typeof e === 'object').length > 0 ? (
                          <div className="space-y-5">
                            {adminTimelineEntries.filter(e => e && typeof e === 'object').map((entry: any) => {
@@ -1188,6 +1126,51 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                   <button type="button" onClick={handleEmployeeUploadComplete} disabled={isSaving || !selectedProject?.drive_folder_url} className="w-full h-12 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[13px] font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center disabled:opacity-50">
                     {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : taskToUpload.is_completed ? "Update Log & Confirm" : "Mark Task as Completed"}
                   </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {/* CUSTOM ALERT MODAL */}
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {customAlert && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[10020] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+              <motion.div initial={{ scale: 0.95, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 10 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 relative flex flex-col items-center text-center border border-slate-100">
+                <div className={`h-12 w-12 rounded-full flex items-center justify-center mb-4 ${customAlert.type === 'error' ? 'bg-rose-50 text-rose-600' : customAlert.type === 'success' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
+                  {customAlert.type === 'error' ? <AlertCircle className="h-6 w-6" /> : customAlert.type === 'success' ? <CheckCircle2 className="h-6 w-6" /> : <Info className="h-6 w-6" />}
+                </div>
+                <h3 className="text-lg font-black text-slate-900 tracking-tight mb-2">{customAlert.title}</h3>
+                <p className="text-xs font-medium text-slate-500 mb-6 leading-relaxed">
+                  {customAlert.message}
+                </p>
+                <button type="button" onClick={() => setCustomAlert(null)} className={`w-full h-10 rounded-xl text-white font-bold text-xs uppercase tracking-wider transition-colors shadow-md ${customAlert.type === 'error' ? 'bg-rose-600 hover:bg-rose-700' : customAlert.type === 'success' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'}`}>OK</button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {/* CUSTOM CONFIRM ACTION MODAL */}
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {confirmAction && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[10020] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+              <motion.div initial={{ scale: 0.95, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 10 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 relative flex flex-col items-center text-center border border-slate-100">
+                <div className="h-12 w-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
+                  <AlertCircle className="h-6 w-6" />
+                </div>
+                <h3 className="text-lg font-black text-slate-900 tracking-tight mb-2">{confirmAction.title}</h3>
+                <p className="text-xs font-medium text-slate-500 mb-6 leading-relaxed">
+                  {confirmAction.message}
+                </p>
+                <div className="flex gap-3 w-full">
+                  <button type="button" onClick={() => setConfirmAction(null)} className="flex-1 h-10 rounded-xl bg-slate-50 text-slate-600 font-bold text-xs uppercase tracking-wider hover:bg-slate-100 transition-colors border border-slate-200">Cancel</button>
+                  <button type="button" onClick={() => { confirmAction.action(); setConfirmAction(null); }} className="flex-1 h-10 rounded-xl bg-rose-600 text-white font-bold text-xs uppercase tracking-wider hover:bg-rose-700 transition-colors shadow-md">Confirm</button>
                 </div>
               </motion.div>
             </motion.div>
@@ -1526,7 +1509,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                               max={formData.due_date || undefined}
                               onChange={(e) => {
                                 if (formData.due_date && new Date(e.target.value) > new Date(formData.due_date)) {
-                                  alert(`Task deadline cannot exceed the project's main due date (${formData.due_date}).`);
+                                  setCustomAlert({ title: "Invalid Deadline", message: `Task deadline cannot exceed the project's main due date (${formData.due_date}).`, type: "error" });
                                   return;
                                 }
                                 setNewTaskDeadline(e.target.value);
@@ -1594,7 +1577,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                                       if (isAdminView) {
                                         if (task.id) {
                                           if (!task.assignee_id) {
-                                            alert("Please assign this task to a team member before tracking its completion.");
+                                            setCustomAlert({ title: "Unassigned Task", message: "Please assign this task to a team member before tracking its completion.", type: "error" });
                                           } else {
                                             setTaskRedirectPrompt(task);
                                           }
@@ -1905,14 +1888,56 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                          <div className="flex flex-col md:flex-row gap-4 items-end mb-8 bg-slate-50 p-4 rounded-xl border border-slate-100">
                             <div className="flex-1 w-full">
                                <label className="text-[9px] font-bold text-slate-600 uppercase tracking-widest block mb-2">Select Employee</label>
-                               <select value={paymentForm.employee_id} onChange={(e) => setPaymentForm({...paymentForm, employee_id: e.target.value})} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-[12px] font-bold text-slate-800 outline-none bg-white shadow-sm focus:border-blue-500">
+                               <select 
+                                  value={paymentForm.employee_id} 
+                                  onChange={(e) => {
+                                    const selectedEmpId = e.target.value;
+                                    let currentAmount = paymentForm.amount;
+                                    
+                                    // Auto-clamp logic on employee select
+                                    if (selectedEmpId) {
+                                      const empId = parseInt(selectedEmpId);
+                                      const alloc = allocationsForm[empId] || { allocated: 0, incentive: 0 };
+                                      const maxAllowed = Number(alloc.allocated) + Number(alloc.incentive);
+                                      const existingPayments = salaryPayments.filter(sp => sp.project_id?.toString() === selectedProject?.id?.toString() && sp.employee_id?.toString() === empId.toString());
+                                      const alreadyPaid = existingPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+                                      const remaining = Math.max(0, maxAllowed - alreadyPaid);
+                                      
+                                      if (currentAmount > remaining) currentAmount = remaining;
+                                    }
+                                    setPaymentForm({...paymentForm, employee_id: selectedEmpId, amount: currentAmount});
+                                  }} 
+                                  className="w-full h-11 rounded-lg border border-slate-200 px-3 text-[12px] font-bold text-slate-800 outline-none bg-white shadow-sm focus:border-blue-500"
+                               >
                                   <option value="">-- Choose Member --</option>
                                   {(formData.assignee_ids || []).map(id => <option key={id} value={id}>{getAvatar(id)?.name || 'Unknown'}</option>)}
                                </select>
                             </div>
                             <div className="w-full md:w-36 shrink-0">
                                <label className="text-[9px] font-bold text-slate-600 uppercase tracking-widest block mb-2">Amount (₹)</label>
-                               <input type="number" value={paymentForm.amount || ''} onChange={(e) => setPaymentForm({...paymentForm, amount: parseFloat(e.target.value) || 0})} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-[12px] font-bold text-slate-800 outline-none bg-white shadow-sm focus:border-blue-500" placeholder="0" />
+                               <input 
+                                  type="number" 
+                                  value={paymentForm.amount || ''} 
+                                  onChange={(e) => {
+                                    let val = parseFloat(e.target.value);
+                                    if (isNaN(val) || val < 0) val = 0;
+                                    
+                                    // Auto-clamp logic on amount typing
+                                    if (paymentForm.employee_id) {
+                                      const empId = parseInt(paymentForm.employee_id);
+                                      const alloc = allocationsForm[empId] || { allocated: 0, incentive: 0 };
+                                      const maxAllowed = Number(alloc.allocated) + Number(alloc.incentive);
+                                      const existingPayments = salaryPayments.filter(sp => sp.project_id?.toString() === selectedProject?.id?.toString() && sp.employee_id?.toString() === empId.toString());
+                                      const alreadyPaid = existingPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+                                      const remaining = Math.max(0, maxAllowed - alreadyPaid);
+                                      
+                                      if (val > remaining) val = remaining;
+                                    }
+                                    setPaymentForm({...paymentForm, amount: val});
+                                  }} 
+                                  className="w-full h-11 rounded-lg border border-slate-200 px-3 text-[12px] font-bold text-slate-800 outline-none bg-white shadow-sm focus:border-blue-500" 
+                                  placeholder="0" 
+                               />
                             </div>
                             <div className="w-full md:w-36 shrink-0">
                                <label className="text-[9px] font-bold text-slate-600 uppercase tracking-widest block mb-2">Tranche Type</label>
@@ -1968,7 +1993,25 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                                                        
                                                        return isEditingPayment ? (
                                                           <div key={p.id} className="flex flex-col sm:flex-row gap-2 text-xs p-3 bg-blue-50/50 border border-blue-100 rounded-lg shadow-sm">
-                                                             <input type="number" value={editPaymentForm.amount || ''} onChange={(e) => setEditPaymentForm({...editPaymentForm, amount: parseFloat(e.target.value) || 0})} className="w-full sm:w-28 h-8 rounded-md border border-blue-200 px-2 font-bold text-blue-900 outline-none focus:border-blue-500" placeholder="Amount" />
+                                                             <input 
+                                                                type="number" 
+                                                                value={editPaymentForm.amount || ''} 
+                                                                onChange={(e) => {
+                                                                  let val = parseFloat(e.target.value);
+                                                                  if (isNaN(val) || val < 0) val = 0;
+                                                                  
+                                                                  // Auto-clamp logic for inline editing
+                                                                  const existingPayments = salaryPayments.filter(sp => sp.project_id?.toString() === selectedProject?.id?.toString() && sp.employee_id?.toString() === empId.toString() && sp.id !== p.id);
+                                                                  const alreadyPaidOther = existingPayments.reduce((sum, pay) => sum + parseFloat(pay.amount), 0);
+                                                                  const remaining = Math.max(0, totalAlloc - alreadyPaidOther);
+                                                                  
+                                                                  if (val > remaining) val = remaining;
+                                                                  
+                                                                  setEditPaymentForm({...editPaymentForm, amount: val});
+                                                                }} 
+                                                                className="w-full sm:w-28 h-8 rounded-md border border-blue-200 px-2 font-bold text-blue-900 outline-none focus:border-blue-500" 
+                                                                placeholder="Amount" 
+                                                             />
                                                              <select value={editPaymentForm.payment_type} onChange={(e) => setEditPaymentForm({...editPaymentForm, payment_type: e.target.value})} className="w-full sm:w-28 h-8 rounded-md border border-blue-200 px-2 font-bold text-blue-900 outline-none focus:border-blue-500">
                                                                 <option value="Advance">Advance</option>
                                                                 <option value="Standard">Standard</option>
