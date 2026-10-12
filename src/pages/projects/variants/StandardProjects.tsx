@@ -1,7 +1,7 @@
 import { useState, useRef, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Search, FolderKanban, CheckCircle2, AlertCircle, X, Check, User, Trash2, Clock, Download, Loader2, ChevronDown, ExternalLink, UploadCloud, Calendar, Info, Layers, FileText, Edit2, ThumbsUp, ThumbsDown, Eye, MessageCircle, CornerDownRight, Lock, BookOpen, ListTodo, MessageSquare } from "lucide-react";
+import { Plus, Search, FolderKanban, CheckCircle2, AlertCircle, X, Check, User, Trash2, Clock, Download, Loader2, ChevronDown, ExternalLink, UploadCloud, Calendar, Info, Layers, FileText, Edit2, ThumbsUp, ThumbsDown, Eye, MessageCircle, CornerDownRight, Lock, BookOpen, ListTodo, MessageSquare, LayoutGrid, List, MoreVertical, ChevronLeft, ChevronRight } from "lucide-react";
 import { useAuthStore } from "../../../store/authStore";
 import { useDataStore } from "../../../store/dataStore";
 import { supabase } from "../../../supabase";
@@ -22,6 +22,9 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
   const [filterCompanyId, setFilterCompanyId] = useState<string>("all");
+  const [layoutView, setLayoutView] = useState<'grid' | 'list'>('list');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 8;
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalTab, setModalTab] = useState<"details" | "team" | "tasks" | "progress" | "finance">("details");
@@ -102,7 +105,10 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const visibleProjects = projects.filter(p => {
     if (!p.name) return false;
 
-    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const projComp = companies.find((c: any) => c.id?.toString() === p.company_id?.toString());
+    const customer = customers.find((c: any) => c.id?.toString() === p.customer_id?.toString());
+    const searchTarget = `${p.name} ${projComp?.name || ''} ${customer?.name || ''}`.toLowerCase();
+    const matchesSearch = searchTarget.includes(searchQuery.toLowerCase());
     const matchesStatus = filterStatus === "All" || p.status === filterStatus;
 
     if (isGlobalAdmin) {
@@ -113,6 +119,9 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     const isAssigned = isHead || (Array.isArray(p.assignee_ids) ? p.assignee_ids : []).includes(employeeId);
     return matchesSearch && matchesStatus && isAssigned && p.company_id?.toString() === currentCompanyId?.toString();
   }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  const totalPages = Math.ceil(visibleProjects.length / itemsPerPage) || 1;
+  const paginatedProjects = visibleProjects.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const availableCustomers = customers.filter(c => c.company_id === parseInt(formData.company_id || '0'));
   
@@ -322,7 +331,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
         if (error) throw new Error(error.message);
       }
 
-      // --- BULK PROCESS STAGED TASKS ---
       const originalTasks = selectedProject ? tasks.filter((t: any) => t.project_id?.toString() === selectedProject.id?.toString()) : [];
       
       const tasksToInsert = pendingTasks.filter(t => !t.id).map(t => ({
@@ -353,7 +361,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
       await fetchAllData(); 
       
-      // Update local snapshots cleanly so window stays open perfectly synced
       const finalTasks = tasks.filter((t: any) => t.project_id?.toString() === targetProjectId?.toString());
       setPendingTasks(finalTasks);
       const newTaskSnapshot = finalTasks.map((t: any) => ({ id: t.id, title: t.title, assignee_id: t.assignee_id, deadline: t.deadline, is_completed: t.is_completed }));
@@ -463,7 +470,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   };
 
   const handleUpdateProjectPayment = async (paymentId: number, empId: number) => {
-    if (editPaymentForm.amount <= 0) return; // Silent return if empty, UI won't allow bad inputs
+    if (editPaymentForm.amount <= 0) return;
     setIsSaving(true);
     try {
       const { error } = await supabase.from('salary_payments').update({
@@ -627,7 +634,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
     setIsSaving(true);
     try {
-      // If it is an actual task, mark it as completed. If it's just a general document upload, skip this part.
       if (taskToUpload.id !== 'general') {
         const { error: taskError } = await supabase.from('project_tasks').update({ is_completed: true }).eq('id', taskToUpload.id);
         if (taskError) throw new Error(taskError.message);
@@ -640,7 +646,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
       const { error: reportError } = await supabase.from('project_reports').upsert({ project_id: selectedProject.id, employee_id: employeeId, entries: [...currentEntries, newEntry] }, { onConflict: 'project_id, employee_id' });
       if (reportError) throw new Error(reportError.message);
 
-      // Local optimistic update
       if (taskToUpload.id !== 'general') {
         setPendingTasks(prev => prev.map(t => t.id === taskToUpload.id ? { ...t, is_completed: true } : t));
       }
@@ -656,15 +661,14 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
   const getAvatar = (id: number) => employees.find(e => e.id?.toString() === id?.toString());
 
-  // FIX: This restores the displayTasks missing variable for Action Items and Timeline views
   const displayTasks = selectedProject 
     ? pendingTasks.sort((a: any, b: any) => ((a.id || 0) > (b.id || 0) ? 1 : -1)) 
     : pendingTasks;
 
   const getStatusStyle = (status: string) => {
     switch(status) {
-      case 'Planning': return 'bg-slate-50 text-slate-700 border-slate-200';
-      case 'In Progress': return 'bg-blue-50 text-blue-700 border-blue-200';
+      case 'Planning': return 'bg-blue-50/70 text-blue-600 border-blue-100';
+      case 'In Progress': return 'bg-indigo-50 text-indigo-700 border-indigo-200';
       case 'Review': return 'bg-amber-50 text-amber-700 border-amber-200';
       case 'Completed': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
       default: return 'bg-slate-50 text-slate-700 border-slate-200';
@@ -705,7 +709,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     return Number(formAlloc.allocated) !== Number(originalAlloc?.allocated_amount || 0) || Number(formAlloc.incentive) !== Number(originalAlloc?.incentive_amount || 0);
   });
 
-  // --- STATUS BAR METRICS CALCULATIONS ---
   const allRelevantProjects = projects.filter(p => {
     if (!p.name) return false;
     if (isGlobalAdmin) {
@@ -722,7 +725,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     return new Date(p.due_date).getTime() < new Date(today).getTime();
   }).length;
   const totalTasksCount = tasks.filter((t: any) => allRelevantProjects.some(p => p.id?.toString() === t.project_id?.toString())).length;
-  // ---------------------------------------
 
   return (
     <>
@@ -735,7 +737,8 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 sm:gap-6 print:hidden">
           <div>
             <p className="text-[9px] sm:text-[11px] font-bold text-blue-600 uppercase tracking-[0.2em] mb-1.5 sm:mb-2 bg-blue-50 inline-block px-3 py-1 rounded-full">Workflows & Tasks</p>
-            <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-slate-900 mt-1 sm:mt-2">Projects.</h1>
+            <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-slate-900 mt-1 sm:mt-2">Projects</h1>
+            <p className="text-xs sm:text-sm font-medium text-slate-500 mt-0.5">Track progress across your teams</p>
           </div>
           {(role === 'admin' || role === 'head') && (
             <button type="button" onClick={openNewProject} className="bg-gradient-to-r from-blue-900 to-indigo-800 text-white shadow-lg shadow-blue-900/20 hover:shadow-xl hover:-translate-y-0.5 px-4 sm:px-6 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl text-[11px] sm:text-[13px] font-bold transition-all flex items-center shrink-0">
@@ -744,9 +747,8 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
           )}
         </div>
 
-        {/* STATUS BAR COMPONENT */}
+        {/* STATUS BAR METRICS */}
         <div className="bg-white rounded-2xl sm:rounded-[20px] border border-slate-100 shadow-sm p-5 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-6 print:hidden w-full">
-          
           <div className="flex items-center gap-4 w-full sm:w-1/4">
             <div className="h-12 w-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
               <Layers className="h-6 w-6" />
@@ -792,22 +794,27 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
               <p className="text-[13px] font-medium text-slate-500 mt-1">Completed</p>
             </div>
           </div>
-
         </div>
-        {/* END OF STATUS BAR COMPONENT */}
 
-        <div className="bg-white p-2 rounded-xl sm:rounded-2xl border border-slate-100 shadow-sm flex flex-col sm:flex-row gap-2 print:hidden">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 h-3.5 sm:h-4 w-3.5 sm:w-4 text-slate-400" />
-            <input type="text" placeholder="Search projects by name..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full h-10 sm:h-11 pl-9 sm:pl-11 pr-4 rounded-lg sm:rounded-xl border-none text-[13px] sm:text-sm font-medium outline-none bg-transparent focus:ring-0 placeholder:text-slate-400" />
+        {/* SEARCH & FILTERS BAR WITH LIST/GRID VIEW TOGGLE */}
+        <div className="bg-white p-2 sm:p-2.5 rounded-2xl border border-slate-100 shadow-sm flex flex-col sm:flex-row items-center gap-2.5 print:hidden">
+          <div className="relative flex-1 w-full">
+            <Search className="absolute left-3.5 sm:left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder="Search projects by name, client or team..." 
+              value={searchQuery} 
+              onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }} 
+              className="w-full h-11 pl-10 sm:pl-11 pr-4 rounded-xl border-none text-[13px] sm:text-sm font-medium outline-none bg-transparent focus:ring-0 placeholder:text-slate-400 text-slate-800" 
+            />
           </div>
 
           {role === 'admin' && !activeWorkspace && (
-            <div className="sm:w-64 shrink-0 border-t sm:border-t-0 sm:border-l border-slate-100 pt-2 sm:pt-0 sm:pl-2">
+            <div className="w-full sm:w-60 shrink-0 border-t sm:border-t-0 sm:border-l border-slate-100 pt-2 sm:pt-0 sm:pl-2.5">
               <select
                 value={filterCompanyId}
-                onChange={(e) => setFilterCompanyId(e.target.value)}
-                className="w-full h-10 sm:h-11 rounded-lg sm:rounded-xl bg-slate-50 border-none px-3 sm:px-4 text-[12px] sm:text-sm font-bold text-slate-700 outline-none cursor-pointer hover:bg-slate-100 transition-colors focus:ring-4 focus:ring-blue-500/10 appearance-none"
+                onChange={(e) => { setFilterCompanyId(e.target.value); setCurrentPage(1); }}
+                className="w-full h-10 sm:h-11 rounded-xl bg-slate-50 border-none px-3 sm:px-4 text-[12px] sm:text-[13px] font-semibold text-slate-700 outline-none cursor-pointer hover:bg-slate-100 transition-colors focus:ring-2 focus:ring-blue-500/10 appearance-none"
                 style={{ backgroundImage: `url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', backgroundSize: '14px' }}
               >
                 <option value="all">Global (All Subsidiaries)</option>
@@ -816,25 +823,50 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
             </div>
           )}
 
-          <div className="sm:w-48 shrink-0 border-t sm:border-t-0 sm:border-l border-slate-100 pt-2 sm:pt-0 sm:pl-2">
-            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-full h-10 sm:h-11 rounded-lg sm:rounded-xl bg-slate-50 border-none px-3 sm:px-4 text-[12px] sm:text-sm font-bold text-slate-700 outline-none cursor-pointer appearance-none"
-               style={{ backgroundImage: `url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', backgroundSize: '14px' }}
+          <div className="w-full sm:w-48 shrink-0 border-t sm:border-t-0 sm:border-l border-slate-100 pt-2 sm:pt-0 sm:pl-2.5">
+            <select 
+              value={filterStatus} 
+              onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }} 
+              className="w-full h-10 sm:h-11 rounded-xl bg-slate-50 border-none px-3 sm:px-4 text-[12px] sm:text-[13px] font-semibold text-slate-700 outline-none cursor-pointer appearance-none hover:bg-slate-100 transition-colors"
+              style={{ backgroundImage: `url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', backgroundSize: '14px' }}
             >
                <option value="All">All Statuses</option>
                {STATUS_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
             </select>
           </div>
+
+          {/* VIEW SWITCHER: GRID OR LIST */}
+          <div className="flex items-center gap-1 bg-slate-100/70 p-1 rounded-xl shrink-0 self-end sm:self-auto">
+            <button 
+              type="button" 
+              onClick={() => setLayoutView('grid')} 
+              title="Grid View"
+              className={`h-9 w-9 rounded-lg flex items-center justify-center transition-all ${layoutView === 'grid' ? 'bg-[#0f172a] text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </button>
+            <button 
+              type="button" 
+              onClick={() => setLayoutView('list')} 
+              title="List View"
+              className={`h-9 w-9 rounded-lg flex items-center justify-center transition-all ${layoutView === 'list' ? 'bg-[#0f172a] text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+            >
+              <List className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
+        {/* PROJECTS SECTION */}
         <div className="space-y-4 print:hidden">
           {visibleProjects.length === 0 ? (
              <div className="h-48 sm:h-64 border border-slate-200 border-dashed rounded-2xl sm:rounded-3xl flex flex-col items-center justify-center text-slate-400 bg-slate-50/50">
                 <FolderKanban className="h-8 w-8 sm:h-10 sm:w-10 mb-2 sm:mb-3 text-slate-300" />
                 <p className="text-[11px] sm:text-sm font-bold uppercase tracking-wider">No Records Found</p>
              </div>
-          ) : (
+          ) : layoutView === 'grid' ? (
+            /* GRID VIEW */
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-5">
-              {visibleProjects.map(project => {
+              {paginatedProjects.map(project => {
                 const projectTasks = tasks.filter((t: any) => t.project_id?.toString() === project.id?.toString());
                 const completedTasks = projectTasks.filter((t: any) => t.is_completed).length;
                 const totalTasks = projectTasks.length;
@@ -842,7 +874,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                 const radius = 18; const circumference = 2 * Math.PI * radius; const progressOffset = circumference - (progressPct / 100) * circumference;
 
                 const dueStatus = project.status !== 'Completed' ? getDueDateStatus(project.due_date) : null;
-                
                 const projComp = companies.find(c => c.id?.toString() === project.company_id?.toString());
                 const isAcademyProj = projComp?.business_type === 'academy' || ['Course', 'Workshop', 'Internship'].includes(project.metadata?.type);
                 const owningCompanyName = projComp?.name;
@@ -923,11 +954,177 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                           </div>
                         )}
                       </div>
-
                     </div>
                   </div>
                 );
               })}
+            </div>
+          ) : (
+            /* PROFESSIONAL LIST / TABLE VIEW */
+            <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[850px]">
+                  <thead>
+                    <tr className="bg-[#f8fafc] text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                      <th className="py-3.5 pl-6 pr-4">PROJECT</th>
+                      <th className="py-3.5 px-4">TEAM</th>
+                      <th className="py-3.5 px-4">TASKS</th>
+                      <th className="py-3.5 px-4">PROGRESS</th>
+                      <th className="py-3.5 px-4">STATUS</th>
+                      <th className="py-3.5 px-4">DUE DATE</th>
+                      <th className="py-3.5 pr-6 pl-2 text-right">•••</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-700">
+                    {paginatedProjects.map(project => {
+                      const projectTasks = tasks.filter((t: any) => t.project_id?.toString() === project.id?.toString());
+                      const completedTasks = projectTasks.filter((t: any) => t.is_completed).length;
+                      const totalTasks = projectTasks.length;
+                      const progressPct = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
+
+                      const projComp = companies.find(c => c.id?.toString() === project.company_id?.toString());
+                      const customer = customers.find(c => c.id?.toString() === project.customer_id?.toString());
+                      
+                      const isOverdue = project.status !== 'Completed' && project.due_date && new Date(project.due_date).getTime() < new Date(today).getTime();
+
+                      const formattedDueDate = project.due_date ? new Date(project.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBD';
+
+                      return (
+                        <tr 
+                          key={project.id} 
+                          className="hover:bg-slate-50/70 transition-colors group relative cursor-pointer"
+                          onClick={() => handleProjectClick(project)}
+                        >
+                          {/* PROJECT NAME & AFFILIATION */}
+                          <td className="py-4 pl-6 pr-4 relative">
+                            <div className="absolute left-0 top-2 bottom-2 w-1 bg-slate-900 rounded-r-md" />
+                            <div className="flex flex-col">
+                              <span className="font-bold text-slate-900 text-sm group-hover:text-blue-900 transition-colors truncate">
+                                {project.name}
+                              </span>
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                                {projComp?.name || 'NETWORK'} {customer?.name ? `• ${customer.name}` : project.internal_company_id ? '• INTERNAL' : ''}
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* ASSIGNED TEAM AVATARS */}
+                          <td className="py-4 px-4">
+                            <div className="flex items-center -space-x-1.5">
+                              {(Array.isArray(project.assignee_ids) ? project.assignee_ids : []).slice(0, 4).map((id: number) => {
+                                const emp = getAvatar(id);
+                                return (
+                                  <div 
+                                    key={id} 
+                                    className="h-7 w-7 rounded-full bg-[#1e293b] text-white border-2 border-white flex items-center justify-center text-[10px] font-bold shadow-sm overflow-hidden" 
+                                    title={emp?.name}
+                                  >
+                                    {emp?.profile_image_url ? (
+                                      <img src={emp.profile_image_url} alt="" className="h-full w-full object-cover" />
+                                    ) : (
+                                      (emp?.name || 'U').charAt(0).toUpperCase()
+                                    )}
+                                  </div>
+                                );
+                              })}
+                              {(Array.isArray(project.assignee_ids) ? project.assignee_ids : []).length > 4 && (
+                                <div className="h-7 w-7 rounded-full bg-slate-200 text-slate-600 border-2 border-white flex items-center justify-center text-[9px] font-bold shadow-sm">
+                                  +{(Array.isArray(project.assignee_ids) ? project.assignee_ids : []).length - 4}
+                                </div>
+                              )}
+                              {(Array.isArray(project.assignee_ids) ? project.assignee_ids : []).length === 0 && (
+                                <span className="text-slate-400 text-[11px] font-medium">--</span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* TASKS RATIO */}
+                          <td className="py-4 px-4 font-semibold text-slate-700">
+                            {completedTasks} / {totalTasks}
+                          </td>
+
+                          {/* PROGRESS PERCENT & BAR */}
+                          <td className="py-4 px-4">
+                            <div className="flex items-center gap-3">
+                              <span className="text-xs font-semibold text-slate-800 w-8">{progressPct}%</span>
+                              <div className="w-24 sm:w-28 h-2 bg-slate-100 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full transition-all duration-500 ${progressPct === 100 ? 'bg-emerald-500' : 'bg-[#0f172a]'}`} 
+                                  style={{ width: `${progressPct}%` }}
+                                />
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* STATUS BADGE */}
+                          <td className="py-4 px-4">
+                            <span className={`inline-block px-3 py-1 rounded-full text-[11px] font-semibold border ${getStatusStyle(project.status || 'Planning')}`}>
+                              {project.status || 'Planning'}
+                            </span>
+                          </td>
+
+                          {/* DUE DATE */}
+                          <td className="py-4 px-4 whitespace-nowrap">
+                            <div className={`flex items-center gap-2 text-xs font-medium ${isOverdue ? 'text-rose-500 font-semibold' : 'text-slate-500'}`}>
+                              <Calendar className={`h-4 w-4 shrink-0 ${isOverdue ? 'text-rose-500' : 'text-slate-400'}`} />
+                              <span>{formattedDueDate}</span>
+                            </div>
+                          </td>
+
+                          {/* ACTIONS */}
+                          <td className="py-4 pr-6 pl-2 text-right">
+                            <button 
+                              type="button" 
+                              onClick={(e) => { e.stopPropagation(); handleProjectClick(project); }} 
+                              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* LIST VIEW PAGINATION FOOTER */}
+              <div className="py-3.5 px-6 border-t border-slate-100 bg-white flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 font-medium">
+                <div>
+                  Showing {visibleProjects.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, visibleProjects.length)} of {visibleProjects.length} projects
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="h-8 w-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                    <button
+                      key={page}
+                      type="button"
+                      onClick={() => setCurrentPage(page)}
+                      className={`h-8 w-8 rounded-lg text-xs font-bold transition-all ${currentPage === page ? 'bg-blue-50 text-blue-600 font-black' : 'text-slate-500 hover:bg-slate-50'}`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="h-8 w-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -1347,7 +1544,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
                         <button type="button" onClick={() => setModalTab('progress')} disabled={!selectedProject} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedProject ? 'opacity-30 cursor-not-allowed' : modalTab === 'progress' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>{isUserView ? '2. Timeline' : '4. Timeline'}</button>
                         
-                        {/* STRICT FINANCE ACCESS LOCK ON TABS */}
                         {showFinance && !isUserView && (
                           <button type="button" onClick={() => setModalTab('finance')} disabled={!selectedProject} className={`pb-2.5 sm:pb-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${!selectedProject ? 'opacity-30 cursor-not-allowed' : modalTab === 'finance' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>5. Budget & Finances</button>
                         )}
@@ -1473,7 +1669,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                             <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 text-[12px] sm:text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 shadow-sm disabled:bg-slate-50" />
                           </div>
                           
-                          {/* STRICT FINANCE ACCESS LOCK */}
                           {showFinance && role === 'admin' && (
                             <div className="flex flex-col">
                               <label className="text-[9px] sm:text-[10px] font-bold text-slate-700 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1 whitespace-nowrap truncate">Expected Value (₹)</label>
@@ -1650,7 +1845,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                             ) : (
                               <div key={taskKey} className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl sm:rounded-2xl border transition-all ${task.is_completed ? 'bg-slate-50 border-slate-100' : 'bg-white border-slate-200 shadow-sm group hover:border-slate-300'}`}>
                                 <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
-                                  
                                   <div onClick={() => {
                                       if (isAdminView) {
                                         if (task.id) {
@@ -1867,7 +2061,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                              const emp = getAvatar(empId);
                              const empReport = reports.find(r => r.project_id?.toString() === selectedProject?.id?.toString() && r.employee_id?.toString() === empId?.toString());
                              
-                             const noteCount = Array.isArray(empReport?.entries) ? empReport.entries.length : 0;
+                             const noteCount = Array.isArray(empReport?.entries) ? empReport.entries : [];
 
                              return (
                                <div key={empId} className="bg-white border border-slate-200 hover:border-blue-300 rounded-2xl p-5 shadow-sm flex flex-col items-center text-center transition-all group">
@@ -1893,8 +2087,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                 {showFinance && modalTab === 'finance' && (
                   <div className="flex-1 overflow-y-auto min-h-0 overscroll-contain p-5 sm:p-8 flex flex-col sm:[&::-webkit-scrollbar]:w-1.5 sm:[&::-webkit-scrollbar-thumb]:bg-slate-300 sm:[&::-webkit-scrollbar-thumb]:rounded-full sm:[&::-webkit-scrollbar-track]:bg-transparent max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none] max-sm:[scrollbar-width:none]">
                     <div className="space-y-6 max-w-4xl mx-auto w-full">
-                      
-                      {/* Professional Project Value Summary */}
                       <div className="bg-white border border-slate-200 rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center justify-between shadow-sm gap-4">
                          <div>
                             <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Project Financial Cap</h4>
@@ -1908,7 +2100,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                          </div>
                       </div>
 
-                      {/* Allocations Form */}
                       <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-sm">
                          <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-200">
                             <div>
@@ -1966,7 +2157,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                          )}
                       </div>
 
-                      {/* Payment Recording */}
                       <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
                          <div className="mb-6 pb-4 border-b border-slate-100">
                             <h4 className="text-[12px] font-bold text-slate-900 uppercase tracking-wider">Disburse Payment</h4>
@@ -2036,7 +2226,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                             <button type="button" onClick={handleRecordProjectPayment} disabled={isSaving || !paymentForm.employee_id || paymentForm.amount <= 0} className="w-full md:w-auto h-11 px-8 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-50 shadow-md">Record</button>
                          </div>
 
-                         {/* Payment Ledger Accordion */}
                          <div>
                             <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Payment Ledger</h4>
                             <div className="space-y-3">
