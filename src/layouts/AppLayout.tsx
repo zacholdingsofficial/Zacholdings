@@ -64,6 +64,7 @@ export default function AppLayout() {
     { path: "/customers", icon: UserSquare2, label: isAcademy ? "Students" : "Customers", allowedRoles: ['admin', 'head'] },
     { path: "/finance", icon: Banknote, label: "Finance", allowedRoles: ['admin', 'head'] },
     { path: "/invoices", icon: FileText, label: "Invoices", allowedRoles: ['admin', 'head'] },
+    { path: "/agreements", icon: FileText, label: "Agreements", allowedRoles: ['admin', 'head'] },
     { path: "/employees", icon: Users, label: "Personnel", allowedRoles: ['admin', 'head'] },
     { path: "/settings", icon: Settings, label: "Settings", allowedRoles: ['admin', 'head', 'user'] },
   ];
@@ -312,10 +313,12 @@ export default function AppLayout() {
                </>
              )}
 
-             <button onClick={() => setIsChatOpen(true)} className="relative h-12 w-12 bg-white/90 backdrop-blur-md border border-slate-200/50 rounded-full flex items-center justify-center text-slate-500 hover:text-blue-900 shadow-sm transition-all" title="Messages">
-                <MessageSquare className="h-5 w-5" />
-                {totalUnread > 0 && <span className="absolute top-0 right-0 h-3.5 w-3.5 border-2 border-white bg-rose-500 rounded-full"></span>}
-             </button>
+             {isDashboardRoute && (
+               <button onClick={() => setIsChatOpen(true)} className="relative h-12 w-12 bg-white/90 backdrop-blur-md border border-slate-200/50 rounded-full flex items-center justify-center text-slate-500 hover:text-blue-900 shadow-sm transition-all" title="Messages">
+                 <MessageSquare className="h-5 w-5" />
+                 {totalUnread > 0 && <span className="absolute top-0 right-0 h-3.5 w-3.5 border-2 border-white bg-rose-500 rounded-full"></span>}
+               </button>
+             )}
 
             {activeWorkspace && role === 'admin' && (
               <div className="flex items-center gap-3 bg-white/90 backdrop-blur-md px-5 py-3 rounded-2xl border border-slate-200/50 shadow-sm ml-1">
@@ -372,10 +375,13 @@ export default function AppLayout() {
                  </button>
                </>
              )}
-             <button onClick={() => setIsChatOpen(true)} className="relative h-10 w-10 text-slate-500 hover:text-blue-900 flex items-center justify-center transition-all active:scale-95">
-                <MessageSquare className="h-5 w-5" />
-                {totalUnread > 0 && <span className="absolute top-2 right-2 h-2.5 w-2.5 border-2 border-white bg-rose-500 rounded-full"></span>}
-             </button>
+             
+             {isDashboardRoute && (
+               <button onClick={() => setIsChatOpen(true)} className="relative h-10 w-10 text-slate-500 hover:text-blue-900 flex items-center justify-center transition-all active:scale-95">
+                 <MessageSquare className="h-5 w-5" />
+                 {totalUnread > 0 && <span className="absolute top-2 right-2 h-2.5 w-2.5 border-2 border-white bg-rose-500 rounded-full"></span>}
+               </button>
+             )}
            </div>
         </div>
 
