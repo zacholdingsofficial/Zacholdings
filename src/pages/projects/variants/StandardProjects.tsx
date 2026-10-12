@@ -705,6 +705,25 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     return Number(formAlloc.allocated) !== Number(originalAlloc?.allocated_amount || 0) || Number(formAlloc.incentive) !== Number(originalAlloc?.incentive_amount || 0);
   });
 
+  // --- STATUS BAR METRICS CALCULATIONS ---
+  const allRelevantProjects = projects.filter(p => {
+    if (!p.name) return false;
+    if (isGlobalAdmin) {
+      return filterCompanyId === "all" || p.company_id?.toString() === filterCompanyId;
+    }
+    const isAssigned = isHead || (Array.isArray(p.assignee_ids) ? p.assignee_ids : []).includes(employeeId);
+    return isAssigned && p.company_id?.toString() === currentCompanyId?.toString();
+  });
+
+  const activeProjectsCount = allRelevantProjects.filter(p => p.status !== 'Completed').length;
+  const completedProjectsCount = allRelevantProjects.filter(p => p.status === 'Completed').length;
+  const overdueProjectsCount = allRelevantProjects.filter(p => {
+    if (p.status === 'Completed' || !p.due_date) return false;
+    return new Date(p.due_date).getTime() < new Date(today).getTime();
+  }).length;
+  const totalTasksCount = tasks.filter((t: any) => allRelevantProjects.some(p => p.id?.toString() === t.project_id?.toString())).length;
+  // ---------------------------------------
+
   return (
     <>
       <div className="max-w-[1200px] mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-700 pb-8 relative z-0 print:p-0 print:m-0">
@@ -724,6 +743,58 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
             </button>
           )}
         </div>
+
+        {/* STATUS BAR COMPONENT */}
+        <div className="bg-white rounded-2xl sm:rounded-[20px] border border-slate-100 shadow-sm p-5 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-6 print:hidden w-full">
+          
+          <div className="flex items-center gap-4 w-full sm:w-1/4">
+            <div className="h-12 w-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+              <Layers className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-2xl font-black text-slate-900 tracking-tight leading-none">{activeProjectsCount}</p>
+              <p className="text-[13px] font-medium text-slate-500 mt-1">Active Projects</p>
+            </div>
+          </div>
+
+          <div className="hidden sm:block w-px h-12 bg-slate-100 shrink-0"></div>
+
+          <div className="flex items-center gap-4 w-full sm:w-1/4">
+            <div className="h-12 w-12 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center shrink-0">
+              <AlertCircle className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-2xl font-black text-slate-900 tracking-tight leading-none">{overdueProjectsCount}</p>
+              <p className="text-[13px] font-medium text-slate-500 mt-1">Overdue</p>
+            </div>
+          </div>
+
+          <div className="hidden sm:block w-px h-12 bg-slate-100 shrink-0"></div>
+
+          <div className="flex items-center gap-4 w-full sm:w-1/4">
+            <div className="h-12 w-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+              <ListTodo className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-2xl font-black text-slate-900 tracking-tight leading-none">{totalTasksCount}</p>
+              <p className="text-[13px] font-medium text-slate-500 mt-1">Total Tasks</p>
+            </div>
+          </div>
+
+          <div className="hidden sm:block w-px h-12 bg-slate-100 shrink-0"></div>
+
+          <div className="flex items-center gap-4 w-full sm:w-1/4">
+            <div className="h-12 w-12 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-2xl font-black text-slate-900 tracking-tight leading-none">{completedProjectsCount}</p>
+              <p className="text-[13px] font-medium text-slate-500 mt-1">Completed</p>
+            </div>
+          </div>
+
+        </div>
+        {/* END OF STATUS BAR COMPONENT */}
 
         <div className="bg-white p-2 rounded-xl sm:rounded-2xl border border-slate-100 shadow-sm flex flex-col sm:flex-row gap-2 print:hidden">
           <div className="relative flex-1">
