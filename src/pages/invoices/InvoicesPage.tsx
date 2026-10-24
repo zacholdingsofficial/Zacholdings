@@ -147,7 +147,7 @@ export default function InvoicesPage() {
     return true;
   });
 
-  const showAdminPopup = isAdmin && projectsNeedingInvoices.length > 0 && !dismissedPopup && canViewFinance;
+  const showAdminPopup = canViewFinance && projectsNeedingInvoices.length > 0 && !dismissedPopup;
 
   // --- SPLIT ACTIVE & COMPLETED LISTS ---
   const activeRecords: any[] = [];
