@@ -6,6 +6,13 @@ interface DataState {
   companies: any[]; projects: any[]; tasks: any[]; reports: any[]; employees: any[]; customers: any[]; invoices: any[]; invoiceItems: any[]; invoicePayments: any[]; messages: any[]; salaryPayments: any[]; announcements: any[]; expenses: any[]; projectAllocations: any[]; 
   agreementTemplates: any[]; clientAgreements: any[];
   isLoading: boolean;
+  
+  // Tab Interconnectivity State
+  targetProjectId: number | null;
+  targetInvoiceId: number | null;
+  setTargetProjectId: (id: number | null) => void;
+  setTargetInvoiceId: (id: number | null) => void;
+
   fetchAllData: () => Promise<void>;
 }
 
@@ -13,6 +20,12 @@ export const useDataStore = create<DataState>((set) => ({
   companies: [], projects: [], tasks: [], reports: [], employees: [], customers: [], invoices: [], invoiceItems: [], invoicePayments: [], messages: [], salaryPayments: [], announcements: [], expenses: [], projectAllocations: [], 
   agreementTemplates: [], clientAgreements: [],
   isLoading: false,
+
+  // Tab Interconnectivity Initial State
+  targetProjectId: null,
+  targetInvoiceId: null,
+  setTargetProjectId: (id) => set({ targetProjectId: id }),
+  setTargetInvoiceId: (id) => set({ targetInvoiceId: id }),
 
   fetchAllData: async () => {
     set({ isLoading: true });
