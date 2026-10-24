@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Search, Download, Printer, X, CheckCircle2, Building2, UserSquare2, Trash2, Receipt, ArrowRight } from "lucide-react";
+import { Plus, Search, Download, Printer, X, CheckCircle2, Building2, UserSquare2, Trash2, Receipt, ArrowRight, AlertCircle, ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import { useDataStore } from "../../store/dataStore";
 import { supabase } from "../../supabase";
@@ -8,11 +9,13 @@ import { supabase } from "../../supabase";
 const STATUS_OPTIONS = ['Pending', 'Partially Paid', 'Paid', 'Overdue', 'Cancelled'];
 
 export default function InvoicesPage() {
+  const navigate = useNavigate();
   const { role, activeWorkspace, companyId } = useAuthStore();
   
   const { 
     invoices, invoiceItems, invoicePayments, projects, 
-    customers, companies, employees, projectAllocations, salaryPayments, expenses = [], fetchAllData 
+    customers, companies, employees, projectAllocations, salaryPayments, expenses = [], 
+    targetInvoiceId, setTargetInvoiceId, setTargetProjectId, fetchAllData 
   } = useDataStore();
 
   const isAdmin = role === 'admin';
@@ -21,7 +24,6 @@ export default function InvoicesPage() {
   const currentCompany = companies.find((c: any) => c.id?.toString() === currentCompanyId?.toString());
   
   // --- DYNAMIC FINANCE ACCESS CHECK ---
-  // If ON: See Invoices/Billing. If OFF: See Project Expenses/Cost Sheets.
   const canViewFinance = isAdmin || (isHead && currentCompany?.allow_head_finance !== false);
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -31,6 +33,9 @@ export default function InvoicesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
+  
+  const [showCompleted, setShowCompleted] = useState(false);
+  const [dismissedPopup, setDismissedPopup] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -68,7 +73,6 @@ export default function InvoicesPage() {
 
     const searchStr = searchQuery.trim().toLowerCase();
     
-    // Search matches invoice ID, customer name, internal company name, or linked project name
     const matchesSearch = 
       !searchStr ||
       (inv.invoice_number && inv.invoice_number.toLowerCase().includes(searchStr)) || 
@@ -93,18 +97,15 @@ export default function InvoicesPage() {
     const matchesSearch = !searchStr || p.name.toLowerCase().includes(searchStr) || costId.includes(searchStr);
     return matchesSearch && p.company_id === currentCompanyId;
   }).map(p => {
-    // 1. Calculate Labor Allocations
     const pAllocations = projectAllocations.filter(a => a.project_id === p.id);
     const totalAllocated = pAllocations.reduce((sum, a) => sum + (a.allocated_amount || 0) + (a.incentive_amount || 0), 0);
     const pPayments = salaryPayments.filter(sp => sp.project_id === p.id);
     const totalPaidSalaries = pPayments.reduce((sum, sp) => sum + parseFloat(sp.amount || 0), 0);
-
-    // 2. Calculate Additional Project Expenses
     const pExpenses = expenses.filter((e: any) => e.project_id === p.id);
     const totalProjectExpenses = pExpenses.reduce((sum: number, e: any) => sum + parseFloat(e.amount || 0), 0);
 
     return {
-      isExpenseReport: true, // Flag identifying it as a Head view read-only document
+      isExpenseReport: true,
       id: p.id,
       project_id: p.id,
       project_name: p.name,
@@ -112,15 +113,58 @@ export default function InvoicesPage() {
       company_id: p.company_id,
       issue_date: p.approval_date || today,
       due_date: p.due_date || today,
-      total_amount: totalAllocated + totalProjectExpenses, // Total Cost = Labor + Expenses
-      amount_paid: totalPaidSalaries + totalProjectExpenses, // We assume external expenses are cleared/paid
+      total_amount: totalAllocated + totalProjectExpenses,
+      amount_paid: totalPaidSalaries + totalProjectExpenses,
       status: p.status || 'Active',
       allocations: pAllocations,
-      project_expenses: pExpenses // Passed down for rendering expense line items
+      project_expenses: pExpenses
     };
   });
 
   const displayList = !canViewFinance ? headProjectExpenses : visibleInvoices;
+
+  // --- TAB INTERCONNECTIVITY EFFECT ---
+  useEffect(() => {
+    if (targetInvoiceId) {
+      const invToOpen = displayList.find(inv => inv.id === targetInvoiceId);
+      if (invToOpen) {
+        openViewInvoice(invToOpen);
+      }
+      setTargetInvoiceId(null);
+    }
+  }, [targetInvoiceId]);
+
+  // --- ADMIN: PROJECTS AWAITING INVOICE ---
+  const projectsNeedingInvoices = projects.filter(p => {
+    if ((p.expected_amount || 0) <= 0) return false;
+    if (invoices.some(inv => inv.project_id === p.id)) return false;
+    if (p.status === 'Cancelled') return false;
+    if (isAdmin && !activeWorkspace) {
+       if (filterCompanyId !== 'all' && p.company_id.toString() !== filterCompanyId) return false;
+    } else {
+       if (p.company_id?.toString() !== currentCompanyId?.toString()) return false;
+    }
+    return true;
+  });
+
+  const showAdminPopup = isAdmin && projectsNeedingInvoices.length > 0 && !dismissedPopup && canViewFinance;
+
+  // --- SPLIT ACTIVE & COMPLETED LISTS ---
+  const activeRecords: any[] = [];
+  const completedRecords: any[] = [];
+
+  displayList.forEach(inv => {
+    let isProjectCompleted = false;
+    if (canViewFinance) {
+      const proj = projects.find(p => p.id === inv.project_id);
+      isProjectCompleted = proj?.status === 'Completed';
+    } else {
+      isProjectCompleted = inv.status === 'Completed';
+    }
+
+    if (isProjectCompleted) completedRecords.push(inv);
+    else activeRecords.push(inv);
+  });
 
   const currentInvoicePayments = selectedInvoice && !selectedInvoice.isExpenseReport 
       ? invoicePayments.filter(p => p.invoice_id === selectedInvoice.id) 
@@ -154,6 +198,15 @@ export default function InvoicesPage() {
     setLineItems([{ description: "", quantity: 1, rate: 0 }]);
     setShowPaymentForm(false);
     setIsModalOpen(true);
+  };
+
+  // --- REROUTE LOGIC FOR PENDING APPROVALS ---
+  const handleReviewPending = () => {
+    const targetProj = projectsNeedingInvoices[0];
+    if (targetProj) {
+      setTargetProjectId(targetProj.id);
+      navigate('/projects');
+    }
   };
 
   const openViewInvoice = (inv: any) => {
@@ -330,6 +383,60 @@ export default function InvoicesPage() {
     }
   };
 
+  // Reusable card renderer
+  const renderCard = (inv: any) => {
+    const status = canViewFinance ? getDynamicStatus(inv) : inv.status;
+    const proj = projects.find(p => p.id === inv.project_id);
+    const projStatus = proj?.status || 'Active';
+    
+    const gridTitle = canViewFinance 
+        ? inv.invoice_number 
+        : inv.project_name;
+        
+    const gridClientName = canViewFinance
+        ? (inv.customer_id 
+            ? customers.find(c => c.id === inv.customer_id)?.name 
+            : projects.find(p => p.id === inv.project_id)?.internal_company_id 
+              ? `${companies.find(c => c.id === projects.find(p => p.id === inv.project_id)?.internal_company_id)?.name} (Internal)` 
+              : 'Unknown Client')
+        : inv.invoice_number;
+
+    return (
+      <motion.div key={inv.id} layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} onClick={() => openViewInvoice(inv)} className="bg-white rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all flex flex-col relative overflow-hidden group cursor-pointer p-4 sm:p-6">
+        <div className="flex justify-between items-start mb-3 sm:mb-4">
+          <div className="flex flex-col min-w-0 pr-2">
+            <span className="text-[13px] sm:text-[14px] font-black text-slate-900 truncate">{gridTitle}</span>
+            {/* Real-time Project Status Indicator (Hidden on Print) */}
+            {canViewFinance && proj && (
+               <div className="flex items-center gap-1.5 mt-1.5 print:hidden">
+                  <div className={`h-1.5 w-1.5 rounded-full ${projStatus === 'Completed' ? 'bg-slate-400' : 'bg-emerald-500'}`}></div>
+                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{projStatus} Project</span>
+               </div>
+            )}
+          </div>
+          <span className={`px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-[8px] sm:text-[9px] font-bold uppercase tracking-widest shrink-0 border shadow-sm ${getStatusStyle(status)}`}>{status}</span>
+        </div>
+        <div className="space-y-1 sm:space-y-1.5 mb-4 sm:mb-6">
+          <p className="text-[11px] sm:text-[12px] font-medium text-slate-600 flex items-center gap-1.5 sm:gap-2 truncate">
+            {canViewFinance ? <UserSquare2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-slate-400 shrink-0" /> : <Receipt className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-slate-400 shrink-0" />} 
+            <span className="truncate">{gridClientName}</span>
+          </p>
+          {canViewFinance && inv.project_id && <p className="text-[11px] sm:text-[12px] font-medium text-slate-600 flex items-center gap-1.5 sm:gap-2 truncate"><Building2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-slate-400 shrink-0" /> <span className="truncate">{proj?.name}</span></p>}
+        </div>
+        <div className="mt-auto pt-3 sm:pt-4 border-t border-slate-50 flex justify-between items-end">
+          <div>
+            <p className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">{canViewFinance ? 'Due Date' : 'Target Date'}</p>
+            <p className={`text-[11px] sm:text-[12px] font-bold ${status === 'Overdue' ? 'text-rose-500' : 'text-slate-800'}`}>{inv.due_date ? new Date(inv.due_date).toLocaleDateString(undefined, {month: 'short', day: 'numeric'}) : 'TBD'}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">{canViewFinance ? 'Total' : 'Project Cost'}</p>
+            <p className={`text-lg sm:text-xl font-bold tracking-tight ${!canViewFinance ? 'text-rose-600' : 'text-slate-900'}`}>₹{(inv.total_amount || 0).toLocaleString()}</p>
+          </div>
+        </div>
+      </motion.div>
+    );
+  };
+
   return (
     <>
       <div className="max-w-[1200px] mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-700 pb-8 relative z-0 print:p-0 print:m-0">
@@ -404,54 +511,76 @@ export default function InvoicesPage() {
         </div>
 
         {/* INVOICES / REPORTS GRID */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 print:hidden">
-          {displayList.length === 0 && (
-            <div className="col-span-full h-32 sm:h-48 border border-slate-200 border-dashed rounded-2xl sm:rounded-3xl flex items-center justify-center text-slate-400 bg-slate-50/50">
+        <div className="space-y-8 print:hidden">
+          
+          {displayList.length === 0 ? (
+            <div className="h-32 sm:h-48 border border-slate-200 border-dashed rounded-2xl sm:rounded-3xl flex items-center justify-center text-slate-400 bg-slate-50/50">
               <p className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest">No matching records found</p>
             </div>
-          )}
-          {displayList.map((inv: any) => {
-            const status = canViewFinance ? getDynamicStatus(inv) : inv.status;
-            
-            const gridTitle = canViewFinance 
-                ? inv.invoice_number 
-                : inv.project_name;
-                
-            const gridClientName = canViewFinance
-                ? (inv.customer_id 
-                    ? customers.find(c => c.id === inv.customer_id)?.name 
-                    : projects.find(p => p.id === inv.project_id)?.internal_company_id 
-                      ? `${companies.find(c => c.id === projects.find(p => p.id === inv.project_id)?.internal_company_id)?.name} (Internal)` 
-                      : 'Unknown Client')
-                : inv.invoice_number;
+          ) : (
+            <>
+              {/* ACTIVE PROJECTS GRID */}
+              {activeRecords.length > 0 && (
+                 <div>
+                    <h2 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4">Active Financials</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                      {activeRecords.map(inv => renderCard(inv))}
+                    </div>
+                 </div>
+              )}
 
-            return (
-              <motion.div key={inv.id} layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} onClick={() => openViewInvoice(inv)} className="bg-white rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all flex flex-col relative overflow-hidden group cursor-pointer p-4 sm:p-6">
-                <div className="flex justify-between items-start mb-3 sm:mb-4">
-                  <span className="text-[13px] sm:text-[14px] font-black text-slate-900 truncate pr-2">{gridTitle}</span>
-                  <span className={`px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-[8px] sm:text-[9px] font-bold uppercase tracking-widest shrink-0 border shadow-sm ${getStatusStyle(status)}`}>{status}</span>
+              {/* COMPLETED PROJECTS GRID */}
+              {completedRecords.length > 0 && (
+                <div className="pt-4">
+                  <button onClick={() => setShowCompleted(!showCompleted)} className="flex items-center gap-2 text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-4 hover:text-slate-700 transition-colors">
+                     {showCompleted ? <ChevronDown className="h-4 w-4"/> : <ChevronRight className="h-4 w-4"/>}
+                     Completed / Archived Financials ({completedRecords.length})
+                  </button>
+                  <AnimatePresence>
+                     {showCompleted && (
+                       <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                            {completedRecords.map(inv => renderCard(inv))}
+                          </div>
+                       </motion.div>
+                     )}
+                  </AnimatePresence>
                 </div>
-                <div className="space-y-1 sm:space-y-1.5 mb-4 sm:mb-6">
-                  <p className="text-[11px] sm:text-[12px] font-medium text-slate-600 flex items-center gap-1.5 sm:gap-2 truncate">
-                    {canViewFinance ? <UserSquare2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-slate-400 shrink-0" /> : <Receipt className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-slate-400 shrink-0" />} 
-                    <span className="truncate">{gridClientName}</span>
-                  </p>
-                  {canViewFinance && inv.project_id && <p className="text-[11px] sm:text-[12px] font-medium text-slate-600 flex items-center gap-1.5 sm:gap-2 truncate"><Building2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-slate-400 shrink-0" /> <span className="truncate">{projects.find(p => p.id === inv.project_id)?.name}</span></p>}
-                </div>
-                <div className="mt-auto pt-3 sm:pt-4 border-t border-slate-50 flex justify-between items-end">
-                  <div>
-                    <p className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">{canViewFinance ? 'Due Date' : 'Target Date'}</p>
-                    <p className={`text-[11px] sm:text-[12px] font-bold ${status === 'Overdue' ? 'text-rose-500' : 'text-slate-800'}`}>{inv.due_date ? new Date(inv.due_date).toLocaleDateString(undefined, {month: 'short', day: 'numeric'}) : 'TBD'}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">{canViewFinance ? 'Total' : 'Project Cost'}</p>
-                    <p className={`text-lg sm:text-xl font-bold tracking-tight ${!canViewFinance ? 'text-rose-600' : 'text-slate-900'}`}>₹{(inv.total_amount || 0).toLocaleString()}</p>
-                  </div>
-                </div>
-              </motion.div>
-            );
-          })}
+              )}
+            </>
+          )}
+
         </div>
+
+        {/* --- FLOATING ADMIN POP-UP FOR PENDING INVOICES --- */}
+        <AnimatePresence>
+          {showAdminPopup && (
+            <motion.div
+              initial={{ opacity: 0, y: 50, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 50, scale: 0.95 }}
+              className="fixed bottom-6 right-6 z-[90] bg-white border border-amber-200 shadow-2xl shadow-amber-900/10 rounded-2xl p-5 w-[340px] max-w-[calc(100vw-3rem)] print:hidden"
+            >
+              <button onClick={() => setDismissedPopup(true)} className="absolute top-3 right-3 text-slate-400 hover:text-slate-700"><X className="h-4 w-4" /></button>
+              
+              <div className="flex items-start gap-3 mb-4">
+                <div className="h-10 w-10 bg-amber-50 rounded-full flex items-center justify-center shrink-0">
+                  <AlertCircle className="h-5 w-5 text-amber-600" />
+                </div>
+                <div className="pt-1">
+                  <h4 className="text-[13px] font-black text-slate-900 tracking-tight leading-tight">Action Required</h4>
+                  <p className="text-[11px] font-medium text-slate-500 mt-1 leading-relaxed">
+                    <strong>{projectsNeedingInvoices.length}</strong> project{projectsNeedingInvoices.length > 1 ? 's are' : ' is'} awaiting initial invoice approval.
+                  </p>
+                </div>
+              </div>
+              
+              <button onClick={handleReviewPending} className="w-full h-10 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl shadow-md transition-colors flex items-center justify-center gap-2">
+                Review Project Workspace <ExternalLink className="h-3 w-3" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* --- INVOICE / EXPENSE MODAL --- */}
         <AnimatePresence>
