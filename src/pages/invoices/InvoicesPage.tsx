@@ -202,11 +202,8 @@ export default function InvoicesPage() {
 
   // --- REROUTE LOGIC FOR PENDING APPROVALS ---
   const handleReviewPending = () => {
-    const targetProj = projectsNeedingInvoices[0];
-    if (targetProj) {
-      setTargetProjectId(targetProj.id);
-      navigate('/projects');
-    }
+    // Navigate to the Projects tab, and tell it to open the 'Awaiting Billing' view
+    navigate('/projects', { state: { view: 'pending_billing' } });
   };
 
   const openViewInvoice = (inv: any) => {
