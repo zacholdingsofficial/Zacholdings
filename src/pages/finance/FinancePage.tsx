@@ -23,7 +23,7 @@ export default function FinancePage() {
 
   const today = new Date().toISOString().split('T')[0];
 
-  const [activeTab, setActiveTab] = useState<"projects" | "expenses">("projects");
+  const [activeTab, setActiveTab] = useState<"active_projects" | "completed_projects" | "expenses">("active_projects");
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCompanyId, setFilterCompanyId] = useState<string>("all");
   const [expenseStatusFilter, setExpenseStatusFilter] = useState<string>("all");
@@ -31,7 +31,6 @@ export default function FinancePage() {
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [editingExpenseId, setEditingExpenseId] = useState<number | null>(null);
   const [selectedProjectDetails, setSelectedProjectDetails] = useState<any>(null);
-  const [showCompletedProjects, setShowCompletedProjects] = useState(false);
   
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -424,7 +423,8 @@ export default function FinancePage() {
         </div>
 
         <div className="flex gap-3 sm:gap-4 border-b border-slate-200 overflow-x-auto max-sm:[&::-webkit-scrollbar]:hidden">
-           <button onClick={() => setActiveTab('projects')} className={`pb-2.5 sm:pb-3 text-[12px] sm:text-sm font-bold tracking-wide transition-all border-b-2 whitespace-nowrap ${activeTab === 'projects' ? 'border-emerald-700 text-emerald-700' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>Project Finances</button>
+           <button onClick={() => setActiveTab('active_projects')} className={`pb-2.5 sm:pb-3 text-[12px] sm:text-sm font-bold tracking-wide transition-all border-b-2 whitespace-nowrap ${activeTab === 'active_projects' ? 'border-emerald-700 text-emerald-700' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>Active Portfolios</button>
+           <button onClick={() => setActiveTab('completed_projects')} className={`pb-2.5 sm:pb-3 text-[12px] sm:text-sm font-bold tracking-wide transition-all border-b-2 whitespace-nowrap ${activeTab === 'completed_projects' ? 'border-emerald-700 text-emerald-700' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>Archived / Completed</button>
            <button onClick={() => setActiveTab('expenses')} className={`pb-2.5 sm:pb-3 text-[12px] sm:text-sm font-bold tracking-wide transition-all border-b-2 whitespace-nowrap ${activeTab === 'expenses' ? 'border-emerald-700 text-emerald-700' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>Other Expenses</button>
         </div>
 
@@ -432,46 +432,32 @@ export default function FinancePage() {
         <div className="bg-white p-2 rounded-xl sm:rounded-2xl border border-slate-100 shadow-sm flex">
           <div className="relative flex-1">
             <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 h-3.5 sm:h-4 w-3.5 sm:w-4 text-slate-400" />
-            <input type="text" placeholder={activeTab === 'projects' ? "Search projects..." : "Search expenses by description or category..."} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full h-10 sm:h-11 pl-9 sm:pl-11 pr-4 rounded-lg sm:rounded-xl border-none text-[13px] sm:text-sm font-medium outline-none bg-transparent focus:ring-0 placeholder:text-slate-400" />
+            <input type="text" placeholder={activeTab === 'expenses' ? "Search expenses by description or category..." : "Search projects..."} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full h-10 sm:h-11 pl-9 sm:pl-11 pr-4 rounded-lg sm:rounded-xl border-none text-[13px] sm:text-sm font-medium outline-none bg-transparent focus:ring-0 placeholder:text-slate-400" />
           </div>
         </div>
 
-        {/* PROJECTS TAB */}
-        {activeTab === 'projects' && (
+        {/* ACTIVE PROJECTS TAB */}
+        {activeTab === 'active_projects' && (
           <div className="space-y-8">
-            {visibleProjects.length === 0 ? (
-               <div className="h-32 sm:h-40 border border-slate-200 border-dashed rounded-2xl flex items-center justify-center text-slate-400 bg-slate-50/50"><p className="text-[10px] font-bold uppercase tracking-widest">No Projects Found</p></div>
+            {activeProjects.length === 0 ? (
+               <div className="h-32 sm:h-40 border border-slate-200 border-dashed rounded-2xl flex items-center justify-center text-slate-400 bg-slate-50/50"><p className="text-[10px] font-bold uppercase tracking-widest">No Active Projects Found</p></div>
             ) : (
-              <>
-                {/* ACTIVE PROJECTS GRID */}
-                {activeProjects.length > 0 && (
-                   <div>
-                      <h2 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4">Active Portfolios</h2>
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
-                        {activeProjects.map(project => renderProjectCard(project))}
-                      </div>
-                   </div>
-                )}
+               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
+                 {activeProjects.map(project => renderProjectCard(project))}
+               </div>
+            )}
+          </div>
+        )}
 
-                {/* COMPLETED PROJECTS GRID */}
-                {completedProjects.length > 0 && (
-                  <div className="pt-4 border-t border-slate-100">
-                    <button onClick={() => setShowCompletedProjects(!showCompletedProjects)} className="flex items-center gap-2 text-[11px] font-bold text-slate-500 uppercase tracking-widest hover:text-slate-700 transition-colors">
-                       {showCompletedProjects ? <ChevronDown className="h-4 w-4"/> : <ChevronRight className="h-4 w-4"/>}
-                       Archived / Completed Portfolios ({completedProjects.length})
-                    </button>
-                    <AnimatePresence>
-                       {showCompletedProjects && (
-                         <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden pt-4">
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
-                              {completedProjects.map(project => renderProjectCard(project))}
-                            </div>
-                         </motion.div>
-                       )}
-                    </AnimatePresence>
-                  </div>
-                )}
-              </>
+        {/* COMPLETED PROJECTS TAB */}
+        {activeTab === 'completed_projects' && (
+          <div className="space-y-8">
+            {completedProjects.length === 0 ? (
+               <div className="h-32 sm:h-40 border border-slate-200 border-dashed rounded-2xl flex items-center justify-center text-slate-400 bg-slate-50/50"><p className="text-[10px] font-bold uppercase tracking-widest">No Completed Projects Found</p></div>
+            ) : (
+               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
+                 {completedProjects.map(project => renderProjectCard(project))}
+               </div>
             )}
           </div>
         )}
