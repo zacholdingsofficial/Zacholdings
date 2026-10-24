@@ -18,8 +18,8 @@ const DEFAULT_MILESTONES = {
 export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, onClearOverride, onCrossHandoff }: { autoOpenProjectId?: number | null, forcedCompanyId?: number | null, onClearOverride?: () => void, onCrossHandoff?: (projectId: number, compId: number) => void }) {
   const { role, employeeId, activeWorkspace, companyId } = useAuthStore();
   const store = useDataStore();
-  // Added 'invoices' here to check billing status
-  const { projects, tasks, reports, employees, companies, customers, salaryPayments, projectAllocations, invoices, fetchAllData } = store;
+  // Added targetProjectId and setTargetProjectId to intercept incoming navigations
+  const { projects, tasks, reports, employees, companies, customers, salaryPayments, projectAllocations, invoices, fetchAllData, targetProjectId, setTargetProjectId } = store;
   const location = useLocation();
 
   const [projectTab, setProjectTab] = useState<'all' | 'pending_billing'>('all');
@@ -114,6 +114,25 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     }
   }, [location]);
 
+  // Handle incoming Workspace navigation (from Finance/Invoices)
+  useLayoutEffect(() => {
+    if (autoOpenProjectId && projects.length > 0) {
+      const projToOpen = projects.find((p: any) => p.id === autoOpenProjectId);
+      if (projToOpen) {
+        openProjectDetails(projToOpen, role === 'user' ? 'user' : 'admin');
+      }
+    }
+    
+    // Automatically open the modal if we are carrying a target project ID
+    if (targetProjectId && projects.length > 0) {
+      const projToOpen = projects.find((p: any) => p.id === targetProjectId);
+      if (projToOpen) {
+        openProjectDetails(projToOpen, role === 'user' ? 'user' : 'admin');
+        setTargetProjectId(null); // Clear ID to prevent reopening on re-renders
+      }
+    }
+  }, [autoOpenProjectId, targetProjectId, projects, role, setTargetProjectId]);
+
   // Calculate projects awaiting billing
   const pendingBillingProjects = projects.filter(p => {
     if ((p.expected_amount || 0) <= 0) return false;
@@ -162,15 +181,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
     return assignments.some((cr: any) => cr.company_id?.toString() === formData.company_id?.toString());
   });
-
-  useLayoutEffect(() => {
-    if (autoOpenProjectId && projects.length > 0) {
-      const projToOpen = projects.find((p: any) => p.id === autoOpenProjectId);
-      if (projToOpen) {
-        openProjectDetails(projToOpen, role === 'user' ? 'user' : 'admin');
-      }
-    }
-  }, [autoOpenProjectId, projects, role]);
 
   const handleCloseModal = () => {
     if (hasUnsavedChanges) {
@@ -1955,7 +1965,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
                 {/* TAB 4: TIMELINE & MILESTONES */}
                 {modalTab === 'progress' && (
-                  <div className="flex-1 overflow-y-auto min-h-0 overscroll-contain p-5 sm:p-8 flex flex-col sm:[&::-webkit-scrollbar]:w-1.5 sm:[&::-webkit-scrollbar-thumb]:bg-slate-300 sm:[&::-webkit-scrollbar-thumb]:rounded-full sm:[&::-webkit-scrollbar-track]:bg-transparent max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none max-sm:[scrollbar-width:none]">
+                  <div className="flex-1 overflow-y-auto min-h-0 overscroll-contain p-5 sm:p-8 flex flex-col sm:[&::-webkit-scrollbar]:w-1.5 sm:[&::-webkit-scrollbar-thumb]:bg-slate-300 sm:[&::-webkit-scrollbar-thumb]:rounded-full sm:[&::-webkit-scrollbar-track]:bg-transparent max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none] max-sm:[scrollbar-width:none]">
 
                     {isAdminView && (
                       <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 sm:p-6 mb-6 shadow-sm">
@@ -2413,9 +2423,8 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
               </motion.div>
             </motion.div>
           )}
-        </AnimatePresence>,
-        document.body
-      )}
+        </AnimatePresence>
+      </div>
     </>
   );
 }
