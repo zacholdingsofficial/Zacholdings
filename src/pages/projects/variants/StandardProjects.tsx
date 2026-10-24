@@ -102,7 +102,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const adminTimelineReport = (selectedProject && timelineModalEmpId) ? reports.find(r => r.project_id?.toString() === selectedProject.id?.toString() && r.employee_id?.toString() === timelineModalEmpId?.toString()) : null;
   const adminTimelineEntries = Array.isArray(adminTimelineReport?.entries) ? adminTimelineReport.entries : [];
 
-  const taskSnapshot = stagedTasks => stagedTasks.map((t: any) => ({ id: t.id, title: t.title, assignee_id: t.assignee_id, deadline: t.deadline, is_completed: t.is_completed }));
+  const taskSnapshot = (stagedTasks: any) => stagedTasks.map((t: any) => ({ id: t.id, title: t.title, assignee_id: t.assignee_id, deadline: t.deadline, is_completed: t.is_completed }));
   const currentSnapshot = JSON.stringify({ formData, taskSnapshot: taskSnapshot(selectedProject ? pendingTasks : pendingTasks), customerType, newCustomer });
   const hasUnsavedChanges = initialSnapshot !== null && initialSnapshot !== currentSnapshot;
 
@@ -370,12 +370,12 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
       const tasksToUpdate = pendingTasks.filter(st => {
         if (!st.id) return false;
-        const ot = originalTasks.find(o => o.id === st.id);
+        const ot = originalTasks.find((o: any) => o.id === st.id);
         if (!ot) return false;
         return st.title !== ot.title || st.assignee_id !== ot.assignee_id || st.deadline !== ot.deadline || st.is_completed !== ot.is_completed;
       });
 
-      const tasksToDelete = originalTasks.filter(ot => !pendingTasks.some(st => st.id === ot.id)).map(t => t.id);
+      const tasksToDelete = originalTasks.filter((ot: any) => !pendingTasks.some(st => st.id === ot.id)).map((t: any) => t.id);
 
       if (tasksToInsert.length > 0) {
         const { error } = await supabase.from('project_tasks').insert(tasksToInsert);
@@ -659,7 +659,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     setEditingTaskKey(null);
   };
 
-  const handleAdminToggleTask = (task: any) => {
+  const handleAdminToggleTask = (task: any, index?: number) => {
     if (isUserView && !isImpersonating) return; 
     setPendingTasks(prev => prev.map(t => (t.id ? t.id === task.id : t.tempId === task.tempId) ? { ...t, is_completed: !t.is_completed } : t));
   };
@@ -1328,7 +1328,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                                       {entry.type === 'upload' && (
                                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-100 text-[9px] font-bold uppercase tracking-wider rounded-lg mb-3">
                                            <FileText className="h-3 w-3" /> Attached File: {entry.task_title || "Unknown"}
-                                      </span>
+                                        </span>
                                       )}
                                       <p className="text-[13px] text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">{entry.text || ''}</p>
                                       <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-50">
@@ -1955,7 +1955,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
                 {/* TAB 4: TIMELINE & MILESTONES */}
                 {modalTab === 'progress' && (
-                  <div className="flex-1 overflow-y-auto min-h-0 overscroll-contain p-5 sm:p-8 flex flex-col sm:[&::-webkit-scrollbar]:w-1.5 sm:[&::-webkit-scrollbar-thumb]:bg-slate-300 sm:[&::-webkit-scrollbar-thumb]:rounded-full sm:[&::-webkit-scrollbar-track]:bg-transparent max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none] max-sm:[scrollbar-width:none]">
+                  <div className="flex-1 overflow-y-auto min-h-0 overscroll-contain p-5 sm:p-8 flex flex-col sm:[&::-webkit-scrollbar]:w-1.5 sm:[&::-webkit-scrollbar-thumb]:bg-slate-300 sm:[&::-webkit-scrollbar-thumb]:rounded-full sm:[&::-webkit-scrollbar-track]:bg-transparent max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none max-sm:[scrollbar-width:none]">
 
                     {isAdminView && (
                       <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 sm:p-6 mb-6 shadow-sm">
@@ -2413,8 +2413,9 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
               </motion.div>
             </motion.div>
           )}
-        </AnimatePresence>
-      </div>
+        </AnimatePresence>,
+        document.body
+      )}
     </>
   );
 }
