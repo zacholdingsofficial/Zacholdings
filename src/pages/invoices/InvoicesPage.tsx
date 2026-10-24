@@ -468,7 +468,7 @@ export default function InvoicesPage() {
         {/* --- DEDICATED TABS FOR INVOICES --- */}
         <div className="flex gap-3 sm:gap-4 border-b border-slate-200 overflow-x-auto max-sm:[&::-webkit-scrollbar]:hidden mb-4 print:hidden">
            <button onClick={() => setActiveTab('active')} className={`pb-2.5 sm:pb-3 text-[12px] sm:text-sm font-bold tracking-wide transition-all border-b-2 whitespace-nowrap ${activeTab === 'active' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>Active Financials</button>
-           <button onClick={() => setActiveTab('completed')} className={`pb-2.5 sm:pb-3 text-[12px] sm:text-sm font-bold tracking-wide transition-all border-b-2 whitespace-nowrap ${activeTab === 'completed' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>Completed / Archived</button>
+           <button onClick={() => setActiveTab('completed')} className={`pb-2.5 sm:pb-3 text-[12px] sm:text-sm font-bold tracking-wide transition-all border-b-2 whitespace-nowrap ${activeTab === 'completed' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>Completed</button>
         </div>
 
         {/* FILTER BAR */}
