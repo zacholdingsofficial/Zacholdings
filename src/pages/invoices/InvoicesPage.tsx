@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useLayoutEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Search, Download, Printer, X, CheckCircle2, Building2, UserSquare2, Trash2, Receipt, ArrowRight, AlertCircle, ExternalLink } from "lucide-react";
@@ -123,16 +123,16 @@ export default function InvoicesPage() {
 
   const displayList = !canViewFinance ? headProjectExpenses : visibleInvoices;
 
-  // --- TAB INTERCONNECTIVITY EFFECT ---
-  useEffect(() => {
-    if (targetInvoiceId) {
+  // --- TAB INTERCONNECTIVITY EFFECT (Upgraded to useLayoutEffect for zero-flash transitions) ---
+  useLayoutEffect(() => {
+    if (targetInvoiceId && displayList.length > 0) {
       const invToOpen = displayList.find(inv => inv.id === targetInvoiceId);
       if (invToOpen) {
         openViewInvoice(invToOpen);
       }
       setTargetInvoiceId(null);
     }
-  }, [targetInvoiceId]);
+  }, [targetInvoiceId, displayList, setTargetInvoiceId]);
 
   // --- ADMIN: PROJECTS AWAITING INVOICE ---
   const projectsNeedingInvoices = projects.filter(p => {
