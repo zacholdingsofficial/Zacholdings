@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Search, Download, Printer, X, CheckCircle2, Building2, UserSquare2, Trash2, Receipt, ArrowRight, AlertCircle, ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
+import { Plus, Search, Download, Printer, X, CheckCircle2, Building2, UserSquare2, Trash2, Receipt, ArrowRight, AlertCircle, ExternalLink } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import { useDataStore } from "../../store/dataStore";
 import { supabase } from "../../supabase";
@@ -26,6 +26,7 @@ export default function InvoicesPage() {
   // --- DYNAMIC FINANCE ACCESS CHECK ---
   const canViewFinance = isAdmin || (isHead && currentCompany?.allow_head_finance !== false);
 
+  const [activeTab, setActiveTab] = useState<"active" | "completed">("active");
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCompanyId, setFilterCompanyId] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("All");
@@ -34,7 +35,6 @@ export default function InvoicesPage() {
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
   
-  const [showCompleted, setShowCompleted] = useState(false);
   const [dismissedPopup, setDismissedPopup] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
@@ -465,6 +465,12 @@ export default function InvoicesPage() {
           </div>
         </div>
 
+        {/* --- DEDICATED TABS FOR INVOICES --- */}
+        <div className="flex gap-3 sm:gap-4 border-b border-slate-200 overflow-x-auto max-sm:[&::-webkit-scrollbar]:hidden mb-4 print:hidden">
+           <button onClick={() => setActiveTab('active')} className={`pb-2.5 sm:pb-3 text-[12px] sm:text-sm font-bold tracking-wide transition-all border-b-2 whitespace-nowrap ${activeTab === 'active' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>Active Financials</button>
+           <button onClick={() => setActiveTab('completed')} className={`pb-2.5 sm:pb-3 text-[12px] sm:text-sm font-bold tracking-wide transition-all border-b-2 whitespace-nowrap ${activeTab === 'completed' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>Completed / Archived</button>
+        </div>
+
         {/* FILTER BAR */}
         <div className="bg-white p-2 rounded-xl sm:rounded-2xl border border-slate-100 shadow-sm print:hidden flex flex-col sm:flex-row gap-2">
           <div className="relative flex-1">
@@ -508,46 +514,33 @@ export default function InvoicesPage() {
         </div>
 
         {/* INVOICES / REPORTS GRID */}
-        <div className="space-y-8 print:hidden">
-          
-          {displayList.length === 0 ? (
-            <div className="h-32 sm:h-48 border border-slate-200 border-dashed rounded-2xl sm:rounded-3xl flex items-center justify-center text-slate-400 bg-slate-50/50">
-              <p className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest">No matching records found</p>
-            </div>
-          ) : (
-            <>
-              {/* ACTIVE PROJECTS GRID */}
-              {activeRecords.length > 0 && (
-                 <div>
-                    <h2 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4">Active Financials</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                      {activeRecords.map(inv => renderCard(inv))}
-                    </div>
-                 </div>
-              )}
+        {activeTab === 'active' && (
+          <div className="space-y-8 print:hidden">
+            {activeRecords.length === 0 ? (
+              <div className="h-32 sm:h-48 border border-slate-200 border-dashed rounded-2xl sm:rounded-3xl flex items-center justify-center text-slate-400 bg-slate-50/50">
+                <p className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest">No active records found</p>
+              </div>
+            ) : (
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                 {activeRecords.map(inv => renderCard(inv))}
+               </div>
+            )}
+          </div>
+        )}
 
-              {/* COMPLETED PROJECTS GRID */}
-              {completedRecords.length > 0 && (
-                <div className="pt-4">
-                  <button onClick={() => setShowCompleted(!showCompleted)} className="flex items-center gap-2 text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-4 hover:text-slate-700 transition-colors">
-                     {showCompleted ? <ChevronDown className="h-4 w-4"/> : <ChevronRight className="h-4 w-4"/>}
-                     Completed / Archived Financials ({completedRecords.length})
-                  </button>
-                  <AnimatePresence>
-                     {showCompleted && (
-                       <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                            {completedRecords.map(inv => renderCard(inv))}
-                          </div>
-                       </motion.div>
-                     )}
-                  </AnimatePresence>
-                </div>
-              )}
-            </>
-          )}
-
-        </div>
+        {activeTab === 'completed' && (
+          <div className="space-y-8 print:hidden">
+            {completedRecords.length === 0 ? (
+              <div className="h-32 sm:h-48 border border-slate-200 border-dashed rounded-2xl sm:rounded-3xl flex items-center justify-center text-slate-400 bg-slate-50/50">
+                <p className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest">No completed records found</p>
+              </div>
+            ) : (
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                 {completedRecords.map(inv => renderCard(inv))}
+               </div>
+            )}
+          </div>
+        )}
 
         {/* --- FLOATING ADMIN POP-UP FOR PENDING INVOICES --- */}
         <AnimatePresence>
