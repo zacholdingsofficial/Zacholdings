@@ -1,14 +1,16 @@
 import { useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, TrendingUp, Wallet, Building2, Plus, X, Receipt, CheckCircle2, UserSquare2, FileText, ArrowDownLeft, ArrowUpRight, Users, Download, BarChart3, Calendar, Filter, Clock, Edit2, Trash2, PieChart, Activity } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Search, TrendingUp, Wallet, Building2, Plus, X, Receipt, CheckCircle2, UserSquare2, FileText, ArrowDownLeft, ArrowUpRight, Users, Download, BarChart3, Calendar, Filter, Clock, Edit2, Trash2, PieChart, Activity, ExternalLink, ChevronDown, ChevronRight } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import { useDataStore } from "../../store/dataStore";
 import { supabase } from "../../supabase";
 
 export default function FinancePage() {
+  const navigate = useNavigate();
   const { role, activeWorkspace, companyId } = useAuthStore();
-  const { projects, invoices, salaryPayments, expenses, companies, employees, customers, fetchAllData } = useDataStore();
+  const { projects, invoices, salaryPayments, expenses, companies, employees, customers, fetchAllData, setTargetProjectId, setTargetInvoiceId } = useDataStore();
 
   const isAdmin = role === 'admin';
   const isHead = role === 'head';
@@ -29,6 +31,7 @@ export default function FinancePage() {
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [editingExpenseId, setEditingExpenseId] = useState<number | null>(null);
   const [selectedProjectDetails, setSelectedProjectDetails] = useState<any>(null);
+  const [showCompletedProjects, setShowCompletedProjects] = useState(false);
   
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -147,8 +150,11 @@ export default function FinancePage() {
     } catch (error: any) { alert(error.message); } finally { setIsSaving(false); }
   };
 
-  // --- FILTERING ---
+  // --- FILTERING & SORTING PROJECTS ---
   const visibleProjects = globalProjects.filter(p => p.name?.toLowerCase().includes(searchQuery.toLowerCase()));
+  
+  const activeProjects = visibleProjects.filter(p => p.status !== 'Completed');
+  const completedProjects = visibleProjects.filter(p => p.status === 'Completed');
   
   let visibleExpenses = [...globalExpenses]
     .sort((a,b) => new Date(b.expense_date).getTime() - new Date(a.expense_date).getTime())
@@ -215,7 +221,6 @@ export default function FinancePage() {
       rPayments = rPayments.filter(p => new Date(p.payment_date) <= new Date(reportConfig.endDate));
     }
 
-    // Totals
     const inc = rInvoices.reduce((acc, i) => acc + parseFloat(i.amount_paid || 0), 0);
     const expOverhead = rExpenses.reduce((acc, e) => acc + parseFloat(e.amount || 0), 0);
     const expPayroll = rPayments.reduce((acc, p) => acc + parseFloat(p.amount || 0), 0);
@@ -223,7 +228,6 @@ export default function FinancePage() {
     const prof = inc - exp;
     const margin = inc > 0 ? ((prof / inc) * 100).toFixed(1) : '0.0';
 
-    // Detailed Ledgers
     const incList = rInvoices.filter(i => parseFloat(i.amount_paid) > 0).map(i => ({
       date: i.issue_date,
       ref: i.invoice_number,
@@ -246,20 +250,17 @@ export default function FinancePage() {
       }))
     ].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    // Category Grouping
     const categoryData: Record<string, number> = { 'Payroll': expPayroll };
     rExpenses.forEach(e => {
       const cat = e.category || 'Other';
       categoryData[cat] = (categoryData[cat] || 0) + parseFloat(e.amount || 0);
     });
     
-    // Sort categories by highest expense
     const sortedCategories = Object.keys(categoryData)
       .map(k => ({ category: k, amount: categoryData[k] }))
       .filter(item => item.amount > 0)
       .sort((a, b) => b.amount - a.amount);
 
-    // Grouping by Month for Chart
     const monthlyData: Record<string, { inc: number, exp: number }> = {};
     rInvoices.forEach(i => {
       const m = i.issue_date ? i.issue_date.substring(0, 7) : 'Unknown';
@@ -289,19 +290,15 @@ export default function FinancePage() {
 
   const reportStats = useMemo(() => generateReportData(), [reportConfig, isReportModalOpen]);
 
-  // --- REPORT LOGOS DATA (STRICT PARENT & SUBJECT SEGREGATION) ---
   const masterAdmin = employees.find(e => e.access_level === 'admin');
   const parentCompanyDef = companies.find(c => c.business_type === 'parent');
   
-  // Left Side: Strictly Parent Entity
   const parentLogoUrl = parentCompanyDef?.logo_url || masterAdmin?.profile_image_url;
   const parentName = parentCompanyDef?.name || 'Zac Holdings';
   
-  // Right Side: Selected Subsidiary (Subject Entity)
   const selectedCompany = reportConfig.companyId !== 'all' ? companies.find(c => c.id.toString() === reportConfig.companyId) : null;
   const showSubjectEntity = selectedCompany && selectedCompany.name !== parentName;
 
-  // Polyline Points for SVG Line Chart
   const lineChartIncPoints = reportStats.chartData.map((d, i) => {
     const x = reportStats.chartData.length > 1 ? (i / (reportStats.chartData.length - 1)) * 100 : 50;
     const y = 100 - (d.inc / (reportStats.maxChartVal || 1)) * 100;
@@ -313,6 +310,59 @@ export default function FinancePage() {
     const y = 100 - (d.exp / (reportStats.maxChartVal || 1)) * 100;
     return `${x},${y}`;
   }).join(' ');
+
+  // Reusable Project Card Renderer
+  const renderProjectCard = (project: any) => {
+    const pInvoices = globalInvoices.filter(i => i.project_id === project.id);
+    const pPayments = globalPayments.filter(p => p.project_id === project.id);
+    const pExpenses = globalExpenses.filter(e => e.project_id === project.id);
+
+    const pMoneyIn = pInvoices.reduce((sum, inv) => sum + parseFloat(inv.amount_paid || 0), 0);
+    const pMoneyOut = pPayments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0) + pExpenses.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
+    const pProfit = pMoneyIn - pMoneyOut;
+    const clientInfo = getProjectClientInfo(project);
+
+    return (
+      <div key={project.id} onClick={() => setSelectedProjectDetails(project)} className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all group cursor-pointer">
+         <div className="flex justify-between items-start mb-4 border-b border-slate-50 pb-3">
+           <div className="min-w-0 pr-2">
+             <div className="flex items-center gap-1.5 mb-1 print:hidden">
+                <div className={`h-1.5 w-1.5 rounded-full ${project.status === 'Completed' ? 'bg-slate-400' : 'bg-emerald-500'}`}></div>
+                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{project.status}</span>
+             </div>
+             <h3 className="text-[14px] sm:text-[15px] font-bold text-slate-900 group-hover:text-emerald-700 truncate">{project.name}</h3>
+             <p className="text-[8px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 truncate">
+               {companies.find(c => c.id === project.company_id)?.name} • {clientInfo.name}
+             </p>
+           </div>
+           {canViewFinance && (
+             <span className={`px-2 py-0.5 rounded-lg text-[8px] font-bold uppercase tracking-widest shrink-0 ${pProfit >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+               {pProfit >= 0 ? 'Profit' : 'Deficit'}
+             </span>
+           )}
+         </div>
+
+         <div className="flex justify-between items-center gap-2">
+            {canViewFinance && (
+              <div className="flex-1 min-w-0">
+                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 truncate">Income</p>
+                <p className="text-[13px] sm:text-lg font-black text-slate-700 truncate">₹{pMoneyIn.toLocaleString()}</p>
+              </div>
+            )}
+            <div className={`flex-1 min-w-0 ${canViewFinance ? 'border-l border-slate-100 pl-2' : ''}`}>
+              <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 truncate">Expenses</p>
+              <p className="text-[13px] sm:text-lg font-black text-slate-700 truncate">₹{pMoneyOut.toLocaleString()}</p>
+            </div>
+            {canViewFinance && (
+              <div className={`flex-1 min-w-0 border-l border-slate-100 pl-2 ${pProfit >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
+                <p className="text-[8px] font-bold uppercase tracking-widest mb-0.5 opacity-70 truncate">Profit</p>
+                <p className="text-[14px] sm:text-xl font-black truncate">₹{pProfit.toLocaleString()}</p>
+              </div>
+            )}
+         </div>
+      </div>
+    );
+  };
 
   return (
     <>
@@ -387,56 +437,41 @@ export default function FinancePage() {
 
         {/* PROJECTS TAB */}
         {activeTab === 'projects' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
+          <div className="space-y-8">
             {visibleProjects.length === 0 ? (
-               <div className="col-span-full h-32 sm:h-40 border border-slate-200 border-dashed rounded-2xl flex items-center justify-center text-slate-400 bg-slate-50/50"><p className="text-[10px] font-bold uppercase tracking-widest">No Projects Found</p></div>
-            ) : visibleProjects.map(project => {
-              const pInvoices = globalInvoices.filter(i => i.project_id === project.id);
-              const pPayments = globalPayments.filter(p => p.project_id === project.id);
-              const pExpenses = globalExpenses.filter(e => e.project_id === project.id);
-
-              const pMoneyIn = pInvoices.reduce((sum, inv) => sum + parseFloat(inv.amount_paid || 0), 0);
-              const pMoneyOut = pPayments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0) + pExpenses.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
-              const pProfit = pMoneyIn - pMoneyOut;
-              const clientInfo = getProjectClientInfo(project);
-
-              return (
-                <div key={project.id} onClick={() => setSelectedProjectDetails(project)} className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all group cursor-pointer">
-                   <div className="flex justify-between items-start mb-4 border-b border-slate-50 pb-3">
-                     <div className="min-w-0 pr-2">
-                       <h3 className="text-[14px] sm:text-[15px] font-bold text-slate-900 group-hover:text-emerald-700 truncate">{project.name}</h3>
-                       <p className="text-[8px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 truncate">
-                         {companies.find(c => c.id === project.company_id)?.name} • {clientInfo.name}
-                       </p>
-                     </div>
-                     {canViewFinance && (
-                       <span className={`px-2 py-0.5 rounded-lg text-[8px] font-bold uppercase tracking-widest shrink-0 ${pProfit >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-                         {pProfit >= 0 ? 'Profit' : 'Deficit'}
-                       </span>
-                     )}
-                   </div>
-
-                   <div className="flex justify-between items-center gap-2">
-                      {canViewFinance && (
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 truncate">Income</p>
-                          <p className="text-[13px] sm:text-lg font-black text-slate-700 truncate">₹{pMoneyIn.toLocaleString()}</p>
-                        </div>
-                      )}
-                      <div className={`flex-1 min-w-0 ${canViewFinance ? 'border-l border-slate-100 pl-2' : ''}`}>
-                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 truncate">Expenses</p>
-                        <p className="text-[13px] sm:text-lg font-black text-slate-700 truncate">₹{pMoneyOut.toLocaleString()}</p>
+               <div className="h-32 sm:h-40 border border-slate-200 border-dashed rounded-2xl flex items-center justify-center text-slate-400 bg-slate-50/50"><p className="text-[10px] font-bold uppercase tracking-widest">No Projects Found</p></div>
+            ) : (
+              <>
+                {/* ACTIVE PROJECTS GRID */}
+                {activeProjects.length > 0 && (
+                   <div>
+                      <h2 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4">Active Portfolios</h2>
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
+                        {activeProjects.map(project => renderProjectCard(project))}
                       </div>
-                      {canViewFinance && (
-                        <div className={`flex-1 min-w-0 border-l border-slate-100 pl-2 ${pProfit >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
-                          <p className="text-[8px] font-bold uppercase tracking-widest mb-0.5 opacity-70 truncate">Profit</p>
-                          <p className="text-[14px] sm:text-xl font-black truncate">₹{pProfit.toLocaleString()}</p>
-                        </div>
-                      )}
                    </div>
-                </div>
-              )
-            })}
+                )}
+
+                {/* COMPLETED PROJECTS GRID */}
+                {completedProjects.length > 0 && (
+                  <div className="pt-4 border-t border-slate-100">
+                    <button onClick={() => setShowCompletedProjects(!showCompletedProjects)} className="flex items-center gap-2 text-[11px] font-bold text-slate-500 uppercase tracking-widest hover:text-slate-700 transition-colors">
+                       {showCompletedProjects ? <ChevronDown className="h-4 w-4"/> : <ChevronRight className="h-4 w-4"/>}
+                       Archived / Completed Portfolios ({completedProjects.length})
+                    </button>
+                    <AnimatePresence>
+                       {showCompletedProjects && (
+                         <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden pt-4">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
+                              {completedProjects.map(project => renderProjectCard(project))}
+                            </div>
+                         </motion.div>
+                       )}
+                    </AnimatePresence>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
 
@@ -555,12 +590,17 @@ export default function FinancePage() {
             <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center sm:p-4 bg-slate-900/40 backdrop-blur-sm print:hidden">
               <motion.div initial={{ opacity: 0, y: 40, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 40, scale: 0.95 }} className="bg-white rounded-[2rem] shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden">
                 <div className="px-5 py-5 border-b border-slate-100 bg-[#FAFCFF] shrink-0">
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-start justify-between">
                     <div>
                       <span className="text-[9px] font-bold uppercase tracking-widest text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">Financial Details</span>
                       <h3 className="text-xl font-bold text-slate-900 mt-2 truncate">{selectedProjectDetails.name}</h3>
                     </div>
-                    <button onClick={() => setSelectedProjectDetails(null)} className="h-8 w-8 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm"><X className="h-4 w-4" /></button>
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <button onClick={() => { setTargetProjectId(selectedProjectDetails.id); navigate('/projects'); }} className="h-8 px-3 sm:h-10 sm:px-4 bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 rounded-lg sm:rounded-xl flex items-center justify-center text-[10px] sm:text-[11px] font-bold uppercase tracking-wider shadow-sm transition-colors print:hidden">
+                         Workspace <ExternalLink className="h-3 w-3 sm:h-3.5 sm:w-3.5 ml-1.5" />
+                      </button>
+                      <button onClick={() => setSelectedProjectDetails(null)} className="h-8 w-8 sm:h-10 sm:w-10 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm"><X className="h-4 w-4" /></button>
+                    </div>
                   </div>
                 </div>
 
@@ -609,14 +649,19 @@ export default function FinancePage() {
                               {pInvoices.length === 0 ? <p className="text-xs italic text-slate-400">No invoices generated.</p> : (
                                 <div className="space-y-2">
                                   {pInvoices.map(inv => (
-                                    <div key={inv.id} className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
+                                    <div key={inv.id} className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm group">
                                       <div className="flex justify-between">
                                         <p className="font-bold text-slate-900 text-xs">{inv.invoice_number}</p>
                                         <span className="px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest bg-emerald-100 text-emerald-700">{inv.status}</span>
                                       </div>
                                       <div className="flex justify-between items-end mt-2">
-                                        <div className="text-[9px] font-bold text-slate-400">Total: ₹{parseFloat(inv.total_amount || 0).toLocaleString()}</div>
-                                        <div className="text-xs font-black text-emerald-600">Paid: ₹{parseFloat(inv.amount_paid || 0).toLocaleString()}</div>
+                                        <div>
+                                          <div className="text-[9px] font-bold text-slate-400 mb-0.5">Total: ₹{parseFloat(inv.total_amount || 0).toLocaleString()}</div>
+                                          <div className="text-xs font-black text-emerald-600">Paid: ₹{parseFloat(inv.amount_paid || 0).toLocaleString()}</div>
+                                        </div>
+                                        <button onClick={() => { setTargetInvoiceId(inv.id); navigate('/invoices'); setIsReportModalOpen(false); setSelectedProjectDetails(null); }} className="text-[9px] font-bold text-blue-600 hover:text-blue-800 uppercase tracking-widest flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                          View <ExternalLink className="h-3 w-3" />
+                                        </button>
                                       </div>
                                     </div>
                                   ))}
@@ -974,15 +1019,13 @@ export default function FinancePage() {
                    </div>
 
                    <div className="text-center text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-16 pt-8 border-t border-slate-100 print:mt-8 print:pt-4 print:text-[7px]">
-                     End of Report • Generated on {new Date().toLocaleString()}
+                      End of Report • Generated on {new Date().toLocaleString()}
                    </div>
                 </div>
               </motion.div>
             </div>
           )}
-        </AnimatePresence>,
-        document.body
-      )}
+        </AnimatePresence>
 
     </>
   );
