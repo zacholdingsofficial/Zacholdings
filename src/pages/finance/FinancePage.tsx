@@ -540,6 +540,86 @@ export default function FinancePage() {
         )}
       </div>
 
+      {/* ADD/EDIT EXPENSE MODAL */}
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {isExpenseModalOpen && (
+            <div className="fixed inset-0 z-[10000] flex items-center justify-center sm:p-4 bg-slate-900/40 backdrop-blur-sm print:hidden">
+              <motion.div initial={{ opacity: 0, y: 40, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 40, scale: 0.95 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden border border-slate-100">
+                <div className="px-6 py-5 border-b border-slate-100 bg-[#FAFCFF] flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-slate-900 tracking-tight">{editingExpenseId ? 'Edit Expense' : 'Add New Expense'}</h3>
+                  <button onClick={() => setIsExpenseModalOpen(false)} className="h-8 w-8 bg-white border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm"><X className="h-4 w-4" /></button>
+                </div>
+                <div className="p-6 space-y-4 overflow-y-auto max-h-[70vh]">
+                  {isAdmin && !activeWorkspace && (
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Company</label>
+                      <select value={expenseForm.company_id} onChange={e => setExpenseForm({...expenseForm, company_id: e.target.value})} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none focus:border-emerald-500">
+                        <option value="" disabled>Select Company...</option>
+                        {companies.map(c => <option key={c.id} value={c.id.toString()}>{c.name}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Project (Optional)</label>
+                    <select value={expenseForm.project_id} onChange={e => setExpenseForm({...expenseForm, project_id: e.target.value})} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none focus:border-emerald-500">
+                      <option value="">General / None</option>
+                      {projects.filter(p => !expenseForm.company_id || p.company_id?.toString() === expenseForm.company_id).map(p => (
+                        <option key={p.id} value={p.id.toString()}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Category</label>
+                    <select value={expenseForm.category} onChange={e => setExpenseForm({...expenseForm, category: e.target.value})} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none focus:border-emerald-500">
+                      <option value="Software">Software & Subscriptions</option>
+                      <option value="Marketing">Marketing & Ads</option>
+                      <option value="Office">Office & Rent</option>
+                      <option value="Travel">Travel & Logistics</option>
+                      <option value="Hardware">Hardware & Equipment</option>
+                      <option value="Other">Other Expenses</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Description *</label>
+                    <input type="text" value={expenseForm.description} onChange={e => setExpenseForm({...expenseForm, description: e.target.value})} placeholder="What was this expense for?" className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none focus:border-emerald-500" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Amount (₹) *</label>
+                    <input type="number" value={expenseForm.amount || ''} onChange={e => setExpenseForm({...expenseForm, amount: parseFloat(e.target.value) || 0})} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none focus:border-emerald-500" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Status</label>
+                      <select value={expenseForm.status} onChange={e => setExpenseForm({...expenseForm, status: e.target.value})} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none focus:border-emerald-500">
+                        <option value="Completed">Completed</option>
+                        <option value="Pending">Pending</option>
+                        <option value="Due">Due</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Date / Due Date</label>
+                      <input type="date" value={expenseForm.status === 'Completed' ? expenseForm.expense_date : expenseForm.due_date} onChange={e => {
+                        if (expenseForm.status === 'Completed') {
+                          setExpenseForm({...expenseForm, expense_date: e.target.value, due_date: ""});
+                        } else {
+                          setExpenseForm({...expenseForm, due_date: e.target.value});
+                        }
+                      }} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none focus:border-emerald-500" />
+                    </div>
+                  </div>
+                </div>
+                <div className="p-6 border-t border-slate-100 bg-[#FAFCFF] flex justify-end gap-3 shrink-0">
+                  <button onClick={() => setIsExpenseModalOpen(false)} className="rounded-xl border border-slate-200 bg-white h-11 px-6 font-bold text-sm text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
+                  <button onClick={handleSaveExpense} disabled={isSaving} className="bg-emerald-600 text-white rounded-xl h-11 px-8 font-bold text-sm shadow-md hover:bg-emerald-700 transition-all disabled:opacity-50">{isSaving ? "Saving..." : "Save Expense"}</button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+
       {/* MARK EXPENSE COMPLETE MODAL */}
       {typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
@@ -1014,8 +1094,9 @@ export default function FinancePage() {
               </motion.div>
             </div>
           )}
-        </AnimatePresence>
-
+        </AnimatePresence>,
+        document.body
+      )}
     </>
   );
 }
