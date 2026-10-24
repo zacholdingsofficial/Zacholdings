@@ -311,7 +311,7 @@ export default function FinancePage() {
     return `${x},${y}`;
   }).join(' ');
 
-  // Reusable Project Card Renderer
+  // --- REUSABLE PROJECT CARD RENDERER ---
   const renderProjectCard = (project: any) => {
     const pInvoices = globalInvoices.filter(i => i.project_id === project.id);
     const pPayments = globalPayments.filter(p => p.project_id === project.id);
@@ -326,9 +326,10 @@ export default function FinancePage() {
       <div key={project.id} onClick={() => setSelectedProjectDetails(project)} className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all group cursor-pointer">
          <div className="flex justify-between items-start mb-4 border-b border-slate-50 pb-3">
            <div className="min-w-0 pr-2">
+             {/* Visual Status Indicator (Hidden on print) */}
              <div className="flex items-center gap-1.5 mb-1 print:hidden">
                 <div className={`h-1.5 w-1.5 rounded-full ${project.status === 'Completed' ? 'bg-slate-400' : 'bg-emerald-500'}`}></div>
-                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{project.status}</span>
+                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{project.status} Project</span>
              </div>
              <h3 className="text-[14px] sm:text-[15px] font-bold text-slate-900 group-hover:text-emerald-700 truncate">{project.name}</h3>
              <p className="text-[8px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 truncate">
@@ -596,6 +597,7 @@ export default function FinancePage() {
                       <h3 className="text-xl font-bold text-slate-900 mt-2 truncate">{selectedProjectDetails.name}</h3>
                     </div>
                     <div className="flex items-center gap-2 sm:gap-3">
+                      {/* Deep Link to Projects Tab */}
                       <button onClick={() => { setTargetProjectId(selectedProjectDetails.id); navigate('/projects'); }} className="h-8 px-3 sm:h-10 sm:px-4 bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 rounded-lg sm:rounded-xl flex items-center justify-center text-[10px] sm:text-[11px] font-bold uppercase tracking-wider shadow-sm transition-colors print:hidden">
                          Workspace <ExternalLink className="h-3 w-3 sm:h-3.5 sm:w-3.5 ml-1.5" />
                       </button>
@@ -659,6 +661,7 @@ export default function FinancePage() {
                                           <div className="text-[9px] font-bold text-slate-400 mb-0.5">Total: ₹{parseFloat(inv.total_amount || 0).toLocaleString()}</div>
                                           <div className="text-xs font-black text-emerald-600">Paid: ₹{parseFloat(inv.amount_paid || 0).toLocaleString()}</div>
                                         </div>
+                                        {/* Deep Link to Specific Invoice */}
                                         <button onClick={() => { setTargetInvoiceId(inv.id); navigate('/invoices'); setIsReportModalOpen(false); setSelectedProjectDetails(null); }} className="text-[9px] font-bold text-blue-600 hover:text-blue-800 uppercase tracking-widest flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                           View <ExternalLink className="h-3 w-3" />
                                         </button>
