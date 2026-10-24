@@ -648,7 +648,7 @@ export default function FinancePage() {
                                           <div className="text-xs font-black text-emerald-600">Paid: ₹{parseFloat(inv.amount_paid || 0).toLocaleString()}</div>
                                         </div>
                                         {/* Deep Link to Specific Invoice */}
-                                        <button onClick={() => { setTargetInvoiceId(inv.id); navigate('/invoices'); setIsReportModalOpen(false); setSelectedProjectDetails(null); }} className="text-[9px] font-bold text-blue-600 hover:text-blue-800 uppercase tracking-widest flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => { setTargetInvoiceId(inv.id); navigate('/invoices'); }} className="text-[9px] font-bold text-blue-600 hover:text-blue-800 uppercase tracking-widest flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                           View <ExternalLink className="h-3 w-3" />
                                         </button>
                                       </div>
@@ -1014,9 +1014,7 @@ export default function FinancePage() {
               </motion.div>
             </div>
           )}
-        </AnimatePresence>,
-        document.body
-      )}
+        </AnimatePresence>
 
     </>
   );
