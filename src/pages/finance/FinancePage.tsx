@@ -599,7 +599,7 @@ export default function FinancePage() {
                     <div className="flex items-center gap-2 sm:gap-3">
                       {/* Deep Link to Projects Tab */}
                       <button onClick={() => { setTargetProjectId(selectedProjectDetails.id); navigate('/projects'); }} className="h-8 px-3 sm:h-10 sm:px-4 bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 rounded-lg sm:rounded-xl flex items-center justify-center text-[10px] sm:text-[11px] font-bold uppercase tracking-wider shadow-sm transition-colors print:hidden">
-                         Workspace <ExternalLink className="h-3 w-3 sm:h-3.5 sm:w-3.5 ml-1.5" />
+                          Workspace <ExternalLink className="h-3 w-3 sm:h-3.5 sm:w-3.5 ml-1.5" />
                       </button>
                       <button onClick={() => setSelectedProjectDetails(null)} className="h-8 w-8 sm:h-10 sm:w-10 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm"><X className="h-4 w-4" /></button>
                     </div>
@@ -1028,7 +1028,9 @@ export default function FinancePage() {
               </motion.div>
             </div>
           )}
-        </AnimatePresence>
+        </AnimatePresence>,
+        document.body
+      )}
 
     </>
   );
