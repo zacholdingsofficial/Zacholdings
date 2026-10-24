@@ -72,6 +72,23 @@ export default function FinancePage() {
   const totalOverhead = globalExpenses.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
   const netProfit = totalMoneyIn - totalEmployeePayouts - totalOverhead;
 
+  // --- TRANSITION HANDLERS ---
+  const handleViewInvoice = (invoiceId: number) => {
+    setSelectedProjectDetails(null);
+    setTimeout(() => {
+      setTargetInvoiceId(invoiceId);
+      navigate('/invoices');
+    }, 300);
+  };
+
+  const handleViewProjectWorkspace = (projectId: number) => {
+    setSelectedProjectDetails(null);
+    setTimeout(() => {
+      setTargetProjectId(projectId);
+      navigate('/projects');
+    }, 300);
+  };
+
   // --- EXPENSE CRUD LOGIC ---
 
   const handleOpenNewExpense = () => {
@@ -664,7 +681,7 @@ export default function FinancePage() {
                     </div>
                     <div className="flex items-center gap-2 sm:gap-3">
                       {/* Deep Link to Projects Tab */}
-                      <button onClick={() => { setTargetProjectId(selectedProjectDetails.id); navigate('/projects'); }} className="h-8 px-3 sm:h-10 sm:px-4 bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 rounded-lg sm:rounded-xl flex items-center justify-center text-[10px] sm:text-[11px] font-bold uppercase tracking-wider shadow-sm transition-colors print:hidden">
+                      <button onClick={() => handleViewProjectWorkspace(selectedProjectDetails.id)} className="h-8 px-3 sm:h-10 sm:px-4 bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 rounded-lg sm:rounded-xl flex items-center justify-center text-[10px] sm:text-[11px] font-bold uppercase tracking-wider shadow-sm transition-colors print:hidden">
                           Workspace <ExternalLink className="h-3 w-3 sm:h-3.5 sm:w-3.5 ml-1.5" />
                       </button>
                       <button onClick={() => setSelectedProjectDetails(null)} className="h-8 w-8 sm:h-10 sm:w-10 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm"><X className="h-4 w-4" /></button>
@@ -728,7 +745,7 @@ export default function FinancePage() {
                                           <div className="text-xs font-black text-emerald-600">Paid: ₹{parseFloat(inv.amount_paid || 0).toLocaleString()}</div>
                                         </div>
                                         {/* Deep Link to Specific Invoice */}
-                                        <button onClick={() => { setTargetInvoiceId(inv.id); navigate('/invoices'); }} className="text-[9px] font-bold text-blue-600 hover:text-blue-800 uppercase tracking-widest flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => handleViewInvoice(inv.id)} className="text-[9px] font-bold text-blue-600 hover:text-blue-800 uppercase tracking-widest flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                           View <ExternalLink className="h-3 w-3" />
                                         </button>
                                       </div>
