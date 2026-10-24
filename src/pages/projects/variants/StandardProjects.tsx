@@ -1,7 +1,8 @@
-import { useState, useRef, useLayoutEffect } from "react";
+import { useState, useRef, useLayoutEffect, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Search, FolderKanban, CheckCircle2, AlertCircle, X, Check, User, Trash2, Clock, Download, Loader2, ChevronDown, ExternalLink, UploadCloud, Calendar, Info, Layers, FileText, Edit2, ThumbsUp, ThumbsDown, Eye, MessageCircle, CornerDownRight, Lock, BookOpen, ListTodo, MessageSquare, LayoutGrid, List, MoreVertical, ChevronLeft, ChevronRight } from "lucide-react";
+import { useLocation } from "react-router-dom";
+import { Plus, Search, FolderKanban, CheckCircle2, AlertCircle, X, Check, User, Trash2, Clock, Download, Loader2, ChevronDown, ExternalLink, UploadCloud, Calendar, Info, Layers, FileText, Edit2, ThumbsUp, ThumbsDown, Eye, MessageCircle, CornerDownRight, Lock, BookOpen, ListTodo, MessageSquare, LayoutGrid, List, MoreVertical, ChevronLeft, ChevronRight, Receipt } from "lucide-react";
 import { useAuthStore } from "../../../store/authStore";
 import { useDataStore } from "../../../store/dataStore";
 import { supabase } from "../../../supabase";
@@ -17,8 +18,11 @@ const DEFAULT_MILESTONES = {
 export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, onClearOverride, onCrossHandoff }: { autoOpenProjectId?: number | null, forcedCompanyId?: number | null, onClearOverride?: () => void, onCrossHandoff?: (projectId: number, compId: number) => void }) {
   const { role, employeeId, activeWorkspace, companyId } = useAuthStore();
   const store = useDataStore();
-  const { projects, tasks, reports, employees, companies, customers, salaryPayments, projectAllocations, fetchAllData } = store;
+  // Added 'invoices' here to check billing status
+  const { projects, tasks, reports, employees, companies, customers, salaryPayments, projectAllocations, invoices, fetchAllData } = store;
+  const location = useLocation();
 
+  const [projectTab, setProjectTab] = useState<'all' | 'pending_billing'>('all');
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
   const [filterCompanyId, setFilterCompanyId] = useState<string>("all");
@@ -102,7 +106,30 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const currentSnapshot = JSON.stringify({ formData, taskSnapshot: taskSnapshot(selectedProject ? pendingTasks : pendingTasks), customerType, newCustomer });
   const hasUnsavedChanges = initialSnapshot !== null && initialSnapshot !== currentSnapshot;
 
-  const visibleProjects = projects.filter(p => {
+  // Listen for deep link from Invoices tab
+  useEffect(() => {
+    if (location.state?.view === 'pending_billing') {
+      setProjectTab('pending_billing');
+      window.history.replaceState({}, document.title);
+    }
+  }, [location]);
+
+  // Calculate projects awaiting billing
+  const pendingBillingProjects = projects.filter(p => {
+    if ((p.expected_amount || 0) <= 0) return false;
+    if (invoices.some((inv: any) => inv.project_id === p.id)) return false;
+    if (p.status === 'Cancelled') return false;
+    if (isGlobalAdmin) {
+       if (filterCompanyId !== "all" && p.company_id?.toString() !== filterCompanyId) return false;
+    } else {
+       if (p.company_id?.toString() !== currentCompanyId?.toString()) return false;
+    }
+    return true;
+  });
+
+  const baseProjects = projectTab === 'pending_billing' ? pendingBillingProjects : projects;
+
+  const visibleProjects = baseProjects.filter(p => {
     if (!p.name) return false;
 
     const projComp = companies.find((c: any) => c.id?.toString() === p.company_id?.toString());
@@ -177,6 +204,10 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
       setRoleSelectProject(project);
     } else {
       openProjectDetails(project, role === 'user' ? 'user' : 'admin');
+      // If we clicked a project awaiting billing, let's open the finance tab directly for them
+      if (projectTab === 'pending_billing' && showFinance) {
+         setModalTab('finance');
+      }
     }
   };
 
@@ -406,12 +437,17 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
 
       if (invData) {
         const { error: itemError } = await supabase.from('invoice_items').insert([{ 
-          invoice_id: invData.id, description: `Project: ${selectedProject.name}`, quantity: 1, rate: formData.expected_amount, total: formData.expected_amount 
+          invoice_id: invData.id, description: `Project Milestone: ${selectedProject.name}`, quantity: 1, rate: formData.expected_amount, total: formData.expected_amount 
         }]);
         if (itemError) throw new Error(itemError.message);
       }
-
+      
+      await fetchAllData();
       setCustomAlert({ title: "Invoice Generated", message: "Invoice generated and approved successfully!", type: "success" });
+      // Clear out the pending billing tab if it's now empty
+      if (projectTab === 'pending_billing' && pendingBillingProjects.length <= 1) {
+         setProjectTab('all');
+      }
     } catch (error: any) { setCustomAlert({ title: "Error", message: error.message, type: "error" }); } finally { setIsSaving(false); }
   };
 
@@ -796,6 +832,20 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
           </div>
         </div>
 
+        {/* --- DEDICATED TABS FOR PROJECTS --- */}
+        <div className="flex gap-3 sm:gap-4 border-b border-slate-200 overflow-x-auto max-sm:[&::-webkit-scrollbar]:hidden mb-4 print:hidden">
+           <button onClick={() => setProjectTab('all')} className={`pb-2.5 sm:pb-3 text-[12px] sm:text-sm font-bold tracking-wide transition-all border-b-2 whitespace-nowrap ${projectTab === 'all' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
+             All Workflows
+           </button>
+           
+           {(isGlobalAdmin || showFinance) && pendingBillingProjects.length > 0 && (
+             <button onClick={() => setProjectTab('pending_billing')} className={`pb-2.5 sm:pb-3 text-[12px] sm:text-sm font-bold tracking-wide transition-all border-b-2 whitespace-nowrap flex items-center gap-2 ${projectTab === 'pending_billing' ? 'border-amber-500 text-amber-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
+               Awaiting Billing
+               <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-black ${projectTab === 'pending_billing' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-600'}`}>{pendingBillingProjects.length}</span>
+             </button>
+           )}
+        </div>
+
         {/* SEARCH & FILTERS BAR WITH LIST/GRID VIEW TOGGLE */}
         <div className="bg-white p-2 sm:p-2.5 rounded-2xl border border-slate-100 shadow-sm flex flex-col sm:flex-row items-center gap-2.5 print:hidden">
           <div className="relative flex-1 w-full">
@@ -861,7 +911,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
           {visibleProjects.length === 0 ? (
              <div className="h-48 sm:h-64 border border-slate-200 border-dashed rounded-2xl sm:rounded-3xl flex flex-col items-center justify-center text-slate-400 bg-slate-50/50">
                 <FolderKanban className="h-8 w-8 sm:h-10 sm:w-10 mb-2 sm:mb-3 text-slate-300" />
-                <p className="text-[11px] sm:text-sm font-bold uppercase tracking-wider">No Records Found</p>
+                <p className="text-[11px] sm:text-sm font-bold uppercase tracking-wider">{projectTab === 'pending_billing' ? 'No Projects Awaiting Billing' : 'No Records Found'}</p>
              </div>
           ) : layoutView === 'grid' ? (
             /* GRID VIEW */
@@ -896,6 +946,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1.5">
                              {isAcademyProj && <span className="inline-flex items-center gap-1 bg-purple-50 text-purple-600 border border-purple-100 text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md"><BookOpen className="h-2.5 w-2.5" /> Academy Program</span>}
+                             {projectTab === 'pending_billing' && <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-600 border border-amber-100 text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md"><Receipt className="h-2.5 w-2.5" /> Needs Invoice</span>}
                           </div>
                           
                           <h3 onClick={() => handleProjectClick(project)} className={`text-[15px] sm:text-lg font-bold tracking-tight cursor-pointer transition-colors inline-block w-full truncate ${isAcademyProj ? 'text-purple-950 hover:text-purple-700' : 'text-slate-900 hover:text-blue-900'}`}>
@@ -999,8 +1050,9 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                           <td className="py-4 pl-6 pr-4 relative">
                             <div className="absolute left-0 top-2 bottom-2 w-1 bg-slate-900 rounded-r-md" />
                             <div className="flex flex-col">
-                              <span className="font-bold text-slate-900 text-sm group-hover:text-blue-900 transition-colors truncate">
+                              <span className="font-bold text-slate-900 text-sm group-hover:text-blue-900 transition-colors truncate flex items-center gap-1.5">
                                 {project.name}
+                                {projectTab === 'pending_billing' && <Receipt className="h-3.5 w-3.5 text-amber-500" title="Awaiting Billing" />}
                               </span>
                               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
                                 {projComp?.name || 'NETWORK'} {customer?.name ? `• ${customer.name}` : project.internal_company_id ? '• INTERNAL' : ''}
@@ -2361,9 +2413,8 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
               </motion.div>
             </motion.div>
           )}
-        </AnimatePresence>,
-        document.body
-      )}
+        </AnimatePresence>
+      </div>
     </>
   );
 }
