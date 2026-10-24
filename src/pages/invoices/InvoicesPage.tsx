@@ -123,7 +123,7 @@ export default function InvoicesPage() {
 
   const displayList = !canViewFinance ? headProjectExpenses : visibleInvoices;
 
-  // --- TAB INTERCONNECTIVITY EFFECT (Upgraded to useLayoutEffect for zero-flash transitions) ---
+  // --- TAB INTERCONNECTIVITY EFFECT (FIXED) ---
   useLayoutEffect(() => {
     if (targetInvoiceId && displayList.length > 0) {
       const invToOpen = displayList.find(inv => inv.id === targetInvoiceId);
@@ -132,7 +132,7 @@ export default function InvoicesPage() {
       }
       setTargetInvoiceId(null);
     }
-  }, [targetInvoiceId, displayList, setTargetInvoiceId]);
+  }, [targetInvoiceId, invoices, projects, expenses]);
 
   // --- ADMIN: PROJECTS AWAITING INVOICE ---
   const projectsNeedingInvoices = projects.filter(p => {
