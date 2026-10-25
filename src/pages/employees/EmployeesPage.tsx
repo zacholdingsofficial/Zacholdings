@@ -91,7 +91,6 @@ export default function EmployeesPage() {
   
   const [initialFormData, setInitialFormData] = useState<any>(null);
 
-  // Initialize linking company data correctly based on auth context
   useEffect(() => {
     setLinkRoleData(prev => ({ ...prev, company_id: currentCompanyId?.toString() || "" }));
   }, [currentCompanyId]);
@@ -118,6 +117,8 @@ export default function EmployeesPage() {
     return matchesSearch && (matchesCurrentCompany || hasGlobalAdmin);
   }).sort((a, b) => (a.created_at ? new Date(a.created_at).getTime() : a.id) - (b.created_at ? new Date(b.created_at).getTime() : b.id));
 
+  const existingIdsInCompany = visibleEmployees.map(e => e.id);
+
   const getProjectDue = (empId: number, projectIdStr: string) => {
     if (!projectIdStr) return 0;
     const pid = parseInt(projectIdStr);
@@ -134,7 +135,6 @@ export default function EmployeesPage() {
     return { totalAllocated, totalPaid, balanceDue: Math.max(0, totalAllocated - totalPaid), allocs, payments };
   };
 
-  // --- Network Search Functions ---
   const handleSearchNetwork = async (query: string) => {
     setNetworkQuery(query);
     if (query.trim().length < 2) {
@@ -143,20 +143,13 @@ export default function EmployeesPage() {
     }
     setIsSearchingNetwork(true);
     try {
-      // Intentionally ONLY fetching basic identity info to protect subsidiary privacy
       const { data, error } = await supabase
         .from('employees')
         .select('id, name, email, profile_image_url')
         .or(`name.ilike.%${query}%,email.ilike.%${query}%`)
         .limit(8);
       if (error) throw error;
-      
-      // Filter out employees that are already strictly bound to the active company 
-      // (so they don't invite someone who is already here)
-      const existingIdsInCompany = visibleEmployees.map(e => e.id);
-      const filteredResults = (data || []).filter(u => !existingIdsInCompany.includes(u.id));
-      
-      setNetworkResults(filteredResults);
+      setNetworkResults(data || []);
     } catch (err) { console.error(err); } finally { setIsSearchingNetwork(false); }
   };
 
@@ -167,7 +160,6 @@ export default function EmployeesPage() {
     setIsConfirmingExisting(true);
   };
 
-  // --- HR Form Functions ---
   const openNewEmployee = () => {
     setIsNetworkSearchOpen(false);
     setSelectedEmployee(null);
@@ -220,7 +212,6 @@ export default function EmployeesPage() {
     setSaveStatus("saving");
 
     try {
-      // Fallback check just in case someone skips search
       if (!selectedEmployee) {
         const { data: existingUsers } = await supabase.from('employees').select('id, name, email, profile_image_url').ilike('email', formData.email.trim());
         if (existingUsers && existingUsers.length > 0) {
@@ -370,7 +361,18 @@ export default function EmployeesPage() {
                 <button onClick={() => setViewMode('grid')} className={`p-2 sm:p-2.5 rounded-lg sm:rounded-xl transition-all ${viewMode === 'grid' ? 'bg-slate-50 text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}><LayoutGrid className="h-4 w-4" /></button>
                 <button onClick={() => setViewMode('list')} className={`p-2 sm:p-2.5 rounded-lg sm:rounded-xl transition-all ${viewMode === 'list' ? 'bg-slate-50 text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}><List className="h-4 w-4" /></button>
               </div>
-              <button onClick={() => { setIsNetworkSearchOpen(true); setNetworkQuery(""); setNetworkResults([]); }} className="flex-1 sm:flex-none bg-gradient-to-r from-blue-900 to-indigo-800 text-white shadow-lg shadow-blue-900/20 hover:shadow-xl hover:-translate-y-0.5 px-4 sm:px-6 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl text-[11px] sm:text-[13px] font-bold transition-all flex items-center justify-center shrink-0">
+              <button 
+                onClick={() => {
+                  if (role === 'admin' && !activeWorkspace) {
+                    openNewEmployee();
+                  } else {
+                    setIsNetworkSearchOpen(true);
+                    setNetworkQuery("");
+                    setNetworkResults([]);
+                  }
+                }} 
+                className="flex-1 sm:flex-none bg-gradient-to-r from-blue-900 to-indigo-800 text-white shadow-lg shadow-blue-900/20 hover:shadow-xl hover:-translate-y-0.5 px-4 sm:px-6 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl text-[11px] sm:text-[13px] font-bold transition-all flex items-center justify-center shrink-0"
+              >
                 <Plus className="h-4 w-4 mr-1.5 sm:mr-2" /> Add <span className="hidden sm:inline ml-1">Employee</span>
               </button>
             </div>
@@ -519,7 +521,7 @@ export default function EmployeesPage() {
           </div>
         )}
 
-        {/* --- NEW: NETWORK SEARCH MODAL --- */}
+        {/* --- NETWORK SEARCH MODAL --- */}
         {createPortal(
           <AnimatePresence>
             {isNetworkSearchOpen && (
@@ -566,22 +568,42 @@ export default function EmployeesPage() {
                         ) : networkResults.length > 0 ? (
                            <div className="space-y-3">
                               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-1">Matching Profiles ({networkResults.length})</p>
-                              {networkResults.map(u => (
-                                 <div key={u.id} className="flex items-center justify-between p-3 sm:p-4 rounded-xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all group">
-                                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                                       <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0 shadow-sm text-slate-500 font-bold">
-                                          {u.profile_image_url ? <img src={u.profile_image_url} className="h-full w-full object-cover" /> : u.name?.charAt(0).toUpperCase()}
-                                       </div>
-                                       <div className="min-w-0">
-                                          <p className="font-bold text-sm text-slate-900 truncate">{u.name}</p>
-                                          <p className="text-xs text-slate-500 truncate flex items-center gap-1 mt-0.5"><Mail className="h-3 w-3" /> {u.email}</p>
-                                       </div>
-                                    </div>
-                                    <button onClick={() => initiateInvite(u)} className="ml-3 shrink-0 h-9 sm:h-10 px-3 sm:px-4 bg-white border border-indigo-200 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-50 hover:shadow-sm transition-all flex items-center gap-1.5">
-                                       <UserPlus className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Invite</span>
-                                    </button>
-                                 </div>
-                              ))}
+                              {networkResults.map(u => {
+                                 const isAlreadyInCompany = existingIdsInCompany.includes(u.id);
+                                 return (
+                                   <div key={u.id} className={`flex items-center justify-between p-3 sm:p-4 rounded-xl border transition-all group ${isAlreadyInCompany ? 'border-slate-200 bg-slate-50/50' : 'border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/30'}`}>
+                                      <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                                         <div className={`h-10 w-10 sm:h-12 sm:w-12 rounded-full border flex items-center justify-center overflow-hidden shrink-0 shadow-sm font-bold ${isAlreadyInCompany ? 'border-slate-300 bg-slate-100 text-slate-400' : 'border-slate-200 bg-slate-50 text-slate-500'}`}>
+                                            {u.profile_image_url ? <img src={u.profile_image_url} className="h-full w-full object-cover opacity-90" /> : u.name?.charAt(0).toUpperCase()}
+                                         </div>
+                                         <div className="min-w-0">
+                                            <p className="font-bold text-sm text-slate-900 truncate">{u.name}</p>
+                                            <p className="text-xs text-slate-500 truncate flex items-center gap-1 mt-0.5"><Mail className="h-3 w-3" /> {u.email}</p>
+                                         </div>
+                                      </div>
+                                      
+                                      {isAlreadyInCompany ? (
+                                        <div className="ml-3 flex items-center gap-2 shrink-0">
+                                          <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md hidden sm:block border border-emerald-100">In Team</span>
+                                          <button 
+                                            onClick={() => {
+                                              setIsNetworkSearchOpen(false);
+                                              const fullEmpData = employees.find(e => e.id === u.id);
+                                              if (fullEmpData) openEditEmployee(fullEmpData);
+                                            }} 
+                                            className="h-9 sm:h-10 w-9 sm:w-10 bg-white border border-slate-200 text-slate-600 rounded-lg flex items-center justify-center hover:bg-slate-50 hover:text-slate-900 transition-all shadow-sm" title="Edit Profile"
+                                          >
+                                            <Edit3 className="h-4 w-4" />
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <button onClick={() => initiateInvite(u)} className="ml-3 shrink-0 h-9 sm:h-10 px-3 sm:px-4 bg-white border border-indigo-200 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-50 hover:shadow-sm transition-all flex items-center gap-1.5">
+                                           <UserPlus className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Invite</span>
+                                        </button>
+                                      )}
+                                   </div>
+                                 );
+                              })}
                            </div>
                         ) : networkQuery.trim().length >= 2 ? (
                            <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
@@ -742,7 +764,7 @@ export default function EmployeesPage() {
           document.body
         )}
 
-        {/* --- MODIFIED: LINK EXISTING EMPLOYEE MODAL (Triggered from Search) --- */}
+        {/* --- MODIFIED: LINK EXISTING EMPLOYEE MODAL --- */}
         {createPortal(
           <AnimatePresence>
             {isConfirmingExisting && existingNetworkEmployee && (
