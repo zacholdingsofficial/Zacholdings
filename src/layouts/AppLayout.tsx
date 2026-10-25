@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom"; // Added for teleporting the mask
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { LayoutDashboard, Users, Briefcase, FileText, Settings, LogOut, ArrowLeft, Banknote, UserSquare2, Menu, X, MessageSquare, Send, ChevronLeft, Loader2, Building2, Megaphone, Activity } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -33,7 +34,6 @@ export default function AppLayout() {
 
   // --- UPDATED: Conditional Route Transition Mask ---
   useEffect(() => {
-    // Only trigger the mask if the navigation explicitly requested it (e.g., from Finance deep links)
     if (location.state && (location.state as any).showLoadingMask) {
       setIsPageTransitioning(true);
       
@@ -44,15 +44,12 @@ export default function AppLayout() {
       setIsMobileDrawerOpen(false);
       return () => clearTimeout(timer);
     } else {
-      // Normal sidebar navigation remains instant
       setIsMobileDrawerOpen(false);
     }
   }, [location.pathname, location.state]);
 
-  // STRICT USER MATCHING: Ensures the layout never guesses the admin and accurately uses your specific profile
   const currentUser = employees.find(e => e.id == employeeId) || employees.find(e => e.email === user?.email);
   
-  // Brand logo prioritizes the current user if they are an admin, falling back to any admin if necessary
   const masterAdmin = employees.find(e => e.access_level === 'admin' && e.email === user?.email) || employees.find(e => e.access_level === 'admin');
 
   const targetWorkspaceId = role === 'admin' ? activeWorkspace : (activeWorkspace || companyId);
@@ -88,12 +85,10 @@ export default function AppLayout() {
   
   const visibleLinks = allNavLinks.filter(link => link.allowedRoles.includes(role || 'user'));
 
-  // OPTIMIZED: Contact Filter now explicitly checks the junction roles (company_roles)
   const allowedContacts = employees.filter(emp => {
     if (emp.id == employeeId) return false; 
     const currentRole = role?.toLowerCase() || 'user';
     
-    // Helper to check if employee is assigned to a specific company ID
     const isLinkedToCompany = (targetId: string | number | null | undefined) => {
       if (!targetId) return false;
       const targetStr = targetId.toString();
@@ -107,7 +102,7 @@ export default function AppLayout() {
     if (currentRole === 'admin') {
       if (activeWorkspace) return isLinkedToCompany(activeWorkspace) || emp.access_level === 'admin';
       if (chatCompanyFilter !== "all") return isLinkedToCompany(chatCompanyFilter) || emp.access_level === 'admin';
-      return true; // Global view sees everyone
+      return true;
     }
     
     if (currentRole === 'head' || currentRole === 'user') {
@@ -245,20 +240,23 @@ export default function AppLayout() {
   return (
     <div className="flex h-[100dvh] w-full bg-[#F8F9FC] text-slate-800 overflow-hidden font-sans sm:p-4 lg:p-6 selection:bg-blue-900 selection:text-white relative print:p-0 print:bg-white print:block print:h-auto">
       
-      {/* --- NEW: CONDITIONAL PAGE TRANSITION MASK --- */}
-      <AnimatePresence>
-        {isPageTransitioning && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            className="fixed inset-0 z-[999999] bg-[#F8F9FC]/80 backdrop-blur-md flex items-center justify-center print:hidden"
-          >
-            <Loader2 className="h-8 w-8 text-blue-900 animate-spin" />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* --- SEAMLESS DARK PAGE TRANSITION MASK VIA PORTAL --- */}
+      {createPortal(
+        <AnimatePresence>
+          {isPageTransitioning && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="fixed inset-0 z-[999999] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center print:hidden"
+            >
+              <Loader2 className="h-10 w-10 text-white animate-spin" />
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       <AnimatePresence mode="wait">
         {isSidebarOpen && (
