@@ -1,7 +1,7 @@
 import { useState, useRef, useLayoutEffect, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Plus, Search, FolderKanban, CheckCircle2, AlertCircle, X, Check, User, Trash2, Clock, Download, Loader2, ChevronDown, ExternalLink, UploadCloud, Calendar, Info, Layers, FileText, Edit2, ThumbsUp, ThumbsDown, Eye, MessageCircle, CornerDownRight, Lock, BookOpen, ListTodo, MessageSquare, LayoutGrid, List, MoreVertical, ChevronLeft, ChevronRight, Receipt } from "lucide-react";
 import { useAuthStore } from "../../../store/authStore";
 import { useDataStore } from "../../../store/dataStore";
@@ -18,9 +18,9 @@ const DEFAULT_MILESTONES = {
 export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, onClearOverride, onCrossHandoff }: { autoOpenProjectId?: number | null, forcedCompanyId?: number | null, onClearOverride?: () => void, onCrossHandoff?: (projectId: number, compId: number) => void }) {
   const { role, employeeId, activeWorkspace, companyId } = useAuthStore();
   const store = useDataStore();
-  // Added targetProjectId and setTargetProjectId to intercept incoming navigations
   const { projects, tasks, reports, employees, companies, customers, salaryPayments, projectAllocations, invoices, fetchAllData, targetProjectId, setTargetProjectId } = store;
   const location = useLocation();
+  const navigate = useNavigate(); // NEW: Used for the Return Ticket
 
   const [projectTab, setProjectTab] = useState<'all' | 'pending_billing'>('all');
   const [searchQuery, setSearchQuery] = useState("");
@@ -31,6 +31,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const itemsPerPage = 8;
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isInstantOpen, setIsInstantOpen] = useState(false); // NEW: Controls transition speed
   const [modalTab, setModalTab] = useState<"details" | "team" | "tasks" | "progress" | "finance">("details");
   const [selectedProject, setSelectedProject] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -106,7 +107,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const currentSnapshot = JSON.stringify({ formData, taskSnapshot: taskSnapshot(selectedProject ? pendingTasks : pendingTasks), customerType, newCustomer });
   const hasUnsavedChanges = initialSnapshot !== null && initialSnapshot !== currentSnapshot;
 
-  // Listen for deep link from Invoices tab
   useEffect(() => {
     if (location.state?.view === 'pending_billing') {
       setProjectTab('pending_billing');
@@ -114,26 +114,24 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     }
   }, [location]);
 
-  // Handle incoming Workspace navigation (from Finance/Invoices)
+  // --- UPDATED: Automatically open modal instantly if targeted ---
   useLayoutEffect(() => {
     if (autoOpenProjectId && projects.length > 0) {
       const projToOpen = projects.find((p: any) => p.id === autoOpenProjectId);
       if (projToOpen) {
-        openProjectDetails(projToOpen, role === 'user' ? 'user' : 'admin');
+        openProjectDetails(projToOpen, role === 'user' ? 'user' : 'admin', false);
       }
     }
     
-    // Automatically open the modal if we are carrying a target project ID
     if (targetProjectId && projects.length > 0) {
       const projToOpen = projects.find((p: any) => p.id === targetProjectId);
       if (projToOpen) {
-        openProjectDetails(projToOpen, role === 'user' ? 'user' : 'admin');
-        setTargetProjectId(null); // Clear ID to prevent reopening on re-renders
+        openProjectDetails(projToOpen, role === 'user' ? 'user' : 'admin', true); // TRUE: skips animation
+        setTargetProjectId(null); 
       }
     }
   }, [autoOpenProjectId, targetProjectId, projects, role, setTargetProjectId]);
 
-  // Calculate projects awaiting billing
   const pendingBillingProjects = projects.filter(p => {
     if ((p.expected_amount || 0) <= 0) return false;
     if (invoices.some((inv: any) => inv.project_id === p.id)) return false;
@@ -190,13 +188,25 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     executeClose();
   };
 
+  // --- UPDATED: Execute Close handles Return Tickets ---
   const executeClose = () => {
     setIsModalOpen(false);
+    setIsInstantOpen(false);
     setInitialSnapshot(null);
     setShowDiscardPrompt(false);
     setEditingPaymentId(null);
     setEditingTaskKey(null);
     if (onClearOverride) onClearOverride();
+    
+    // Check if we came from another page with a return ticket
+    if (location.state?.returnTo) {
+      navigate(location.state.returnTo, {
+        state: {
+          openProject: location.state.keepOpen,
+          showLoadingMask: true 
+        }
+      });
+    }
   };
 
   const handleProjectClick = (project: any) => {
@@ -214,7 +224,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
       setRoleSelectProject(project);
     } else {
       openProjectDetails(project, role === 'user' ? 'user' : 'admin');
-      // If we clicked a project awaiting billing, let's open the finance tab directly for them
       if (projectTab === 'pending_billing' && showFinance) {
          setModalTab('finance');
       }
@@ -224,6 +233,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
   const openNewProject = () => {
     setViewMode('admin');
     setSelectedProject(null);
+    setIsInstantOpen(false);
     
     const defaultFormData = { 
       name: "", description: "", priority: "Medium", status: "Planning", expected_amount: 0, 
@@ -255,10 +265,12 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
     setIsModalOpen(true);
   };
 
-  const openProjectDetails = (project: any, mode: 'admin' | 'user') => {
+  // --- UPDATED: Accepts instant flag ---
+  const openProjectDetails = (project: any, mode: 'admin' | 'user', instant = false) => {
     setViewMode(mode);
     setRoleSelectProject(null);
     setSelectedProject(project);
+    setIsInstantOpen(instant);
     
     const safeMilestones = {
       in_progress: { ...DEFAULT_MILESTONES.in_progress, ...(project.milestones?.in_progress || {}) },
@@ -409,8 +421,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
       setInitialSnapshot(JSON.stringify({ formData, taskSnapshot: newTaskSnapshot, customerType, newCustomer }));
 
       if(modalTab === 'details' || modalTab === 'tasks') {
-        setIsModalOpen(false);
-        if (onClearOverride) onClearOverride();
+        handleCloseModal(); // Use the return ticket close logic
       } else {
         setCustomAlert({ title: "Success", message: "Project updated successfully.", type: "success" });
       }
@@ -454,7 +465,6 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
       
       await fetchAllData();
       setCustomAlert({ title: "Invoice Generated", message: "Invoice generated and approved successfully!", type: "success" });
-      // Clear out the pending billing tab if it's now empty
       if (projectTab === 'pending_billing' && pendingBillingProjects.length <= 1) {
          setProjectTab('all');
       }
@@ -1563,16 +1573,18 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
         <AnimatePresence>
           {isModalOpen && !isPrintingPayslip && (
             <motion.div 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              exit={{ opacity: 0 }} 
+              initial={isInstantOpen ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 40, scale: 0.95 }} 
+              animate={{ opacity: 1, y: 0, scale: 1 }} 
+              exit={{ opacity: 0, y: 40, scale: 0.95 }} 
+              transition={isInstantOpen ? { duration: 0 } : undefined}
               onMouseDown={handleCloseModal}
               className="fixed inset-0 z-[9999] flex flex-col items-center justify-center max-sm:px-4 max-sm:pt-20 max-sm:pb-[110px] sm:p-4 bg-slate-900/40 backdrop-blur-sm print:hidden"
             >
               <motion.div 
-                initial={{ opacity: 0, y: 40, scale: 0.95 }} 
+                initial={isInstantOpen ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 40, scale: 0.95 }} 
                 animate={{ opacity: 1, y: 0, scale: 1 }} 
                 exit={{ opacity: 0, y: 40, scale: 0.95 }} 
+                transition={isInstantOpen ? { duration: 0 } : undefined}
                 onMouseDown={(e) => e.stopPropagation()}
                 className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-5xl h-full sm:h-[760px] sm:max-h-[90vh] flex flex-col overflow-hidden border border-slate-100 mt-auto sm:mt-0"
               >
@@ -2392,6 +2404,7 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
                     <button type="button" onClick={handleDeleteProject} disabled={isSaving} className="border border-rose-200 text-rose-600 bg-white hover:bg-rose-50 rounded-xl h-11 px-5 flex items-center justify-center shadow-sm mr-auto transition-colors shrink-0"><Trash2 className="h-4 w-4" /></button>
                   )}
                   
+                  {/* --- UPDATED: Close handles return ticket --- */}
                   <button type="button" onClick={handleCloseModal} className="rounded-xl border border-slate-200 bg-white h-11 px-6 font-bold text-[13px] text-slate-600 hover:bg-slate-50 shadow-sm transition-colors flex-1 sm:flex-none">Cancel</button>
 
                   {isAdminView && (
@@ -2423,9 +2436,8 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
               </motion.div>
             </motion.div>
           )}
-        </AnimatePresence>,
-        document.body
-      )}
+        </AnimatePresence>
+      </div>
     </>
   );
 }
