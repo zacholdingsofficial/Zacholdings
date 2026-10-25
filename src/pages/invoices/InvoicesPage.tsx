@@ -1,4 +1,5 @@
 import { useState, useLayoutEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Search, Download, Printer, X, CheckCircle2, Building2, UserSquare2, Trash2, Receipt, ArrowRight, AlertCircle, ExternalLink } from "lucide-react";
@@ -50,7 +51,6 @@ export default function InvoicesPage() {
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [newPayment, setNewPayment] = useState({ amount: 0, payment_date: today, payment_method: "Bank Transfer", reference_note: "" });
 
-  // --- NEW: Baseline states to track if changes occurred ---
   const [initialFormData, setInitialFormData] = useState<any>(null);
   const [initialLineItems, setInitialLineItems] = useState<any>(null);
 
@@ -148,7 +148,6 @@ export default function InvoicesPage() {
     return true;
   });
 
-  // --- FIX 1: Hide the popup when the modal is open to prevent position shift fighting ---
   const showAdminPopup = canViewFinance && projectsNeedingInvoices.length > 0 && !dismissedPopup && !isModalOpen;
 
   const activeRecords: any[] = [];
@@ -189,7 +188,6 @@ export default function InvoicesPage() {
   const linkedProject = projects.find(p => p.id === parseInt(formData.project_id || selectedInvoice?.project_id));
   const internalBilledCompany = linkedProject?.internal_company_id ? companies.find(c => c.id === linkedProject.internal_company_id) : null;
 
-  // --- NEW: Calculate if changes exist for Dynamic Save Button ---
   const hasChanges = useMemo(() => {
     if (!initialFormData || !initialLineItems) return true;
     const formChanged = JSON.stringify(formData) !== JSON.stringify(initialFormData);
@@ -223,9 +221,9 @@ export default function InvoicesPage() {
     const newItems = [{ description: "", quantity: 1, rate: 0 }];
 
     setFormData(newForm);
-    setInitialFormData(newForm); // Capture initial state
+    setInitialFormData(newForm); 
     setLineItems(newItems);
-    setInitialLineItems(newItems); // Capture initial state
+    setInitialLineItems(newItems); 
     
     setShowPaymentForm(false);
     setIsModalOpen(true);
@@ -257,9 +255,9 @@ export default function InvoicesPage() {
        const loadedItems = items.length > 0 ? items : [{ description: "", quantity: 1, rate: 0 }];
        
        setFormData(standardForm);
-       setInitialFormData(standardForm); // Capture initial state
+       setInitialFormData(standardForm); 
        setLineItems(loadedItems);
-       setInitialLineItems(loadedItems); // Capture initial state
+       setInitialLineItems(loadedItems); 
     }
     
     setShowPaymentForm(false);
@@ -348,7 +346,6 @@ export default function InvoicesPage() {
       setShowPaymentForm(false);
       setNewPayment({ amount: 0, payment_date: today, payment_method: "Bank Transfer", reference_note: "" });
       
-      // Update baseline so Save Changes doesn't falsely enable
       setFormData(prev => ({...prev, status: newStatus})); 
       setInitialFormData((prev: any) => ({...prev, status: newStatus}));
     } catch (error: any) { alert(`Error recording payment: ${error.message}`); } finally { setIsSaving(false); }
@@ -368,7 +365,6 @@ export default function InvoicesPage() {
       await supabase.from('invoices').update({ amount_paid: newTotalPaid, status: newStatus }).eq('id', selectedInvoice.id);
       await fetchAllData();
 
-      // Update baseline so Save Changes doesn't falsely enable
       setFormData(prev => ({...prev, status: newStatus}));
       setInitialFormData((prev: any) => ({...prev, status: newStatus}));
     } catch (error: any) { alert(error.message); } finally { setIsSaving(false); }
@@ -576,7 +572,10 @@ export default function InvoicesPage() {
             )}
           </div>
         )}
+      </div>
 
+      {/* --- TELEPORTED MODALS TO BREAK OUT OF <MAIN> Z-INDEX --- */}
+      {createPortal(
         <AnimatePresence>
           {showAdminPopup && (
             <motion.div
@@ -584,7 +583,7 @@ export default function InvoicesPage() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 50, scale: 0.95 }}
               transition={{ delay: 0.4, type: "spring", damping: 20, stiffness: 200 }} 
-              className="fixed bottom-6 right-6 z-[90] bg-white border border-amber-200 shadow-2xl shadow-amber-900/10 rounded-2xl p-5 w-[340px] max-w-[calc(100vw-3rem)] print:hidden"
+              className="fixed bottom-6 right-6 z-[100000] bg-white border border-amber-200 shadow-2xl shadow-amber-900/10 rounded-2xl p-5 w-[340px] max-w-[calc(100vw-3rem)] print:hidden"
             >
               <button onClick={() => setDismissedPopup(true)} className="absolute top-3 right-3 text-slate-400 hover:text-slate-700"><X className="h-4 w-4" /></button>
               
@@ -605,11 +604,14 @@ export default function InvoicesPage() {
               </button>
             </motion.div>
           )}
-        </AnimatePresence>
+        </AnimatePresence>,
+        document.body
+      )}
 
+      {createPortal(
         <AnimatePresence>
           {isModalOpen && (
-            <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center max-sm:px-4 max-sm:pt-20 max-sm:pb-[110px] sm:p-4 bg-slate-900/40 backdrop-blur-sm print:relative print:inset-auto print:p-0 print:bg-transparent">
+            <div className="fixed inset-0 z-[10000] flex flex-col items-center justify-center max-sm:px-4 max-sm:pt-20 max-sm:pb-[110px] sm:p-4 bg-slate-900/40 backdrop-blur-sm print:relative print:inset-auto print:p-0 print:bg-transparent">
               <motion.div 
                 initial={isInstantOpen ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 40, scale: 0.95 }} 
                 animate={{ opacity: 1, y: 0, scale: 1 }} 
@@ -936,8 +938,6 @@ export default function InvoicesPage() {
                   
                   <div className="flex gap-2 sm:gap-3">
                     <button onClick={handleCloseModal} className="rounded-xl border border-slate-200 bg-white h-10 sm:h-12 px-4 sm:px-8 font-bold text-[12px] sm:text-sm text-slate-600 hover:bg-slate-50 shadow-sm transition-colors">Close</button>
-                    
-                    {/* --- FIX 2: Dynamic Save Changes Button applying opacity based on hasChanges --- */}
                     {!selectedInvoice?.isExpenseReport && (
                       <button 
                         onClick={handleSaveInvoice} 
@@ -956,8 +956,9 @@ export default function InvoicesPage() {
               </motion.div>
             </div>
           )}
-        </AnimatePresence>
-      </div>
+        </AnimatePresence>,
+        document.body
+      )}
     </>
   );
 }
