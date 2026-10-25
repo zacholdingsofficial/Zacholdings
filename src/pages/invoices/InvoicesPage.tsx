@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect } from "react";
+import { useState, useLayoutEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Search, Download, Printer, X, CheckCircle2, Building2, UserSquare2, Trash2, Receipt, ArrowRight, AlertCircle, ExternalLink } from "lucide-react";
@@ -32,6 +32,7 @@ export default function InvoicesPage() {
   const [filterStatus, setFilterStatus] = useState<string>("All");
   
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isInstantOpen, setIsInstantOpen] = useState(false); // NEW: Controls transition speed
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
   
@@ -123,16 +124,16 @@ export default function InvoicesPage() {
 
   const displayList = !canViewFinance ? headProjectExpenses : visibleInvoices;
 
-  // --- TAB INTERCONNECTIVITY EFFECT (FIXED) ---
+  // --- TAB INTERCONNECTIVITY EFFECT ---
   useLayoutEffect(() => {
     if (targetInvoiceId && displayList.length > 0) {
       const invToOpen = displayList.find(inv => inv.id === targetInvoiceId);
       if (invToOpen) {
-        openViewInvoice(invToOpen);
+        openViewInvoice(invToOpen, true); // NEW: Pass true to skip the fade animation
       }
       setTargetInvoiceId(null);
     }
-  }, [targetInvoiceId, invoices, projects, expenses]);
+  }, [targetInvoiceId, displayList, setTargetInvoiceId]);
 
   // --- ADMIN: PROJECTS AWAITING INVOICE ---
   const projectsNeedingInvoices = projects.filter(p => {
@@ -190,6 +191,7 @@ export default function InvoicesPage() {
 
   const openNewInvoice = () => {
     setSelectedInvoice(null);
+    setIsInstantOpen(false); // Reset to standard animation
     setFormData({
       company_id: currentCompanyId?.toString() || "", customer_id: "", project_id: "",
       invoice_number: `INV-${Math.floor(10000 + Math.random() * 90000)}`,
@@ -200,14 +202,13 @@ export default function InvoicesPage() {
     setIsModalOpen(true);
   };
 
-  // --- REROUTE LOGIC FOR PENDING APPROVALS ---
   const handleReviewPending = () => {
-    // Navigate to the Projects tab, and tell it to open the 'Awaiting Billing' view
     navigate('/projects', { state: { view: 'pending_billing' } });
   };
 
-  const openViewInvoice = (inv: any) => {
+  const openViewInvoice = (inv: any, instant = false) => {
     setSelectedInvoice(inv);
+    setIsInstantOpen(instant); // Tells Framer Motion to skip the initial zero opacity state
     
     if (inv.isExpenseReport) {
        setFormData({
@@ -380,7 +381,6 @@ export default function InvoicesPage() {
     }
   };
 
-  // Reusable card renderer
   const renderCard = (inv: any) => {
     const status = canViewFinance ? getDynamicStatus(inv) : inv.status;
     const proj = projects.find(p => p.id === inv.project_id);
@@ -399,11 +399,10 @@ export default function InvoicesPage() {
         : inv.invoice_number;
 
     return (
-      <motion.div key={inv.id} layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} onClick={() => openViewInvoice(inv)} className="bg-white rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all flex flex-col relative overflow-hidden group cursor-pointer p-4 sm:p-6">
+      <motion.div key={inv.id} layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} onClick={() => openViewInvoice(inv, false)} className="bg-white rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all flex flex-col relative overflow-hidden group cursor-pointer p-4 sm:p-6">
         <div className="flex justify-between items-start mb-3 sm:mb-4">
           <div className="flex flex-col min-w-0 pr-2">
             <span className="text-[13px] sm:text-[14px] font-black text-slate-900 truncate">{gridTitle}</span>
-            {/* Real-time Project Status Indicator (Hidden on Print) */}
             {canViewFinance && proj && (
                <div className="flex items-center gap-1.5 mt-1.5 print:hidden">
                   <div className={`h-1.5 w-1.5 rounded-full ${projStatus === 'Completed' ? 'bg-slate-400' : 'bg-emerald-500'}`}></div>
@@ -438,12 +437,10 @@ export default function InvoicesPage() {
     <>
       <div className="max-w-[1200px] mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-700 pb-8 relative z-0 print:p-0 print:m-0">
         
-        {/* Minimal Dotted Background Pattern */}
         <div className="absolute inset-0 pointer-events-none z-[-1] overflow-hidden print:hidden">
           <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9InJnYmEoMTQ4LCAxNjMsIDE4NCwgMC4wOCkiLz48L3N2Zz4=')] [mask-image:linear-gradient(to_bottom,white,transparent)]" />
         </div>
 
-        {/* HEADER */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 sm:gap-6 print:hidden">
           <div>
             <p className="text-[9px] sm:text-[11px] font-bold text-blue-600 uppercase tracking-[0.2em] mb-1.5 sm:mb-2 bg-blue-50 inline-block px-2.5 sm:px-3 py-1 rounded-full">
@@ -465,13 +462,11 @@ export default function InvoicesPage() {
           </div>
         </div>
 
-        {/* --- DEDICATED TABS FOR INVOICES --- */}
         <div className="flex gap-3 sm:gap-4 border-b border-slate-200 overflow-x-auto max-sm:[&::-webkit-scrollbar]:hidden mb-4 print:hidden">
            <button onClick={() => setActiveTab('active')} className={`pb-2.5 sm:pb-3 text-[12px] sm:text-sm font-bold tracking-wide transition-all border-b-2 whitespace-nowrap ${activeTab === 'active' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>Active Financials</button>
            <button onClick={() => setActiveTab('completed')} className={`pb-2.5 sm:pb-3 text-[12px] sm:text-sm font-bold tracking-wide transition-all border-b-2 whitespace-nowrap ${activeTab === 'completed' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>Completed</button>
         </div>
 
-        {/* FILTER BAR */}
         <div className="bg-white p-2 rounded-xl sm:rounded-2xl border border-slate-100 shadow-sm print:hidden flex flex-col sm:flex-row gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 h-3.5 sm:h-4 w-3.5 sm:w-4 text-slate-400" />
@@ -490,7 +485,6 @@ export default function InvoicesPage() {
                 value={filterCompanyId} 
                 onChange={(e) => setFilterCompanyId(e.target.value)} 
                 className="w-full h-10 sm:h-11 rounded-lg sm:rounded-xl bg-slate-50 border-none px-3 sm:px-4 text-[12px] sm:text-sm font-bold text-slate-700 outline-none cursor-pointer hover:bg-slate-100 transition-colors focus:ring-4 focus:ring-blue-500/10 appearance-none"
-                style={{ backgroundImage: `url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', backgroundSize: '14px' }}
               >
                 <option value="all">All Companies</option>
                 {companies.map(c => <option key={c.id} value={c.id.toString()}>{c.name}</option>)}
@@ -504,7 +498,6 @@ export default function InvoicesPage() {
                 value={filterStatus} 
                 onChange={(e) => setFilterStatus(e.target.value)} 
                 className="w-full h-10 sm:h-11 rounded-lg sm:rounded-xl bg-slate-50 border-none px-3 sm:px-4 text-[12px] sm:text-sm font-bold text-slate-700 outline-none cursor-pointer appearance-none"
-                style={{ backgroundImage: `url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', backgroundSize: '14px' }}
               >
                 <option value="All">All Statuses</option>
                 {STATUS_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
@@ -513,7 +506,6 @@ export default function InvoicesPage() {
           )}
         </div>
 
-        {/* INVOICES / REPORTS GRID */}
         {activeTab === 'active' && (
           <div className="space-y-8 print:hidden">
             {activeRecords.length === 0 ? (
@@ -542,7 +534,6 @@ export default function InvoicesPage() {
           </div>
         )}
 
-        {/* --- FLOATING ADMIN POP-UP FOR PENDING INVOICES --- */}
         <AnimatePresence>
           {showAdminPopup && (
             <motion.div
@@ -572,11 +563,17 @@ export default function InvoicesPage() {
           )}
         </AnimatePresence>
 
-        {/* --- INVOICE / EXPENSE MODAL --- */}
         <AnimatePresence>
           {isModalOpen && (
             <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center max-sm:px-4 max-sm:pt-20 max-sm:pb-[110px] sm:p-4 bg-slate-900/40 backdrop-blur-sm print:relative print:inset-auto print:p-0 print:bg-transparent">
-              <motion.div initial={{ opacity: 0, y: 40, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 40, scale: 0.95 }} className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-4xl max-h-full sm:max-h-[85svh] flex flex-col overflow-hidden border border-slate-100 mt-auto sm:mt-0 print:shadow-none print:border-none print:rounded-none print:max-h-none print:h-auto print:overflow-visible">
+              {/* NEW: Conditional initial and transition properties for instant open */}
+              <motion.div 
+                initial={isInstantOpen ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 40, scale: 0.95 }} 
+                animate={{ opacity: 1, y: 0, scale: 1 }} 
+                exit={{ opacity: 0, y: 40, scale: 0.95 }} 
+                transition={isInstantOpen ? { duration: 0 } : undefined}
+                className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-4xl max-h-full sm:max-h-[85svh] flex flex-col overflow-hidden border border-slate-100 mt-auto sm:mt-0 print:shadow-none print:border-none print:rounded-none print:max-h-none print:h-auto print:overflow-visible"
+              >
                 
                 <div className="px-5 sm:px-8 pt-5 sm:pt-7 border-b border-slate-100 bg-[#FAFCFF] shrink-0 print:hidden">
                   <div className="flex items-center justify-between mb-4 sm:mb-5">
