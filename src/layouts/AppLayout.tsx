@@ -16,7 +16,7 @@ export default function AppLayout() {
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   
-  // --- Global Page Transition State ---
+  // --- NEW: Global Page Transition State ---
   const [isPageTransitioning, setIsPageTransitioning] = useState(false);
   
   const [activeContact, setActiveContact] = useState<any>(null);
@@ -31,23 +31,21 @@ export default function AppLayout() {
     fetchAllData();
   }, [activeWorkspace, role, companyId, fetchAllData]);
 
-  // --- UPDATED: Conditional Route Transition Mask ---
+  // --- NEW: Intercept Route Changes to Mask Layout Shifts ---
   useEffect(() => {
-    // Only trigger the mask if the navigation explicitly requested it (e.g., from Finance deep links)
-    if (location.state && (location.state as any).showLoadingMask) {
-      setIsPageTransitioning(true);
-      
-      const timer = setTimeout(() => {
-        setIsPageTransitioning(false);
-      }, 400);
+    // Whenever the pathname changes, trigger the loading mask
+    setIsPageTransitioning(true);
+    
+    // Hold the mask for exactly 400ms to allow all background layouts and modals to render invisibly
+    const timer = setTimeout(() => {
+      setIsPageTransitioning(false);
+    }, 400);
 
-      setIsMobileDrawerOpen(false);
-      return () => clearTimeout(timer);
-    } else {
-      // Normal sidebar navigation remains instant
-      setIsMobileDrawerOpen(false);
-    }
-  }, [location.pathname, location.state]);
+    // Also close the mobile drawer automatically on route change
+    setIsMobileDrawerOpen(false);
+
+    return () => clearTimeout(timer);
+  }, [location.pathname]);
 
   // STRICT USER MATCHING: Ensures the layout never guesses the admin and accurately uses your specific profile
   const currentUser = employees.find(e => e.id == employeeId) || employees.find(e => e.email === user?.email);
@@ -245,7 +243,7 @@ export default function AppLayout() {
   return (
     <div className="flex h-[100dvh] w-full bg-[#F8F9FC] text-slate-800 overflow-hidden font-sans sm:p-4 lg:p-6 selection:bg-blue-900 selection:text-white relative print:p-0 print:bg-white print:block print:h-auto">
       
-      {/* --- NEW: CONDITIONAL PAGE TRANSITION MASK --- */}
+      {/* --- NEW: GLOBAL PAGE TRANSITION MASK --- */}
       <AnimatePresence>
         {isPageTransitioning && (
           <motion.div 
