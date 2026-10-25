@@ -1,7 +1,7 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Search, Mail, Phone, Building2, Edit3, Trash2, X, Camera, Wallet, LayoutGrid, List, ShieldAlert, AlertCircle, CheckCircle2, Loader2, Briefcase, UserCheck } from "lucide-react";
+import { Plus, Search, Mail, Phone, Building2, Edit3, Trash2, X, Camera, Wallet, LayoutGrid, List, ShieldAlert, AlertCircle, CheckCircle2, Loader2, Briefcase, UserCheck, UserPlus } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import { useDataStore } from "../../store/dataStore";
 import { supabase } from "../../supabase";
@@ -56,9 +56,17 @@ export default function EmployeesPage() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "compressing" | "uploading" | "saving">("idle");
   const [isSavingLedger, setIsSavingLedger] = useState(false);
   
+  // Network Search States
+  const [isNetworkSearchOpen, setIsNetworkSearchOpen] = useState(false);
+  const [networkQuery, setNetworkQuery] = useState("");
+  const [networkResults, setNetworkResults] = useState<any[]>([]);
+  const [isSearchingNetwork, setIsSearchingNetwork] = useState(false);
+  
+  // Cross-Company Linking States
   const [existingNetworkEmployee, setExistingNetworkEmployee] = useState<any>(null);
   const [isConfirmingExisting, setIsConfirmingExisting] = useState(false);
-  
+  const [linkRoleData, setLinkRoleData] = useState({ company_id: "", role: "", access_level: "user" });
+
   const [isLedgerOpen, setIsLedgerOpen] = useState(false);
   const [ledgerEmployee, setLedgerEmployee] = useState<any>(null);
   
@@ -77,26 +85,24 @@ export default function EmployeesPage() {
   const currentCompanyId = role === 'admin' ? (activeWorkspace || "") : companyId;
 
   const [formData, setFormData] = useState({
-    name: "", 
-    email: "", 
-    phone: "", 
-    password: "",
+    name: "", email: "", phone: "", password: "",
     company_roles: [{ company_id: currentCompanyId?.toString() || "", role: "", access_level: "user" }]
   });
   
-  // NEW: Store initial data to dynamically check for changes
   const [initialFormData, setInitialFormData] = useState<any>(null);
 
+  // Initialize linking company data correctly based on auth context
+  useEffect(() => {
+    setLinkRoleData(prev => ({ ...prev, company_id: currentCompanyId?.toString() || "" }));
+  }, [currentCompanyId]);
+
   const getPrimaryRoleAssignment = (emp: any) => {
-    if (!emp.company_roles || emp.company_roles.length === 0) {
-      return { company_id: emp.company_id, role: emp.role, access_level: emp.access_level };
-    }
+    if (!emp.company_roles || emp.company_roles.length === 0) return { company_id: emp.company_id, role: emp.role, access_level: emp.access_level };
     if (currentCompanyId) {
       const roleInCompany = emp.company_roles.find((cr: any) => cr.company_id?.toString() === currentCompanyId.toString());
       if (roleInCompany) return roleInCompany;
     }
-    const adminRole = emp.company_roles.find((cr: any) => cr.access_level === 'admin');
-    return adminRole || emp.company_roles[0];
+    return emp.company_roles.find((cr: any) => cr.access_level === 'admin') || emp.company_roles[0];
   };
 
   const visibleEmployees = employees.filter(emp => {
@@ -108,23 +114,16 @@ export default function EmployeesPage() {
       const matchesCompany = filterCompanyId === "all" || assignments.some((cr: any) => cr.company_id?.toString() === filterCompanyId);
       return matchesSearch && matchesCompany;
     }
-    
     const matchesCurrentCompany = assignments.some((cr: any) => cr.company_id?.toString() === currentCompanyId?.toString());
     return matchesSearch && (matchesCurrentCompany || hasGlobalAdmin);
-  }).sort((a, b) => {
-    const timeA = a.created_at ? new Date(a.created_at).getTime() : a.id;
-    const timeB = b.created_at ? new Date(b.created_at).getTime() : b.id;
-    return timeA - timeB;
-  });
+  }).sort((a, b) => (a.created_at ? new Date(a.created_at).getTime() : a.id) - (b.created_at ? new Date(b.created_at).getTime() : b.id));
 
   const getProjectDue = (empId: number, projectIdStr: string) => {
     if (!projectIdStr) return 0;
     const pid = parseInt(projectIdStr);
     const pAlloc = projectAllocations.filter(a => a.employee_id === empId && a.project_id === pid);
     const pPay = salaryPayments.filter(p => p.employee_id === empId && p.project_id === pid);
-    const pAll = pAlloc.reduce((sum, a) => sum + (parseFloat(a.allocated_amount || 0) + parseFloat(a.incentive_amount || 0)), 0);
-    const pPd = pPay.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0);
-    return Math.max(0, pAll - pPd);
+    return Math.max(0, pAlloc.reduce((sum, a) => sum + (parseFloat(a.allocated_amount || 0) + parseFloat(a.incentive_amount || 0)), 0) - pPay.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0));
   };
 
   const getFinancials = (empId: number) => {
@@ -132,42 +131,66 @@ export default function EmployeesPage() {
     const payments = salaryPayments.filter(p => p.employee_id === empId);
     const totalAllocated = allocs.reduce((sum, a) => sum + (parseFloat(a.allocated_amount || 0) + parseFloat(a.incentive_amount || 0)), 0);
     const totalPaid = payments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0);
-    const balanceDue = Math.max(0, totalAllocated - totalPaid);
-    return { totalAllocated, totalPaid, balanceDue, allocs, payments };
+    return { totalAllocated, totalPaid, balanceDue: Math.max(0, totalAllocated - totalPaid), allocs, payments };
   };
 
+  // --- Network Search Functions ---
+  const handleSearchNetwork = async (query: string) => {
+    setNetworkQuery(query);
+    if (query.trim().length < 2) {
+      setNetworkResults([]);
+      return;
+    }
+    setIsSearchingNetwork(true);
+    try {
+      // Intentionally ONLY fetching basic identity info to protect subsidiary privacy
+      const { data, error } = await supabase
+        .from('employees')
+        .select('id, name, email, profile_image_url')
+        .or(`name.ilike.%${query}%,email.ilike.%${query}%`)
+        .limit(8);
+      if (error) throw error;
+      
+      // Filter out employees that are already strictly bound to the active company 
+      // (so they don't invite someone who is already here)
+      const existingIdsInCompany = visibleEmployees.map(e => e.id);
+      const filteredResults = (data || []).filter(u => !existingIdsInCompany.includes(u.id));
+      
+      setNetworkResults(filteredResults);
+    } catch (err) { console.error(err); } finally { setIsSearchingNetwork(false); }
+  };
+
+  const initiateInvite = (emp: any) => {
+    setExistingNetworkEmployee(emp);
+    setIsNetworkSearchOpen(false);
+    setLinkRoleData({ company_id: currentCompanyId?.toString() || "", role: "", access_level: "user" });
+    setIsConfirmingExisting(true);
+  };
+
+  // --- HR Form Functions ---
   const openNewEmployee = () => {
+    setIsNetworkSearchOpen(false);
     setSelectedEmployee(null);
-    const initial = { 
-      name: "", email: "", phone: "", password: "", 
-      company_roles: [{ company_id: currentCompanyId?.toString() || "", role: "", access_level: "user" }] 
-    };
-    setFormData(initial);
-    setInitialFormData(initial);
+    const initial = { name: "", email: "", phone: "", password: "", company_roles: [{ company_id: currentCompanyId?.toString() || "", role: "", access_level: "user" }] };
+    setFormData(initial); setInitialFormData(initial);
     setImageFile(null); setImagePreview(null); setRemoveImage(false);
     setIsModalOpen(true);
   };
 
   const openEditEmployee = (emp: any) => {
     setSelectedEmployee(emp);
-    let initialRoles = [];
-    if (emp.company_roles && emp.company_roles.length > 0) {
-      initialRoles = emp.company_roles.map((cr: any) => ({ company_id: cr.company_id?.toString() || "", role: cr.role || "", access_level: cr.access_level || "user" }));
-    } else {
-      initialRoles = [{ company_id: emp.company_id?.toString() || "", role: emp.role || "", access_level: emp.access_level || "user" }];
-    }
-    
+    const initialRoles = emp.company_roles && emp.company_roles.length > 0 
+      ? emp.company_roles.map((cr: any) => ({ company_id: cr.company_id?.toString() || "", role: cr.role || "", access_level: cr.access_level || "user" }))
+      : [{ company_id: emp.company_id?.toString() || "", role: emp.role || "", access_level: emp.access_level || "user" }];
     const initial = { name: emp.name || "", email: emp.email || "", phone: emp.phone || "", password: "", company_roles: initialRoles };
-    setFormData(initial);
-    setInitialFormData(initial);
+    setFormData(initial); setInitialFormData(initial);
     setImageFile(null); setImagePreview(null); setRemoveImage(false);
     setIsModalOpen(true);
   };
 
   const openLedger = (emp: any) => {
     setLedgerEmployee(emp);
-    setShowEmpPaymentForm(false);
-    setEmpPaymentForm({ amount: "", payment_type: "Advance", payment_date: today, notes: "", project_id: "" });
+    setShowEmpPaymentForm(false); setEmpPaymentForm({ amount: "", payment_type: "Advance", payment_date: today, notes: "", project_id: "" });
     setIsLedgerOpen(true);
   };
 
@@ -179,51 +202,30 @@ export default function EmployeesPage() {
   const deleteOldAvatar = async (url: string | null) => {
     if (!url) return;
     try {
-      const urlParts = url.split('/');
-      const fileName = urlParts[urlParts.length - 1];
-      if (fileName) await supabase.storage.from('avatars').remove([fileName]);
-    } catch (e) {
-      console.warn("Could not delete old avatar.");
-    }
+      const parts = url.split('/');
+      const name = parts[parts.length - 1];
+      if (name) await supabase.storage.from('avatars').remove([name]);
+    } catch (e) {}
   };
 
   const addCompanyRoleForm = () => setFormData({ ...formData, company_roles: [...formData.company_roles, { company_id: "", role: "", access_level: "user" }] });
-  
-  const removeCompanyRoleForm = (index: number) => {
-    const newRoles = [...formData.company_roles];
-    newRoles.splice(index, 1);
-    setFormData({ ...formData, company_roles: newRoles });
-  };
-
-  const handleRoleChange = (index: number, field: string, value: string) => {
-    const newRoles = [...formData.company_roles];
-    newRoles[index] = { ...newRoles[index], [field]: value };
-    setFormData({ ...formData, company_roles: newRoles });
-  };
+  const removeCompanyRoleForm = (index: number) => { const r = [...formData.company_roles]; r.splice(index, 1); setFormData({ ...formData, company_roles: r }); };
+  const handleRoleChange = (index: number, field: string, value: string) => { const r = [...formData.company_roles]; r[index] = { ...r[index], [field]: value }; setFormData({ ...formData, company_roles: r }); };
 
   const handleSaveEmployee = async () => {
     if (!formData.name.trim() || !formData.email.trim()) return alert("Name and Email are required.");
     if (!selectedEmployee && !formData.password.trim()) return alert("Initial password is required for new employees.");
-    
-    for (const cr of formData.company_roles) {
-      if (!cr.company_id && cr.access_level !== 'admin' && (role === 'admin' && !activeWorkspace)) return alert("Please select a company for all assigned roles.");
-    }
+    for (const cr of formData.company_roles) if (!cr.company_id && cr.access_level !== 'admin' && (role === 'admin' && !activeWorkspace)) return alert("Please select a company for all assigned roles.");
 
     setSaveStatus("saving");
 
     try {
+      // Fallback check just in case someone skips search
       if (!selectedEmployee) {
-        const { data: existingUsers, error: checkError } = await supabase
-          .from('employees')
-          .select('id, name, email, profile_image_url')
-          .ilike('email', formData.email.trim());
-
-        if (checkError) throw checkError;
-
+        const { data: existingUsers } = await supabase.from('employees').select('id, name, email, profile_image_url').ilike('email', formData.email.trim());
         if (existingUsers && existingUsers.length > 0) {
           setExistingNetworkEmployee(existingUsers[0]);
-          setIsConfirmingExisting(true);
-          setSaveStatus("idle");
+          setIsConfirmingExisting(true); setSaveStatus("idle"); setIsModalOpen(false);
           return; 
         }
       }
@@ -233,18 +235,15 @@ export default function EmployeesPage() {
         if (selectedEmployee?.profile_image_url) await deleteOldAvatar(selectedEmployee.profile_image_url);
         if (removeImage) finalImageUrl = null;
       }
-
       if (imageFile) {
         setSaveStatus("compressing");
         const compressedFile = await compressImage(imageFile, 300, 0.8);
         setSaveStatus("uploading");
         const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.jpg`;
         const { error: uploadError } = await supabase.storage.from('avatars').upload(fileName, compressedFile);
-        if (uploadError) throw new Error(`Image upload failed! ${uploadError.message}`);
-        const { data } = supabase.storage.from('avatars').getPublicUrl(fileName);
-        finalImageUrl = data.publicUrl;
+        if (uploadError) throw uploadError;
+        finalImageUrl = supabase.storage.from('avatars').getPublicUrl(fileName).data.publicUrl;
       }
-
       setSaveStatus("saving");
       
       const corePayload: any = { name: formData.name, email: formData.email, phone: formData.phone, profile_image_url: finalImageUrl };
@@ -252,7 +251,7 @@ export default function EmployeesPage() {
 
       if (!selectedEmployee) {
         const { error: authError } = await supabase.auth.signUp({ email: formData.email, password: formData.password });
-        if (authError) throw new Error(`Authentication Engine Error: ${authError.message}`);
+        if (authError) throw authError;
         corePayload.password = formData.password; 
         const { data: newEmp, error } = await supabase.from('employees').insert([corePayload]).select().single();
         if (error) throw error;
@@ -260,13 +259,10 @@ export default function EmployeesPage() {
       } else {
         const emailChanged = formData.email.trim().toLowerCase() !== selectedEmployee.email.trim().toLowerCase();
         const passwordChanged = formData.password.trim().length > 0;
-
         if (emailChanged || passwordChanged) {
-           const { data: rpcResult, error: rpcError } = await supabase.rpc('admin_update_user_credentials', {
-             old_email: selectedEmployee.email, new_email: formData.email.trim(), new_password: formData.password.trim() || null
-           });
-           if (rpcError) throw new Error(`Failed to contact Auth Vault: ${rpcError.message}`);
-           if (rpcResult !== 'SUCCESS') throw new Error(`Auth Vault Error: ${rpcResult}`);
+           const { data: rpcResult, error: rpcError } = await supabase.rpc('admin_update_user_credentials', { old_email: selectedEmployee.email, new_email: formData.email.trim(), new_password: formData.password.trim() || null });
+           if (rpcError) throw rpcError;
+           if (rpcResult !== 'SUCCESS') throw new Error(`Auth Error: ${rpcResult}`);
            if (passwordChanged) corePayload.password = formData.password; 
         }
         const { error } = await supabase.from('employees').update(corePayload).eq('id', finalEmployeeId);
@@ -276,46 +272,33 @@ export default function EmployeesPage() {
       const { error: deleteError } = await supabase.from('employee_company_roles').delete().eq('employee_id', finalEmployeeId);
       if (deleteError) throw deleteError;
 
-      const validRolesToInsert = formData.company_roles
-        .filter(cr => cr.company_id || cr.access_level === 'admin')
-        .map(cr => ({ employee_id: finalEmployeeId, company_id: cr.company_id ? parseInt(cr.company_id) : null, role: cr.role, access_level: cr.access_level }));
-
-      if (validRolesToInsert.length > 0) {
-        const { error: rolesError } = await supabase.from('employee_company_roles').insert(validRolesToInsert);
+      const validRoles = formData.company_roles.filter(cr => cr.company_id || cr.access_level === 'admin').map(cr => ({ employee_id: finalEmployeeId, company_id: cr.company_id ? parseInt(cr.company_id) : null, role: cr.role, access_level: cr.access_level }));
+      if (validRoles.length > 0) {
+        const { error: rolesError } = await supabase.from('employee_company_roles').insert(validRoles);
         if (rolesError) throw rolesError;
       }
       
-      await fetchAllData();
-      setIsModalOpen(false);
+      await fetchAllData(); setIsModalOpen(false);
     } catch (error: any) { alert(error.message); } finally { setSaveStatus("idle"); }
   };
 
   const handleConfirmExistingEmployee = async () => {
+    if (!linkRoleData.company_id && linkRoleData.access_level !== 'admin' && (role === 'admin' && !activeWorkspace)) return alert("Please select a company to assign them to.");
+    
     setSaveStatus("saving");
     try {
-      const validRolesToInsert = formData.company_roles
-        .filter(cr => cr.company_id || cr.access_level === 'admin')
-        .map(cr => ({
+      const payload = {
           employee_id: existingNetworkEmployee.id,
-          company_id: cr.company_id ? parseInt(cr.company_id) : null,
-          role: cr.role,
-          access_level: cr.access_level
-      }));
-
-      if (validRolesToInsert.length > 0) {
-        const { error: rolesError } = await supabase.from('employee_company_roles').insert(validRolesToInsert);
-        if (rolesError) throw rolesError;
-      }
+          company_id: linkRoleData.company_id ? parseInt(linkRoleData.company_id) : null,
+          role: linkRoleData.role,
+          access_level: linkRoleData.access_level
+      };
+      const { error } = await supabase.from('employee_company_roles').insert([payload]);
+      if (error) throw error;
 
       await fetchAllData();
-      setIsConfirmingExisting(false);
-      setExistingNetworkEmployee(null);
-      setIsModalOpen(false);
-    } catch (error: any) {
-      alert(error.message);
-    } finally {
-      setSaveStatus("idle");
-    }
+      setIsConfirmingExisting(false); setExistingNetworkEmployee(null); setLinkRoleData({ company_id: "", role: "", access_level: "user" });
+    } catch (error: any) { alert(error.message); } finally { setSaveStatus("idle"); }
   };
 
   const handleDeleteEmployee = async () => {
@@ -338,7 +321,6 @@ export default function EmployeesPage() {
     try {
       let finalType = empPaymentForm.payment_type;
       let finalNotes = empPaymentForm.notes;
-
       if (empPaymentForm.project_id) {
         const projectDue = getProjectDue(ledgerEmployee.id, empPaymentForm.project_id);
         if (amountVal > projectDue && projectDue > 0) {
@@ -347,16 +329,14 @@ export default function EmployeesPage() {
             finalNotes = finalNotes ? `${finalNotes} (Includes ₹${bonusAmt} Bonus)` : `Includes ₹${bonusAmt} Extra/Bonus Payout`;
         }
       }
-
       const { error } = await supabase.from('salary_payments').insert([{
         employee_id: ledgerEmployee.id, company_id: ledgerEmployee.company_id || currentCompanyId, project_id: empPaymentForm.project_id ? parseInt(empPaymentForm.project_id) : null,
         amount: amountVal, payment_type: finalType, payment_date: empPaymentForm.payment_date, payment_month: empPaymentForm.payment_date.substring(0, 7), notes: finalNotes
       }]);
-      if (error) throw new Error(`Database Error: ${error.message}`);
+      if (error) throw error;
       
       setEmpPaymentForm({ amount: "", payment_type: "Advance", payment_date: today, notes: "", project_id: "" });
-      setShowEmpPaymentForm(false);
-      await fetchAllData();
+      setShowEmpPaymentForm(false); await fetchAllData();
     } catch (error: any) { alert(error.message); } finally { setIsSavingLedger(false); }
   };
 
@@ -364,14 +344,12 @@ export default function EmployeesPage() {
     if (!window.confirm("Remove this payment record permanently?")) return;
     try {
       const { error } = await supabase.from('salary_payments').delete().eq('id', paymentId);
-      if (error) throw new Error(error.message);
+      if (error) throw error;
       await fetchAllData();
-    } catch (error: any) { alert(`Error deleting record: ${error.message}`); }
+    } catch (error: any) { alert(`Error: ${error.message}`); }
   };
 
   const displayImage = imagePreview || (!removeImage && selectedEmployee?.profile_image_url && selectedEmployee.profile_image_url.trim() !== "" ? selectedEmployee.profile_image_url : null);
-  
-  // NEW: Calculate if form has changes dynamically
   const hasChanges = !selectedEmployee || JSON.stringify(formData) !== JSON.stringify(initialFormData) || imageFile !== null || removeImage;
 
   return (
@@ -392,7 +370,7 @@ export default function EmployeesPage() {
                 <button onClick={() => setViewMode('grid')} className={`p-2 sm:p-2.5 rounded-lg sm:rounded-xl transition-all ${viewMode === 'grid' ? 'bg-slate-50 text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}><LayoutGrid className="h-4 w-4" /></button>
                 <button onClick={() => setViewMode('list')} className={`p-2 sm:p-2.5 rounded-lg sm:rounded-xl transition-all ${viewMode === 'list' ? 'bg-slate-50 text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}><List className="h-4 w-4" /></button>
               </div>
-              <button onClick={openNewEmployee} className="flex-1 sm:flex-none bg-gradient-to-r from-blue-900 to-indigo-800 text-white shadow-lg shadow-blue-900/20 hover:shadow-xl hover:-translate-y-0.5 px-4 sm:px-6 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl text-[11px] sm:text-[13px] font-bold transition-all flex items-center justify-center shrink-0">
+              <button onClick={() => { setIsNetworkSearchOpen(true); setNetworkQuery(""); setNetworkResults([]); }} className="flex-1 sm:flex-none bg-gradient-to-r from-blue-900 to-indigo-800 text-white shadow-lg shadow-blue-900/20 hover:shadow-xl hover:-translate-y-0.5 px-4 sm:px-6 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl text-[11px] sm:text-[13px] font-bold transition-all flex items-center justify-center shrink-0">
                 <Plus className="h-4 w-4 mr-1.5 sm:mr-2" /> Add <span className="hidden sm:inline ml-1">Employee</span>
               </button>
             </div>
@@ -541,6 +519,98 @@ export default function EmployeesPage() {
           </div>
         )}
 
+        {/* --- NEW: NETWORK SEARCH MODAL --- */}
+        {createPortal(
+          <AnimatePresence>
+            {isNetworkSearchOpen && (
+              <motion.div 
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} 
+                onClick={() => setIsNetworkSearchOpen(false)}
+                className="fixed inset-0 z-[10000] flex flex-col items-center justify-center sm:p-4 max-sm:px-4 bg-slate-900/40 backdrop-blur-sm"
+              >
+                <motion.div 
+                  initial={{ opacity: 0, y: 30, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 30, scale: 0.95 }} 
+                  onClick={(e) => e.stopPropagation()}
+                  className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden border border-slate-100 relative max-h-[85vh]"
+                >
+                  <div className="p-6 border-b border-slate-100 bg-slate-50 flex items-center gap-4">
+                     <div className="h-12 w-12 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center shrink-0 shadow-sm border border-indigo-200">
+                        <Search className="h-5 w-5" />
+                     </div>
+                     <div className="flex-1">
+                        <h3 className="text-lg font-bold text-slate-900">Network Directory Search</h3>
+                        <p className="text-xs text-slate-500 mt-0.5">Find existing personnel in Zac Holdings to invite.</p>
+                     </div>
+                     <button onClick={() => setIsNetworkSearchOpen(false)} className="h-8 w-8 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm transition-colors shrink-0"><X className="h-4 w-4" /></button>
+                  </div>
+
+                  <div className="p-6 flex flex-col gap-6 flex-1 overflow-y-auto">
+                     <div className="relative">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                        <input 
+                           type="text" 
+                           autoFocus
+                           placeholder="Search by name or email address..." 
+                           value={networkQuery} 
+                           onChange={(e) => handleSearchNetwork(e.target.value)} 
+                           className="w-full h-14 pl-12 pr-4 rounded-xl border border-slate-200 text-sm font-medium outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 shadow-sm transition-all" 
+                        />
+                     </div>
+
+                     <div className="flex-1 flex flex-col min-h-[250px]">
+                        {isSearchingNetwork ? (
+                           <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
+                              <Loader2 className="h-8 w-8 animate-spin mb-3 text-indigo-400" />
+                              <p className="text-sm font-medium">Searching directory...</p>
+                           </div>
+                        ) : networkResults.length > 0 ? (
+                           <div className="space-y-3">
+                              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-1">Matching Profiles ({networkResults.length})</p>
+                              {networkResults.map(u => (
+                                 <div key={u.id} className="flex items-center justify-between p-3 sm:p-4 rounded-xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all group">
+                                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                                       <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0 shadow-sm text-slate-500 font-bold">
+                                          {u.profile_image_url ? <img src={u.profile_image_url} className="h-full w-full object-cover" /> : u.name?.charAt(0).toUpperCase()}
+                                       </div>
+                                       <div className="min-w-0">
+                                          <p className="font-bold text-sm text-slate-900 truncate">{u.name}</p>
+                                          <p className="text-xs text-slate-500 truncate flex items-center gap-1 mt-0.5"><Mail className="h-3 w-3" /> {u.email}</p>
+                                       </div>
+                                    </div>
+                                    <button onClick={() => initiateInvite(u)} className="ml-3 shrink-0 h-9 sm:h-10 px-3 sm:px-4 bg-white border border-indigo-200 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-50 hover:shadow-sm transition-all flex items-center gap-1.5">
+                                       <UserPlus className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Invite</span>
+                                    </button>
+                                 </div>
+                              ))}
+                           </div>
+                        ) : networkQuery.trim().length >= 2 ? (
+                           <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
+                              <div className="h-16 w-16 bg-slate-50 border-2 border-dashed border-slate-200 rounded-full flex items-center justify-center mb-4"><Search className="h-6 w-6 text-slate-400" /></div>
+                              <h4 className="text-sm font-bold text-slate-800 mb-1">No matching personnel found.</h4>
+                              <p className="text-xs text-slate-500 max-w-sm leading-relaxed">They might not be registered in the Zac Holdings network yet. You can create a fresh account for them.</p>
+                           </div>
+                        ) : (
+                           <div className="flex-1 flex items-center justify-center">
+                              <p className="text-sm font-medium text-slate-400 text-center leading-relaxed">Start typing a name or email address<br/>to securely search the global directory.</p>
+                           </div>
+                        )}
+                     </div>
+                  </div>
+
+                  <div className="p-5 border-t border-slate-100 bg-[#FAFCFF] flex flex-col sm:flex-row items-center justify-between gap-4">
+                     <p className="text-xs text-slate-500 font-medium text-center sm:text-left">Can't find who you're looking for?</p>
+                     <button onClick={openNewEmployee} className="w-full sm:w-auto h-11 px-6 bg-slate-900 text-white rounded-xl text-sm font-bold shadow-md hover:bg-slate-800 hover:shadow-lg transition-all flex items-center justify-center gap-2">
+                        <Plus className="h-4 w-4" /> Create New Employee
+                     </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
+
+        {/* --- EXISTING HR FORM MODAL --- */}
         {createPortal(
           <AnimatePresence>
             {isModalOpen && (
@@ -558,7 +628,7 @@ export default function EmployeesPage() {
                     <div className="flex items-center justify-between mb-4 sm:mb-5">
                       <div>
                         <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-blue-600 bg-blue-50 px-2 sm:px-2.5 py-1 rounded-full">HR Record</span>
-                        <h3 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight mt-1.5">{selectedEmployee ? 'Edit Data' : 'Add Employee'}</h3>
+                        <h3 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight mt-1.5">{selectedEmployee ? 'Edit Data' : 'Create New Profile'}</h3>
                       </div>
                       <button onClick={() => setIsModalOpen(false)} className="h-8 w-8 sm:h-9 sm:w-9 bg-white border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm transition-colors"><X className="h-3.5 w-3.5 sm:h-4 w-4" /></button>
                     </div>
@@ -672,41 +742,62 @@ export default function EmployeesPage() {
           document.body
         )}
 
-        {/* Confirmation Portal Modal for linking existing employees */}
+        {/* --- MODIFIED: LINK EXISTING EMPLOYEE MODAL (Triggered from Search) --- */}
         {createPortal(
           <AnimatePresence>
             {isConfirmingExisting && existingNetworkEmployee && (
               <div className="fixed inset-0 z-[10010] flex flex-col items-center justify-center sm:p-4 bg-slate-900/60 backdrop-blur-md">
                 <motion.div 
                   initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.95 }} 
-                  className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden border border-slate-100"
+                  className="bg-white rounded-3xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden border border-slate-100"
                 >
-                  <div className="p-6 sm:p-8 text-center bg-indigo-50 border-b border-indigo-100 relative shrink-0">
-                    <div className="h-14 w-14 sm:h-16 sm:w-16 mx-auto bg-white rounded-full flex items-center justify-center mb-4 border border-indigo-200 shadow-sm overflow-hidden text-xl font-bold text-indigo-400">
+                  <div className="p-6 sm:p-8 text-center bg-gradient-to-b from-indigo-50 to-white border-b border-indigo-100 relative shrink-0">
+                    <button onClick={() => setIsConfirmingExisting(false)} className="absolute top-4 right-4 h-8 w-8 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm transition-colors"><X className="h-4 w-4" /></button>
+                    <div className="h-16 w-16 sm:h-20 sm:w-20 mx-auto bg-white rounded-full flex items-center justify-center mb-4 border border-indigo-200 shadow-sm overflow-hidden text-2xl font-bold text-indigo-400">
                       {existingNetworkEmployee.profile_image_url ? (
                         <img src={existingNetworkEmployee.profile_image_url} alt="" className="h-full w-full object-cover"/>
                       ) : (
-                        <UserCheck className="h-7 w-7 text-indigo-500" />
+                        existingNetworkEmployee.name?.charAt(0).toUpperCase()
                       )}
                     </div>
-                    <h3 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">Network Match Found</h3>
-                    <p className="text-[10px] sm:text-[11px] font-bold text-indigo-600 uppercase tracking-widest mt-1">Cross-Company Registration</p>
+                    <h3 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">{existingNetworkEmployee.name}</h3>
+                    <p className="text-xs text-slate-500 font-medium flex items-center justify-center gap-1 mt-1"><Mail className="h-3 w-3" /> {existingNetworkEmployee.email}</p>
                   </div>
 
-                  <div className="p-6 sm:p-8 bg-white space-y-4 text-center">
-                    <p className="text-sm text-slate-600 leading-relaxed">
-                      An employee with the email <span className="font-bold text-slate-900">{formData.email.trim()}</span> is already registered in the Zac Holdings network as <span className="font-bold text-slate-900">{existingNetworkEmployee.name}</span>.
-                    </p>
-                    <div className="bg-slate-50 border border-slate-100 p-4 rounded-xl">
-                      <p className="text-xs text-slate-500 font-medium">Do you want to invite and link this existing employee to your subsidiary as <span className="font-bold text-slate-800">{formData.company_roles[0]?.role || 'a new role'}</span>?</p>
-                      <p className="text-[10px] text-slate-400 mt-2 italic">Note: They will use their existing password to log in.</p>
+                  <div className="p-6 sm:p-8 bg-white space-y-4">
+                    <div className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-xl text-center">
+                      <p className="text-xs text-indigo-900 font-medium leading-relaxed">This person is already in the Zac Holdings network. Assign them a role below to link them to your subsidiary.</p>
+                    </div>
+
+                    <div className="space-y-4">
+                      {(role === 'admin' && !activeWorkspace) && (
+                        <div>
+                           <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 px-1">Assign to Company</label>
+                           <select value={linkRoleData.company_id} onChange={(e) => setLinkRoleData({...linkRoleData, company_id: e.target.value})} className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold outline-none cursor-pointer focus:border-indigo-500 shadow-sm">
+                             <option value="">Global Administrator (No specific company)</option>
+                             {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                           </select>
+                        </div>
+                      )}
+                      <div>
+                         <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 px-1">Job Title / Role</label>
+                         <input type="text" placeholder="e.g., Senior Developer" value={linkRoleData.role} onChange={(e) => setLinkRoleData({...linkRoleData, role: e.target.value})} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none focus:border-indigo-500 shadow-sm" />
+                      </div>
+                      <div>
+                         <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 px-1">Access Level</label>
+                         <select value={linkRoleData.access_level} onChange={(e) => setLinkRoleData({...linkRoleData, access_level: e.target.value})} className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold outline-none cursor-pointer focus:border-indigo-500 shadow-sm">
+                             <option value="user">Operator (User)</option>
+                             <option value="head">Director (Head)</option>
+                             {role === 'admin' && <option value="admin">Global Admin</option>}
+                         </select>
+                      </div>
                     </div>
                   </div>
 
                   <div className="p-4 sm:p-6 border-t border-slate-100 bg-[#FAFCFF] flex justify-end gap-3 shrink-0">
-                    <button onClick={() => { setIsConfirmingExisting(false); setExistingNetworkEmployee(null); setSaveStatus("idle"); }} className="rounded-xl border border-slate-200 bg-white h-11 px-6 font-bold text-sm text-slate-600 hover:bg-slate-50 transition-colors w-full sm:w-auto">Cancel</button>
-                    <button onClick={handleConfirmExistingEmployee} disabled={saveStatus === "saving"} className="bg-indigo-600 text-white rounded-xl h-11 px-8 font-bold text-sm shadow-md hover:bg-indigo-700 transition-all flex items-center justify-center w-full sm:w-auto disabled:opacity-50">
-                       {saveStatus === 'saving' ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Processing...</> : "Link Employee"}
+                    <button onClick={() => { setIsConfirmingExisting(false); setExistingNetworkEmployee(null); setSaveStatus("idle"); }} className="rounded-xl border border-slate-200 bg-white h-11 px-6 font-bold text-sm text-slate-600 hover:bg-slate-50 transition-colors w-full sm:w-auto shadow-sm">Cancel</button>
+                    <button onClick={handleConfirmExistingEmployee} disabled={saveStatus === "saving" || !linkRoleData.role.trim()} className="bg-indigo-600 text-white rounded-xl h-11 px-8 font-bold text-sm shadow-md hover:bg-indigo-700 hover:shadow-lg transition-all flex items-center justify-center w-full sm:w-auto disabled:opacity-50 disabled:hover:shadow-none">
+                       {saveStatus === 'saving' ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Processing...</> : "Confirm & Link Role"}
                     </button>
                   </div>
                 </motion.div>
@@ -716,6 +807,7 @@ export default function EmployeesPage() {
           document.body
         )}
 
+        {/* --- EXISTING LEDGER MODAL --- */}
         {createPortal(
           <AnimatePresence>
             {isLedgerOpen && ledgerEmployee && (
