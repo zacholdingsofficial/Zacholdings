@@ -703,12 +703,12 @@ export default function FinancePage() {
                       <>
                         {canViewFinance ? (
                           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                             <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm flex flex-col justify-center">
+                             <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm flex flex-col justify-center print:break-inside-avoid">
                                 <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">Project Expected Value</h4>
                                 <p className="text-4xl font-bold text-gray-900 tracking-tight">₹{pExpected.toLocaleString()}</p>
                              </div>
                              
-                             <div className="lg:col-span-2 bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                             <div className="lg:col-span-2 bg-white border border-gray-200 rounded-xl p-6 shadow-sm print:break-inside-avoid">
                                 <div className="flex justify-between items-end mb-5">
                                   <div>
                                      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Profit Margin & Projected Burn</h4>
@@ -724,46 +724,46 @@ export default function FinancePage() {
                                 </div>
                                 
                                 <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden flex border border-gray-200">
-                                  <div className="h-full bg-blue-600 transition-all" style={{ width: `${pExpected > 0 ? Math.min((pPayroll / pExpected) * 100, 100) : 0}%` }} title="Team Allocations"></div>
-                                  <div className="h-full bg-gray-500 transition-all" style={{ width: `${pExpected > 0 ? Math.min((pOpEx / pExpected) * 100, 100) : 0}%` }} title="Operational Expenses"></div>
+                                  <div className="h-full bg-blue-600 transition-all" style={{ width: `${pExpected > 0 ? Math.min((pPayroll / pExpected) * 100, 100) : 0}%`, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }} title="Team Allocations"></div>
+                                  <div className="h-full bg-gray-500 transition-all" style={{ width: `${pExpected > 0 ? Math.min((pOpEx / pExpected) * 100, 100) : 0}%`, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }} title="Operational Expenses"></div>
                                 </div>
                                 <div className="flex gap-6 mt-4 text-[10px] font-bold uppercase tracking-widest text-gray-600">
-                                  <div className="flex items-center gap-2"><div className="h-2.5 w-2.5 rounded-full bg-blue-600"></div> Team (₹{pPayroll.toLocaleString()})</div>
-                                  <div className="flex items-center gap-2"><div className="h-2.5 w-2.5 rounded-full bg-gray-500"></div> OpEx (₹{pOpEx.toLocaleString()})</div>
+                                  <div className="flex items-center gap-2"><div className="h-2.5 w-2.5 rounded-full bg-blue-600" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}></div> Team (₹{pPayroll.toLocaleString()})</div>
+                                  <div className="flex items-center gap-2"><div className="h-2.5 w-2.5 rounded-full bg-gray-500" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}></div> OpEx (₹{pOpEx.toLocaleString()})</div>
                                 </div>
                              </div>
                           </div>
                         ) : (
-                          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm print:break-inside-avoid">
                              <div className="flex flex-col mb-5">
                                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Total Project Costs (Team + OpEx)</h4>
                                <p className="text-3xl font-bold text-gray-900 mt-1">₹{pTotalOut.toLocaleString()}</p>
                              </div>
                              <div className="flex gap-6 mt-4 text-[10px] font-bold uppercase tracking-widest text-gray-600">
-                               <div className="flex items-center gap-2"><div className="h-2.5 w-2.5 rounded-full bg-blue-600"></div> Team (₹{pPayroll.toLocaleString()})</div>
-                               <div className="flex items-center gap-2"><div className="h-2.5 w-2.5 rounded-full bg-gray-500"></div> OpEx (₹{pOpEx.toLocaleString()})</div>
+                               <div className="flex items-center gap-2"><div className="h-2.5 w-2.5 rounded-full bg-blue-600" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}></div> Team (₹{pPayroll.toLocaleString()})</div>
+                               <div className="flex items-center gap-2"><div className="h-2.5 w-2.5 rounded-full bg-gray-500" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}></div> OpEx (₹{pOpEx.toLocaleString()})</div>
                              </div>
                           </div>
                         )}
 
                         <div className={`grid gap-6 ${canViewFinance ? 'grid-cols-1 lg:grid-cols-3' : 'grid-cols-1 lg:grid-cols-2'}`}>
                           {canViewFinance && (
-                            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm print:break-inside-avoid">
                               <h4 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-3 mb-4 flex items-center gap-2"><FileText className="h-4 w-4 text-blue-500" /> Invoices</h4>
                               {pInvoices.length === 0 ? <p className="text-sm italic text-gray-500">No invoices generated.</p> : (
                                 <div className="space-y-3">
                                   {pInvoices.map(inv => (
-                                    <div key={inv.id} className="bg-gray-50 border border-gray-200 rounded-lg p-4 group">
+                                    <div key={inv.id} className="bg-gray-50 border border-gray-200 rounded-lg p-4 group print:break-inside-avoid">
                                       <div className="flex justify-between items-center mb-2">
                                         <p className="font-bold text-gray-900 text-sm">{inv.invoice_number}</p>
-                                        <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest ${inv.status === 'Paid' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-700'}`}>{inv.status}</span>
+                                        <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest ${inv.status === 'Paid' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-700'}`} style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>{inv.status}</span>
                                       </div>
                                       <div className="flex justify-between items-end mt-3">
                                         <div>
                                           <div className="text-xs font-semibold text-gray-500 mb-1">Total: ₹{parseFloat(inv.total_amount || 0).toLocaleString()}</div>
                                           <div className="text-sm font-bold text-green-600">Paid: ₹{parseFloat(inv.amount_paid || 0).toLocaleString()}</div>
                                         </div>
-                                        <button onClick={() => handleViewInvoice(inv.id)} className="text-xs font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider flex items-center gap-1 bg-white border border-blue-200 px-3 py-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity shadow-sm">
+                                        <button onClick={() => handleViewInvoice(inv.id)} className="text-xs font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider flex items-center gap-1 bg-white border border-blue-200 px-3 py-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity shadow-sm print:hidden">
                                           View <ExternalLink className="h-3 w-3" />
                                         </button>
                                       </div>
@@ -774,14 +774,14 @@ export default function FinancePage() {
                             </div>
                           )}
 
-                          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm print:break-inside-avoid">
                             <h4 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-3 mb-4 flex items-center gap-2"><Users className="h-4 w-4 text-blue-500" /> Project Payroll</h4>
                             {pPayments.length === 0 ? <p className="text-sm italic text-gray-500">No employee payments recorded.</p> : (
                               <div className="space-y-3">
                                 {pPayments.map(p => {
                                   const emp = employees.find(e => e.id === p.employee_id);
                                   return (
-                                    <div key={p.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3 flex justify-between items-center">
+                                    <div key={p.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3 flex justify-between items-center print:break-inside-avoid">
                                       <div>
                                         <p className="text-sm font-bold text-gray-900">{emp?.name || 'Unknown'}</p>
                                         <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mt-1">{p.payment_date ? new Date(p.payment_date).toLocaleDateString() : ''}</p>
@@ -794,12 +794,12 @@ export default function FinancePage() {
                             )}
                           </div>
 
-                          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm print:break-inside-avoid">
                             <h4 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-3 mb-4 flex items-center gap-2"><Briefcase className="h-4 w-4 text-blue-500" /> OpEx (Expenses)</h4>
                             {pExpenses.length === 0 ? <p className="text-sm italic text-gray-500">No operational expenses logged.</p> : (
                               <div className="space-y-3">
                                 {pExpenses.map(e => (
-                                  <div key={e.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3 flex justify-between items-center">
+                                  <div key={e.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3 flex justify-between items-center print:break-inside-avoid">
                                     <div className="flex-1 min-w-0 pr-4">
                                       <p className="text-sm font-bold text-gray-900 truncate">{e.description}</p>
                                       <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mt-1 truncate">{e.expense_date ? new Date(e.expense_date).toLocaleDateString() : ''} • {e.category}</p>
@@ -872,7 +872,7 @@ export default function FinancePage() {
                 </div>
                 
                 <div className="p-8 sm:p-12 flex-1 bg-white print:p-8 print:block print:h-auto print:overflow-visible" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                   <div className="flex justify-between items-start mb-10 border-b border-gray-200 pb-8">
+                   <div className="flex justify-between items-start mb-10 border-b border-gray-200 pb-8 print:break-inside-avoid">
                       <div className="flex flex-col items-start w-1/3">
                          {parentLogoUrl ? (
                             <img src={parentLogoUrl} alt="Parent Logo" className="h-16 object-contain mb-3 print:h-12 mix-blend-multiply" />
@@ -909,35 +909,37 @@ export default function FinancePage() {
                          )}
                       </div>
                    </div>
-                   <div className="grid grid-cols-2 sm:grid-cols-2 gap-6 mb-12 print:grid-cols-2 print:gap-6 print:mb-10">
-                     <div className="border-l-4 border-green-500 bg-gray-50 p-6 rounded-r-xl border-y border-r border-gray-200" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                       <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2 flex items-center gap-2 whitespace-nowrap"><ArrowDownLeft className="h-4 w-4 text-green-600" /> Total Income</p>
-                       <p className="text-3xl font-bold text-gray-900 break-words">₹{reportStats.inc.toLocaleString()}</p>
+                   
+                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8 print:grid-cols-4 print:gap-4 print:mb-8 print:break-inside-avoid">
+                     <div className="border-l-4 border-green-500 bg-gray-50 p-5 rounded-r-xl border-y border-r border-gray-200 print:p-4" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+                       <p className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-1 flex items-center gap-1.5 whitespace-nowrap"><ArrowDownLeft className="h-3.5 w-3.5 text-green-600" /> Income</p>
+                       <p className="text-2xl font-bold text-gray-900 break-words print:text-xl">₹{reportStats.inc.toLocaleString()}</p>
                      </div>
-                     <div className="border-l-4 border-red-500 bg-gray-50 p-6 rounded-r-xl border-y border-r border-gray-200" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                       <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2 flex items-center gap-2 whitespace-nowrap"><ArrowUpRight className="h-4 w-4 text-red-600" /> Total Expenses</p>
-                       <p className="text-3xl font-bold text-gray-900 break-words">₹{reportStats.exp.toLocaleString()}</p>
+                     <div className="border-l-4 border-red-500 bg-gray-50 p-5 rounded-r-xl border-y border-r border-gray-200 print:p-4" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+                       <p className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-1 flex items-center gap-1.5 whitespace-nowrap"><ArrowUpRight className="h-3.5 w-3.5 text-red-600" /> Expenses</p>
+                       <p className="text-2xl font-bold text-gray-900 break-words print:text-xl">₹{reportStats.exp.toLocaleString()}</p>
                      </div>
-                     <div className={`border-l-4 p-6 rounded-r-xl border-y border-r ${reportStats.prof >= 0 ? 'border-blue-500 bg-blue-50 border-y-blue-100 border-r-blue-100' : 'border-red-500 bg-red-50 border-y-red-100 border-r-red-100'}`} style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                       <p className={`text-xs font-bold uppercase tracking-widest mb-2 whitespace-nowrap ${reportStats.prof >= 0 ? 'text-blue-700' : 'text-red-700'}`}>Net Profit</p>
-                       <p className={`text-3xl font-bold break-words ${reportStats.prof >= 0 ? 'text-blue-900' : 'text-red-900'}`}>₹{reportStats.prof.toLocaleString()}</p>
+                     <div className={`border-l-4 p-5 rounded-r-xl border-y border-r print:p-4 ${reportStats.prof >= 0 ? 'border-blue-500 bg-blue-50 border-y-blue-100 border-r-blue-100' : 'border-red-500 bg-red-50 border-y-red-100 border-r-red-100'}`} style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+                       <p className={`text-[11px] font-bold uppercase tracking-widest mb-1 whitespace-nowrap ${reportStats.prof >= 0 ? 'text-blue-700' : 'text-red-700'}`}>Net Profit</p>
+                       <p className={`text-2xl font-bold break-words print:text-xl ${reportStats.prof >= 0 ? 'text-blue-900' : 'text-red-900'}`}>₹{reportStats.prof.toLocaleString()}</p>
                      </div>
-                     <div className="border-l-4 border-gray-400 bg-gray-50 p-6 rounded-r-xl border-y border-r border-gray-200" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                       <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2 whitespace-nowrap">Profit Margin</p>
-                       <p className="text-3xl font-bold text-gray-900 break-words">{reportStats.margin}%</p>
+                     <div className="border-l-4 border-gray-400 bg-gray-50 p-5 rounded-r-xl border-y border-r border-gray-200 print:p-4" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+                       <p className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-1 whitespace-nowrap">Margin</p>
+                       <p className="text-2xl font-bold text-gray-900 break-words print:text-xl">{reportStats.margin}%</p>
                      </div>
                    </div>
-                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12 print:grid print:grid-cols-2 print:gap-6 print:mb-10">
-                      <div className="border border-gray-200 rounded-xl p-6 bg-white shadow-sm flex flex-col print:p-5 print:shadow-none print:border-gray-300">
+                   
+                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8 print:grid print:grid-cols-2 print:gap-6 print:mb-8 print:break-inside-avoid">
+                      <div className="border border-gray-200 rounded-xl p-6 bg-white shadow-sm flex flex-col print:p-5 print:shadow-none print:border-gray-300 print:break-inside-avoid">
                          <h3 className="text-sm font-bold text-gray-900 mb-6 flex items-center print:text-xs"><BarChart3 className="h-4 w-4 mr-2 text-blue-600 print:h-3 print:w-3"/> Monthly Cash Flow</h3>
-                         <div className="flex-1 min-h-[200px] flex items-end gap-2 sm:gap-4 relative pt-10 px-2 border-b border-gray-200 print:min-h-[160px]">
-                           {reportStats.chartData.length === 0 ? <p className="absolute inset-0 flex items-center justify-center text-sm font-medium text-gray-400 italic">No monthly data available.</p> : null}
+                         <div className="flex-1 min-h-[200px] flex items-end gap-2 sm:gap-4 border-b border-gray-200 print:min-h-[160px] pb-2">
+                           {reportStats.chartData.length === 0 ? <p className="w-full flex items-center justify-center text-sm font-medium text-gray-400 italic mb-10">No monthly data available.</p> : null}
                            {reportStats.chartData.map((data, idx) => {
                              const incHeight = Math.max((data.inc / (reportStats.maxChartVal || 1)) * 100, 2);
                              const expHeight = Math.max((data.exp / (reportStats.maxChartVal || 1)) * 100, 2);
                              return (
-                               <div key={idx} className="flex-1 flex flex-col items-center justify-end h-full group relative">
-                                 <div className="flex items-end justify-center w-full gap-1.5 h-full z-10 pb-1">
+                               <div key={idx} className="flex-1 flex flex-col items-center justify-end h-full group shrink-0 relative">
+                                 <div className="flex items-end justify-center w-full gap-1.5 h-full z-10">
                                    <div style={{ height: `${incHeight}%`, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }} className="w-full max-w-[24px] bg-green-500 rounded-t-sm relative transition-all">
                                      <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-[9px] font-bold text-green-700 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap print:opacity-100 print:text-[7px]">₹{(data.inc/1000).toFixed(0)}k</span>
                                    </div>
@@ -945,51 +947,54 @@ export default function FinancePage() {
                                      <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-[9px] font-bold text-red-700 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap print:opacity-100 print:text-[7px]">₹{(data.exp/1000).toFixed(0)}k</span>
                                    </div>
                                  </div>
-                                 <span className="text-[10px] font-bold text-gray-500 mt-2 absolute -bottom-6 truncate w-full text-center print:text-[8px]">{data.month}</span>
+                                 <span className="text-[10px] font-bold text-gray-500 mt-3 truncate w-full text-center print:text-[8px]">{data.month}</span>
                                </div>
                              )
                            })}
                          </div>
-                         <div className="flex justify-center gap-6 mt-12 text-[10px] font-bold uppercase tracking-widest text-gray-600 print:mt-10 print:text-[8px]">
+                         <div className="flex justify-center gap-6 mt-8 text-[10px] font-bold uppercase tracking-widest text-gray-600 print:mt-6 print:text-[8px]">
                            <div className="flex items-center gap-2"><div className="w-3 h-3 bg-green-500 rounded-sm print:bg-green-500" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}></div> Income</div>
                            <div className="flex items-center gap-2"><div className="w-3 h-3 bg-red-500 rounded-sm print:bg-red-500" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}></div> Expense</div>
                          </div>
                       </div>
-                      <div className="border border-gray-200 rounded-xl p-6 bg-white shadow-sm print:col-span-2 print:p-5 print:shadow-none print:border-gray-300 flex flex-col">
+                      
+                      <div className="border border-gray-200 rounded-xl p-6 bg-white shadow-sm print:p-5 print:shadow-none print:border-gray-300 flex flex-col print:break-inside-avoid">
                          <h3 className="text-sm font-bold text-gray-900 mb-6 flex items-center print:text-xs"><Activity className="h-4 w-4 mr-2 text-blue-600 print:h-3 print:w-3"/> Cash Flow Trend</h3>
-                         <div className="flex-1 relative w-full min-h-[200px] print:min-h-[160px]">
+                         <div className="flex-1 flex flex-col justify-end w-full min-h-[200px] print:min-h-[160px]">
                             {reportStats.chartData.length === 0 ? (
-                               <p className="absolute inset-0 flex items-center justify-center text-sm font-medium text-gray-400 italic">No monthly data available.</p>
+                               <p className="flex-1 flex items-center justify-center text-sm font-medium text-gray-400 italic pb-10">No monthly data available.</p>
                             ) : (
                                <>
-                                  <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full absolute inset-0 overflow-visible">
-                                    <line x1="0" y1="25" x2="100" y2="25" stroke="#f1f5f9" strokeWidth="0.5" />
-                                    <line x1="0" y1="50" x2="100" y2="50" stroke="#f1f5f9" strokeWidth="0.5" />
-                                    <line x1="0" y1="75" x2="100" y2="75" stroke="#f1f5f9" strokeWidth="0.5" />
-                                    <line x1="0" y1="100" x2="100" y2="100" stroke="#e2e8f0" strokeWidth="1" />
-                                    {reportStats.chartData.length > 1 && (
-                                       <>
-                                         <polyline points={lineChartIncPoints} fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                                         <polyline points={lineChartExpPoints} fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                                       </>
-                                    )}
-                                    {reportStats.chartData.map((d, i) => {
-                                       const x = reportStats.chartData.length > 1 ? (i / (reportStats.chartData.length - 1)) * 100 : 50;
-                                       const incY = 100 - (d.inc / (reportStats.maxChartVal || 1)) * 100;
-                                       const expY = 100 - (d.exp / (reportStats.maxChartVal || 1)) * 100;
-                                       return (
-                                         <g key={i}>
-                                           <circle cx={x} cy={incY} r="2" fill="#22c55e" />
-                                           <circle cx={x} cy={expY} r="2" fill="#ef4444" />
-                                         </g>
-                                       )
-                                    })}
-                                  </svg>
-                                  <div className="absolute -bottom-6 left-0 w-full">
+                                  <div className="relative w-full h-full flex-1 mb-2">
+                                    <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full absolute inset-0 overflow-visible" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+                                      <line x1="0" y1="25" x2="100" y2="25" stroke="#f1f5f9" strokeWidth="0.5" />
+                                      <line x1="0" y1="50" x2="100" y2="50" stroke="#f1f5f9" strokeWidth="0.5" />
+                                      <line x1="0" y1="75" x2="100" y2="75" stroke="#f1f5f9" strokeWidth="0.5" />
+                                      <line x1="0" y1="100" x2="100" y2="100" stroke="#e2e8f0" strokeWidth="1" />
+                                      {reportStats.chartData.length > 1 && (
+                                         <>
+                                           <polyline points={lineChartIncPoints} fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                                           <polyline points={lineChartExpPoints} fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                                         </>
+                                      )}
+                                      {reportStats.chartData.map((d, i) => {
+                                         const x = reportStats.chartData.length > 1 ? (i / (reportStats.chartData.length - 1)) * 100 : 50;
+                                         const incY = 100 - (d.inc / (reportStats.maxChartVal || 1)) * 100;
+                                         const expY = 100 - (d.exp / (reportStats.maxChartVal || 1)) * 100;
+                                         return (
+                                           <g key={i}>
+                                             <circle cx={x} cy={incY} r="2" fill="#22c55e" />
+                                             <circle cx={x} cy={expY} r="2" fill="#ef4444" />
+                                           </g>
+                                         )
+                                      })}
+                                    </svg>
+                                  </div>
+                                  <div className="relative w-full h-4 mt-2">
                                     {reportStats.chartData.map((d, i) => {
                                       const leftPos = reportStats.chartData.length > 1 ? (i / (reportStats.chartData.length - 1)) * 100 : 50;
                                       return (
-                                        <span key={i} className="text-[10px] font-bold text-gray-500 print:text-[8px] absolute whitespace-nowrap" style={{ left: `${leftPos}%`, transform: 'translateX(-50%)' }}>
+                                        <span key={i} className="text-[10px] font-bold text-gray-500 print:text-[8px] absolute whitespace-nowrap top-0" style={{ left: `${leftPos}%`, transform: 'translateX(-50%)' }}>
                                           {d.month}
                                         </span>
                                       )
@@ -998,32 +1003,34 @@ export default function FinancePage() {
                                </>
                             )}
                          </div>
-                         <div className="flex justify-center gap-6 mt-12 text-[10px] font-bold uppercase tracking-widest text-gray-600 print:mt-10 print:text-[8px]">
+                         <div className="flex justify-center gap-6 mt-6 text-[10px] font-bold uppercase tracking-widest text-gray-600 print:mt-4 print:text-[8px]">
                            <div className="flex items-center gap-2"><div className="w-3 h-3 bg-green-500 rounded-sm print:bg-green-500" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}></div> Income Trend</div>
                            <div className="flex items-center gap-2"><div className="w-3 h-3 bg-red-500 rounded-sm print:bg-red-500" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}></div> Expense Trend</div>
                          </div>
                       </div>
-                      <div className="lg:col-span-2 border border-gray-200 rounded-xl p-6 bg-white shadow-sm print:col-span-2 print:p-5 print:shadow-none print:border-gray-300">
-                         <h3 className="text-sm font-bold text-gray-900 mb-6 flex items-center print:text-xs"><PieChart className="h-4 w-4 mr-2 text-gray-500 print:h-3 print:w-3"/> Expense Distribution</h3>
-                         <div className="space-y-5 print:space-y-4">
-                            {reportStats.sortedCategories.length === 0 ? <p className="text-sm font-medium text-gray-400 italic">No expenses logged.</p> : null}
-                            {reportStats.sortedCategories.map((item, idx) => {
-                               const percentage = ((item.amount / reportStats.exp) * 100).toFixed(1);
-                               return (
-                                 <div key={idx}>
-                                    <div className="flex justify-between items-end mb-1.5 text-xs font-bold print:text-[10px]">
-                                       <span className="text-gray-700">{item.category}</span>
-                                       <span className="text-gray-900">₹{item.amount.toLocaleString()} <span className="text-gray-400 font-medium ml-1.5">({percentage}%)</span></span>
-                                    </div>
-                                    <div className="w-full bg-gray-100 rounded-full h-2 print:h-1.5" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                                       <div className="bg-gray-500 h-2 rounded-full print:h-1.5" style={{ width: `${percentage}%`, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}></div>
-                                    </div>
+                   </div>
+
+                   <div className="border border-gray-200 rounded-xl p-6 bg-white shadow-sm mb-12 print:p-5 print:shadow-none print:border-gray-300 print:break-inside-avoid print:mb-8">
+                      <h3 className="text-sm font-bold text-gray-900 mb-6 flex items-center print:text-xs"><PieChart className="h-4 w-4 mr-2 text-gray-500 print:h-3 print:w-3"/> Expense Distribution</h3>
+                      <div className="space-y-5 print:space-y-4">
+                         {reportStats.sortedCategories.length === 0 ? <p className="text-sm font-medium text-gray-400 italic">No expenses logged.</p> : null}
+                         {reportStats.sortedCategories.map((item, idx) => {
+                            const percentage = ((item.amount / reportStats.exp) * 100).toFixed(1);
+                            return (
+                              <div key={idx} className="print:break-inside-avoid">
+                                 <div className="flex justify-between items-end mb-1.5 text-xs font-bold print:text-[10px]">
+                                    <span className="text-gray-700">{item.category}</span>
+                                    <span className="text-gray-900">₹{item.amount.toLocaleString()} <span className="text-gray-400 font-medium ml-1.5">({percentage}%)</span></span>
                                  </div>
-                               )
-                            })}
-                         </div>
+                                 <div className="w-full bg-gray-100 rounded-full h-2 print:h-1.5" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+                                    <div className="bg-gray-500 h-2 rounded-full print:h-1.5" style={{ width: `${percentage}%`, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}></div>
+                                 </div>
+                              </div>
+                            )
+                         })}
                       </div>
                    </div>
+
                    <div className="print:break-inside-avoid">
                       <h3 className="text-sm font-bold text-gray-900 border-b border-gray-200 pb-3 mb-5 print:text-xs bg-gray-50/50 print:bg-gray-50 px-3 pt-3 rounded-t-lg">Income Ledger</h3>
                       <table className="w-full text-left text-xs mb-12 print:text-[10px]">
@@ -1040,7 +1047,7 @@ export default function FinancePage() {
                                <tr><td colSpan={4} className="py-5 text-gray-500 italic text-center font-medium">No income recorded.</td></tr>
                             ) : (
                                reportStats.incList.map((inc, i) => (
-                                  <tr key={i}>
+                                  <tr key={i} className="print:break-inside-avoid">
                                      <td className="py-3 px-3 text-gray-600 font-medium">{inc.date ? new Date(inc.date).toLocaleDateString() : '-'}</td>
                                      <td className="py-3 px-3 font-bold text-gray-900">{inc.ref}</td>
                                      <td className="py-3 px-3 text-gray-700 font-medium">{inc.client}</td>
@@ -1051,6 +1058,7 @@ export default function FinancePage() {
                          </tbody>
                       </table>
                    </div>
+
                    <div className="print:break-inside-avoid">
                       <h3 className="text-sm font-bold text-gray-900 border-b border-gray-200 pb-3 mb-5 print:text-xs bg-gray-50/50 print:bg-gray-50 px-3 pt-3 rounded-t-lg">Expense Ledger</h3>
                       <table className="w-full text-left text-xs print:text-[10px]">
@@ -1082,7 +1090,8 @@ export default function FinancePage() {
                          </tbody>
                       </table>
                    </div>
-                   <div className="text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-16 pt-8 border-t border-gray-200 print:mt-12 print:pt-6 print:text-[8px]">
+
+                   <div className="text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-16 pt-8 border-t border-gray-200 print:mt-12 print:pt-6 print:text-[8px] print:break-inside-avoid">
                       End of Report • Generated on {new Date().toLocaleString()}
                    </div>
                 </div>
