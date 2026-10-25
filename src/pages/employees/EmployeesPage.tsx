@@ -56,7 +56,6 @@ export default function EmployeesPage() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "compressing" | "uploading" | "saving">("idle");
   const [isSavingLedger, setIsSavingLedger] = useState(false);
   
-  // New States for Network Check
   const [existingNetworkEmployee, setExistingNetworkEmployee] = useState<any>(null);
   const [isConfirmingExisting, setIsConfirmingExisting] = useState(false);
   
@@ -84,6 +83,9 @@ export default function EmployeesPage() {
     password: "",
     company_roles: [{ company_id: currentCompanyId?.toString() || "", role: "", access_level: "user" }]
   });
+  
+  // NEW: Store initial data to dynamically check for changes
+  const [initialFormData, setInitialFormData] = useState<any>(null);
 
   const getPrimaryRoleAssignment = (emp: any) => {
     if (!emp.company_roles || emp.company_roles.length === 0) {
@@ -136,10 +138,12 @@ export default function EmployeesPage() {
 
   const openNewEmployee = () => {
     setSelectedEmployee(null);
-    setFormData({ 
+    const initial = { 
       name: "", email: "", phone: "", password: "", 
       company_roles: [{ company_id: currentCompanyId?.toString() || "", role: "", access_level: "user" }] 
-    });
+    };
+    setFormData(initial);
+    setInitialFormData(initial);
     setImageFile(null); setImagePreview(null); setRemoveImage(false);
     setIsModalOpen(true);
   };
@@ -152,7 +156,10 @@ export default function EmployeesPage() {
     } else {
       initialRoles = [{ company_id: emp.company_id?.toString() || "", role: emp.role || "", access_level: emp.access_level || "user" }];
     }
-    setFormData({ name: emp.name || "", email: emp.email || "", phone: emp.phone || "", password: "", company_roles: initialRoles });
+    
+    const initial = { name: emp.name || "", email: emp.email || "", phone: emp.phone || "", password: "", company_roles: initialRoles };
+    setFormData(initial);
+    setInitialFormData(initial);
     setImageFile(null); setImagePreview(null); setRemoveImage(false);
     setIsModalOpen(true);
   };
@@ -205,7 +212,6 @@ export default function EmployeesPage() {
     setSaveStatus("saving");
 
     try {
-      // 1. Cross-Company Duplicate Check Logic for New Entries
       if (!selectedEmployee) {
         const { data: existingUsers, error: checkError } = await supabase
           .from('employees')
@@ -218,7 +224,7 @@ export default function EmployeesPage() {
           setExistingNetworkEmployee(existingUsers[0]);
           setIsConfirmingExisting(true);
           setSaveStatus("idle");
-          return; // Halt primary save, wait for modal confirmation
+          return; 
         }
       }
 
@@ -297,7 +303,6 @@ export default function EmployeesPage() {
       }));
 
       if (validRolesToInsert.length > 0) {
-        // Only inject new roles linking them to this company, bypassing the core employees table
         const { error: rolesError } = await supabase.from('employee_company_roles').insert(validRolesToInsert);
         if (rolesError) throw rolesError;
       }
@@ -365,6 +370,9 @@ export default function EmployeesPage() {
   };
 
   const displayImage = imagePreview || (!removeImage && selectedEmployee?.profile_image_url && selectedEmployee.profile_image_url.trim() !== "" ? selectedEmployee.profile_image_url : null);
+  
+  // NEW: Calculate if form has changes dynamically
+  const hasChanges = !selectedEmployee || JSON.stringify(formData) !== JSON.stringify(initialFormData) || imageFile !== null || removeImage;
 
   return (
     <>
@@ -643,13 +651,18 @@ export default function EmployeesPage() {
                   </div>
 
                   <div className="p-4 sm:p-6 border-t border-slate-100 bg-[#FAFCFF] flex justify-end items-center gap-2 sm:gap-4 shrink-0">
-                    {selectedEmployee && <button onClick={handleDeleteEmployee} disabled={saveStatus !== 'idle'} className="border border-rose-200 text-rose-600 bg-white hover:bg-rose-50 rounded-xl h-10 sm:h-12 px-3 sm:px-5 shadow-sm mr-auto"><Trash2 className="h-4 w-4" /></button>}
+                    {selectedEmployee && <button onClick={handleDeleteEmployee} disabled={saveStatus !== 'idle'} className="border border-rose-200 text-rose-600 bg-white hover:bg-rose-50 rounded-xl h-10 sm:h-12 px-3 sm:px-5 shadow-sm mr-auto disabled:opacity-50"><Trash2 className="h-4 w-4" /></button>}
                     <button onClick={() => setIsModalOpen(false)} className="rounded-xl border border-slate-200 bg-white h-10 sm:h-12 px-4 sm:px-8 font-bold text-[12px] sm:text-sm text-slate-600 hover:bg-slate-50 shadow-sm flex-1 sm:flex-none">Cancel</button>
-                    <button onClick={handleSaveEmployee} disabled={saveStatus !== 'idle'} className="bg-gradient-to-r from-blue-900 to-indigo-800 text-white rounded-xl h-10 sm:h-12 px-6 sm:px-10 font-bold text-[12px] sm:text-sm shadow-md hover:shadow-lg transition-all flex-1 sm:flex-none flex items-center justify-center">
+                    <button 
+                      onClick={handleSaveEmployee} 
+                      disabled={saveStatus !== 'idle' || !hasChanges} 
+                      className={`rounded-xl h-10 sm:h-12 px-6 sm:px-10 font-bold text-[12px] sm:text-sm shadow-md transition-all flex-1 sm:flex-none flex items-center justify-center
+                        ${hasChanges ? 'bg-gradient-to-r from-blue-900 to-indigo-800 text-white hover:shadow-lg' : 'bg-slate-100 text-slate-400 opacity-60 cursor-not-allowed border border-slate-200 shadow-none'}`}
+                    >
                        {saveStatus === 'compressing' && <><Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> Compressing...</>}
                        {saveStatus === 'uploading' && <><Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> Uploading...</>}
                        {saveStatus === 'saving' && <><Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> Saving...</>}
-                       {saveStatus === 'idle' && "Save Record"}
+                       {saveStatus === 'idle' && (hasChanges ? "Save Record" : "Saved")}
                     </button>
                   </div>
                 </motion.div>
@@ -659,7 +672,7 @@ export default function EmployeesPage() {
           document.body
         )}
 
-        {/* NEW: Confirmation Portal Modal for linking existing employees */}
+        {/* Confirmation Portal Modal for linking existing employees */}
         {createPortal(
           <AnimatePresence>
             {isConfirmingExisting && existingNetworkEmployee && (
