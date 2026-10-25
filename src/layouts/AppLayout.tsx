@@ -16,6 +16,9 @@ export default function AppLayout() {
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   
+  // --- Global Page Transition State ---
+  const [isPageTransitioning, setIsPageTransitioning] = useState(false);
+  
   const [activeContact, setActiveContact] = useState<any>(null);
   const [messageText, setMessageText] = useState("");
   const [toastMsg, setToastMsg] = useState<{sender: string, content: string} | null>(null);
@@ -27,6 +30,24 @@ export default function AppLayout() {
   useEffect(() => {
     fetchAllData();
   }, [activeWorkspace, role, companyId, fetchAllData]);
+
+  // --- UPDATED: Conditional Route Transition Mask ---
+  useEffect(() => {
+    // Only trigger the mask if the navigation explicitly requested it (e.g., from Finance deep links)
+    if (location.state && (location.state as any).showLoadingMask) {
+      setIsPageTransitioning(true);
+      
+      const timer = setTimeout(() => {
+        setIsPageTransitioning(false);
+      }, 400);
+
+      setIsMobileDrawerOpen(false);
+      return () => clearTimeout(timer);
+    } else {
+      // Normal sidebar navigation remains instant
+      setIsMobileDrawerOpen(false);
+    }
+  }, [location.pathname, location.state]);
 
   // STRICT USER MATCHING: Ensures the layout never guesses the admin and accurately uses your specific profile
   const currentUser = employees.find(e => e.id == employeeId) || employees.find(e => e.email === user?.email);
@@ -53,10 +74,6 @@ export default function AppLayout() {
     await signOut(); 
     navigate("/login"); 
   };
-
-  useEffect(() => {
-    setIsMobileDrawerOpen(false);
-  }, [location.pathname]);
 
   const allNavLinks = [
     { path: "/dashboard", icon: LayoutDashboard, label: "Dashboard", allowedRoles: ['admin', 'head', 'user'] },
@@ -228,6 +245,21 @@ export default function AppLayout() {
   return (
     <div className="flex h-[100dvh] w-full bg-[#F8F9FC] text-slate-800 overflow-hidden font-sans sm:p-4 lg:p-6 selection:bg-blue-900 selection:text-white relative print:p-0 print:bg-white print:block print:h-auto">
       
+      {/* --- NEW: CONDITIONAL PAGE TRANSITION MASK --- */}
+      <AnimatePresence>
+        {isPageTransitioning && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-[999999] bg-[#F8F9FC]/80 backdrop-blur-md flex items-center justify-center print:hidden"
+          >
+            <Loader2 className="h-8 w-8 text-blue-900 animate-spin" />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence mode="wait">
         {isSidebarOpen && (
           <motion.aside initial={{ width: 0, opacity: 0 }} animate={{ width: 280, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }} 
