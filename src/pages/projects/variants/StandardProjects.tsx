@@ -2436,8 +2436,9 @@ export default function StandardProjects({ autoOpenProjectId, forcedCompanyId, o
               </motion.div>
             </motion.div>
           )}
-        </AnimatePresence>
-      </div>
+        </AnimatePresence>,
+        document.body
+      )}
     </>
   );
 }
