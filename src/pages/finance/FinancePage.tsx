@@ -1,7 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Search, TrendingUp, Wallet, Building2, Plus, X, Receipt, CheckCircle2, UserSquare2, FileText, ArrowDownLeft, ArrowUpRight, Users, Download, BarChart3, Calendar, Filter, Clock, Edit2, Trash2, PieChart, Activity, ExternalLink, ChevronDown, ChevronRight } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import { useDataStore } from "../../store/dataStore";
@@ -9,6 +9,7 @@ import { supabase } from "../../supabase";
 
 export default function FinancePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { role, activeWorkspace, companyId } = useAuthStore();
   const { projects, invoices, salaryPayments, expenses, companies, employees, customers, fetchAllData, setTargetProjectId, setTargetInvoiceId } = useDataStore();
 
@@ -67,30 +68,38 @@ export default function FinancePage() {
   const globalExpenses = getFilteredData(expenses);
   const globalProjects = getFilteredData(projects);
 
+  // --- NEW: AUTO-REOPEN PROJECT WHEN RETURNING WITH A TICKET ---
+  useLayoutEffect(() => {
+    if (location.state?.openProject && globalProjects.length > 0) {
+      const projToOpen = globalProjects.find(p => p.id === location.state.openProject);
+      if (projToOpen) {
+        setSelectedProjectDetails(projToOpen);
+      }
+      // Clear the router state so it doesn't constantly reopen if you refresh the page
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state, globalProjects]);
+
   const totalMoneyIn = globalInvoices.reduce((sum, inv) => sum + parseFloat(inv.amount_paid || 0), 0);
   const totalEmployeePayouts = globalPayments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0);
   const totalOverhead = globalExpenses.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
   const netProfit = totalMoneyIn - totalEmployeePayouts - totalOverhead;
 
-  // --- TRANSITION HANDLERS ---
+  // --- UPDATED: ROUTING HANDLERS WITH LOADING MASK & RETURN TICKETS ---
   const handleViewInvoice = (invoiceId: number) => {
-    setSelectedProjectDetails(null);
-    setTimeout(() => {
-      setTargetInvoiceId(invoiceId);
-      navigate('/invoices');
-    }, 300);
+    const currentProjectId = selectedProjectDetails?.id;
+    setTargetInvoiceId(invoiceId);
+    // Ask AppLayout for the loading mask, and pack a return ticket
+    navigate('/invoices', { state: { showLoadingMask: true, returnTo: '/finance', keepOpen: currentProjectId } });
   };
 
   const handleViewProjectWorkspace = (projectId: number) => {
-    setSelectedProjectDetails(null);
-    setTimeout(() => {
-      setTargetProjectId(projectId);
-      navigate('/projects');
-    }, 300);
+    setTargetProjectId(projectId);
+    // Ask AppLayout for the loading mask, and pack a return ticket
+    navigate('/projects', { state: { showLoadingMask: true, returnTo: '/finance', keepOpen: projectId } });
   };
 
   // --- EXPENSE CRUD LOGIC ---
-
   const handleOpenNewExpense = () => {
     setEditingExpenseId(null);
     setExpenseForm({ company_id: currentCompanyId?.toString() || "", project_id: "", category: "Software", description: "", amount: 0, expense_date: today, status: "Completed", due_date: "" });
@@ -327,7 +336,6 @@ export default function FinancePage() {
     return `${x},${y}`;
   }).join(' ');
 
-  // --- REUSABLE PROJECT CARD RENDERER ---
   const renderProjectCard = (project: any) => {
     const pInvoices = globalInvoices.filter(i => i.project_id === project.id);
     const pPayments = globalPayments.filter(p => p.project_id === project.id);
@@ -342,7 +350,6 @@ export default function FinancePage() {
       <div key={project.id} onClick={() => setSelectedProjectDetails(project)} className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all group cursor-pointer">
          <div className="flex justify-between items-start mb-4 border-b border-slate-50 pb-3">
            <div className="min-w-0 pr-2">
-             {/* Visual Status Indicator (Hidden on print) */}
              <div className="flex items-center gap-1.5 mb-1 print:hidden">
                 <div className={`h-1.5 w-1.5 rounded-full ${project.status === 'Completed' ? 'bg-slate-400' : 'bg-emerald-500'}`}></div>
                 <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{project.status} Project</span>
@@ -385,7 +392,6 @@ export default function FinancePage() {
     <>
       <div className="max-w-[1200px] mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-700 pb-8 relative z-0 print:hidden">
         
-        {/* HEADER */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 sm:gap-6">
           <div>
             <p className="text-[9px] sm:text-[11px] font-bold text-emerald-600 uppercase tracking-[0.2em] mb-1.5 bg-emerald-50 inline-block px-2.5 py-1 rounded-full">Overview</p>
@@ -411,7 +417,6 @@ export default function FinancePage() {
           </div>
         </div>
 
-        {/* TOP CARDS */}
         <div className={`grid gap-3 sm:gap-4 ${canViewFinance ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 sm:grid-cols-2'}`}>
           {canViewFinance && (
             <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between">
@@ -445,7 +450,6 @@ export default function FinancePage() {
            <button onClick={() => setActiveTab('expenses')} className={`pb-2.5 sm:pb-3 text-[12px] sm:text-sm font-bold tracking-wide transition-all border-b-2 whitespace-nowrap ${activeTab === 'expenses' ? 'border-emerald-700 text-emerald-700' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>Other Expenses</button>
         </div>
 
-        {/* GLOBALSEARCH BAR */}
         <div className="bg-white p-2 rounded-xl sm:rounded-2xl border border-slate-100 shadow-sm flex">
           <div className="relative flex-1">
             <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 h-3.5 sm:h-4 w-3.5 sm:w-4 text-slate-400" />
@@ -453,7 +457,6 @@ export default function FinancePage() {
           </div>
         </div>
 
-        {/* ACTIVE PROJECTS TAB */}
         {activeTab === 'active_projects' && (
           <div className="space-y-8">
             {activeProjects.length === 0 ? (
@@ -466,7 +469,6 @@ export default function FinancePage() {
           </div>
         )}
 
-        {/* COMPLETED PROJECTS TAB */}
         {activeTab === 'completed_projects' && (
           <div className="space-y-8">
             {completedProjects.length === 0 ? (
@@ -479,7 +481,6 @@ export default function FinancePage() {
           </div>
         )}
 
-        {/* EXPENSES TAB */}
         {activeTab === 'expenses' && (
           <div className="space-y-4">
              <div className="flex flex-col sm:flex-row justify-between gap-3">
@@ -557,562 +558,498 @@ export default function FinancePage() {
         )}
       </div>
 
-      {/* ADD/EDIT EXPENSE MODAL */}
-      {typeof document !== 'undefined' && createPortal(
-        <AnimatePresence>
-          {isExpenseModalOpen && (
-            <div className="fixed inset-0 z-[10000] flex items-center justify-center sm:p-4 bg-slate-900/40 backdrop-blur-sm print:hidden">
-              <motion.div initial={{ opacity: 0, y: 40, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 40, scale: 0.95 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden border border-slate-100">
-                <div className="px-6 py-5 border-b border-slate-100 bg-[#FAFCFF] flex items-center justify-between">
-                  <h3 className="text-lg font-bold text-slate-900 tracking-tight">{editingExpenseId ? 'Edit Expense' : 'Add New Expense'}</h3>
-                  <button onClick={() => setIsExpenseModalOpen(false)} className="h-8 w-8 bg-white border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm"><X className="h-4 w-4" /></button>
-                </div>
-                <div className="p-6 space-y-4 overflow-y-auto max-h-[70vh]">
-                  {isAdmin && !activeWorkspace && (
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Company</label>
-                      <select value={expenseForm.company_id} onChange={e => setExpenseForm({...expenseForm, company_id: e.target.value})} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none focus:border-emerald-500">
-                        <option value="" disabled>Select Company...</option>
-                        {companies.map(c => <option key={c.id} value={c.id.toString()}>{c.name}</option>)}
-                      </select>
-                    </div>
-                  )}
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Project (Optional)</label>
-                    <select value={expenseForm.project_id} onChange={e => setExpenseForm({...expenseForm, project_id: e.target.value})} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none focus:border-emerald-500">
-                      <option value="">General / None</option>
-                      {projects.filter(p => !expenseForm.company_id || p.company_id?.toString() === expenseForm.company_id).map(p => (
-                        <option key={p.id} value={p.id.toString()}>{p.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Category</label>
-                    <select value={expenseForm.category} onChange={e => setExpenseForm({...expenseForm, category: e.target.value})} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none focus:border-emerald-500">
-                      <option value="Software">Software & Subscriptions</option>
-                      <option value="Marketing">Marketing & Ads</option>
-                      <option value="Office">Office & Rent</option>
-                      <option value="Travel">Travel & Logistics</option>
-                      <option value="Hardware">Hardware & Equipment</option>
-                      <option value="Other">Other Expenses</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Description *</label>
-                    <input type="text" value={expenseForm.description} onChange={e => setExpenseForm({...expenseForm, description: e.target.value})} placeholder="What was this expense for?" className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none focus:border-emerald-500" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Amount (₹) *</label>
-                    <input type="number" value={expenseForm.amount || ''} onChange={e => setExpenseForm({...expenseForm, amount: parseFloat(e.target.value) || 0})} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none focus:border-emerald-500" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Status</label>
-                      <select value={expenseForm.status} onChange={e => setExpenseForm({...expenseForm, status: e.target.value})} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none focus:border-emerald-500">
-                        <option value="Completed">Completed</option>
-                        <option value="Pending">Pending</option>
-                        <option value="Due">Due</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Date / Due Date</label>
-                      <input type="date" value={expenseForm.status === 'Completed' ? expenseForm.expense_date : expenseForm.due_date} onChange={e => {
-                        if (expenseForm.status === 'Completed') {
-                          setExpenseForm({...expenseForm, expense_date: e.target.value, due_date: ""});
-                        } else {
-                          setExpenseForm({...expenseForm, due_date: e.target.value});
-                        }
-                      }} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none focus:border-emerald-500" />
-                    </div>
-                  </div>
-                </div>
-                <div className="p-6 border-t border-slate-100 bg-[#FAFCFF] flex justify-end gap-3 shrink-0">
-                  <button onClick={() => setIsExpenseModalOpen(false)} className="rounded-xl border border-slate-200 bg-white h-11 px-6 font-bold text-sm text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
-                  <button onClick={handleSaveExpense} disabled={isSaving} className="bg-emerald-600 text-white rounded-xl h-11 px-8 font-bold text-sm shadow-md hover:bg-emerald-700 transition-all disabled:opacity-50">{isSaving ? "Saving..." : "Save Expense"}</button>
-                </div>
-              </motion.div>
+      {isExpenseModalOpen && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center sm:p-4 bg-slate-900/40 backdrop-blur-sm print:hidden">
+          <motion.div initial={{ opacity: 0, y: 40, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 40, scale: 0.95 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden border border-slate-100">
+            <div className="px-6 py-5 border-b border-slate-100 bg-[#FAFCFF] flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900 tracking-tight">{editingExpenseId ? 'Edit Expense' : 'Add New Expense'}</h3>
+              <button onClick={() => setIsExpenseModalOpen(false)} className="h-8 w-8 bg-white border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm"><X className="h-4 w-4" /></button>
             </div>
-          )}
-        </AnimatePresence>,
-        document.body
+            <div className="p-6 space-y-4 overflow-y-auto max-h-[70vh]">
+              {isAdmin && !activeWorkspace && (
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Company</label>
+                  <select value={expenseForm.company_id} onChange={e => setExpenseForm({...expenseForm, company_id: e.target.value})} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none focus:border-emerald-500">
+                    <option value="" disabled>Select Company...</option>
+                    {companies.map(c => <option key={c.id} value={c.id.toString()}>{c.name}</option>)}
+                  </select>
+                </div>
+              )}
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Project (Optional)</label>
+                <select value={expenseForm.project_id} onChange={e => setExpenseForm({...expenseForm, project_id: e.target.value})} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none focus:border-emerald-500">
+                  <option value="">General / None</option>
+                  {projects.filter(p => !expenseForm.company_id || p.company_id?.toString() === expenseForm.company_id).map(p => (
+                    <option key={p.id} value={p.id.toString()}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Category</label>
+                <select value={expenseForm.category} onChange={e => setExpenseForm({...expenseForm, category: e.target.value})} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none focus:border-emerald-500">
+                  <option value="Software">Software & Subscriptions</option>
+                  <option value="Marketing">Marketing & Ads</option>
+                  <option value="Office">Office & Rent</option>
+                  <option value="Travel">Travel & Logistics</option>
+                  <option value="Hardware">Hardware & Equipment</option>
+                  <option value="Other">Other Expenses</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Description *</label>
+                <input type="text" value={expenseForm.description} onChange={e => setExpenseForm({...expenseForm, description: e.target.value})} placeholder="What was this expense for?" className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none focus:border-emerald-500" />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Amount (₹) *</label>
+                <input type="number" value={expenseForm.amount || ''} onChange={e => setExpenseForm({...expenseForm, amount: parseFloat(e.target.value) || 0})} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none focus:border-emerald-500" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Status</label>
+                  <select value={expenseForm.status} onChange={e => setExpenseForm({...expenseForm, status: e.target.value})} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none focus:border-emerald-500">
+                    <option value="Completed">Completed</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Due">Due</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Date / Due Date</label>
+                  <input type="date" value={expenseForm.status === 'Completed' ? expenseForm.expense_date : expenseForm.due_date} onChange={e => {
+                    if (expenseForm.status === 'Completed') {
+                      setExpenseForm({...expenseForm, expense_date: e.target.value, due_date: ""});
+                    } else {
+                      setExpenseForm({...expenseForm, due_date: e.target.value});
+                    }
+                  }} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none focus:border-emerald-500" />
+                </div>
+              </div>
+            </div>
+            <div className="p-6 border-t border-slate-100 bg-[#FAFCFF] flex justify-end gap-3 shrink-0">
+              <button onClick={() => setIsExpenseModalOpen(false)} className="rounded-xl border border-slate-200 bg-white h-11 px-6 font-bold text-sm text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
+              <button onClick={handleSaveExpense} disabled={isSaving} className="bg-emerald-600 text-white rounded-xl h-11 px-8 font-bold text-sm shadow-md hover:bg-emerald-700 transition-all disabled:opacity-50">{isSaving ? "Saving..." : "Save Expense"}</button>
+            </div>
+          </motion.div>
+        </div>
       )}
 
-      {/* MARK EXPENSE COMPLETE MODAL */}
-      {typeof document !== 'undefined' && createPortal(
-        <AnimatePresence>
-          {completingExpense && (
-            <div className="fixed inset-0 z-[10000] flex flex-col items-center justify-center sm:p-4 bg-slate-900/40 backdrop-blur-sm print:hidden">
-              <motion.div initial={{ opacity: 0, y: 40, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 40, scale: 0.95 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden border border-slate-100">
-                <div className="px-6 py-5 border-b border-slate-100 bg-[#FAFCFF] flex items-center justify-between">
-                  <h3 className="text-lg font-bold text-slate-900 tracking-tight">Mark as Completed</h3>
-                  <button onClick={() => setCompletingExpense(null)} className="h-8 w-8 bg-white border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm"><X className="h-4 w-4" /></button>
-                </div>
-                
-                <div className="p-6 space-y-4">
-                   <p className="text-sm text-slate-600">Please provide the exact date this expense was cleared.</p>
-                   <div>
-                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Completion Date *</label>
-                     <input type="date" value={completionDate} onChange={e => setCompletionDate(e.target.value)} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none focus:border-emerald-500" />
-                   </div>
-                </div>
-
-                <div className="p-6 border-t border-slate-100 bg-[#FAFCFF] flex justify-end gap-3 shrink-0">
-                   <button onClick={() => setCompletingExpense(null)} className="rounded-xl border border-slate-200 bg-white h-11 px-6 font-bold text-sm text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
-                   <button onClick={handleMarkCompleted} disabled={isSaving || !completionDate} className="bg-emerald-600 text-white rounded-xl h-11 px-8 font-bold text-sm shadow-md hover:bg-emerald-700 transition-all disabled:opacity-50">{isSaving ? "Saving..." : "Confirm"}</button>
-                </div>
-              </motion.div>
+      {completingExpense && (
+        <div className="fixed inset-0 z-[10000] flex flex-col items-center justify-center sm:p-4 bg-slate-900/40 backdrop-blur-sm print:hidden">
+          <motion.div initial={{ opacity: 0, y: 40, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 40, scale: 0.95 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden border border-slate-100">
+            <div className="px-6 py-5 border-b border-slate-100 bg-[#FAFCFF] flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900 tracking-tight">Mark as Completed</h3>
+              <button onClick={() => setCompletingExpense(null)} className="h-8 w-8 bg-white border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm"><X className="h-4 w-4" /></button>
             </div>
-          )}
-        </AnimatePresence>,
-        document.body
+            <div className="p-6 space-y-4">
+               <p className="text-sm text-slate-600">Please provide the exact date this expense was cleared.</p>
+               <div>
+                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Completion Date *</label>
+                 <input type="date" value={completionDate} onChange={e => setCompletionDate(e.target.value)} className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm font-medium outline-none focus:border-emerald-500" />
+               </div>
+            </div>
+            <div className="p-6 border-t border-slate-100 bg-[#FAFCFF] flex justify-end gap-3 shrink-0">
+               <button onClick={() => setCompletingExpense(null)} className="rounded-xl border border-slate-200 bg-white h-11 px-6 font-bold text-sm text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
+               <button onClick={handleMarkCompleted} disabled={isSaving || !completionDate} className="bg-emerald-600 text-white rounded-xl h-11 px-8 font-bold text-sm shadow-md hover:bg-emerald-700 transition-all disabled:opacity-50">{isSaving ? "Saving..." : "Confirm"}</button>
+            </div>
+          </motion.div>
+        </div>
       )}
 
-      {/* PROJECT FINANCIAL DETAILS MODAL */}
-      {typeof document !== 'undefined' && createPortal(
-        <AnimatePresence>
-          {selectedProjectDetails && (
-            <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center sm:p-4 bg-slate-900/40 backdrop-blur-sm print:hidden">
-              <motion.div initial={{ opacity: 0, y: 40, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 40, scale: 0.95 }} className="bg-white rounded-[2rem] shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden">
-                <div className="px-5 py-5 border-b border-slate-100 bg-[#FAFCFF] shrink-0">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <span className="text-[9px] font-bold uppercase tracking-widest text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">Financial Details</span>
-                      <h3 className="text-xl font-bold text-slate-900 mt-2 truncate">{selectedProjectDetails.name}</h3>
-                    </div>
-                    <div className="flex items-center gap-2 sm:gap-3">
-                      {/* Deep Link to Projects Tab */}
-                      <button onClick={() => handleViewProjectWorkspace(selectedProjectDetails.id)} className="h-8 px-3 sm:h-10 sm:px-4 bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 rounded-lg sm:rounded-xl flex items-center justify-center text-[10px] sm:text-[11px] font-bold uppercase tracking-wider shadow-sm transition-colors print:hidden">
-                          Workspace <ExternalLink className="h-3 w-3 sm:h-3.5 sm:w-3.5 ml-1.5" />
-                      </button>
-                      <button onClick={() => setSelectedProjectDetails(null)} className="h-8 w-8 sm:h-10 sm:w-10 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm"><X className="h-4 w-4" /></button>
-                    </div>
-                  </div>
+      {selectedProjectDetails && (
+        <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center sm:p-4 bg-slate-900/40 backdrop-blur-sm print:hidden">
+          <motion.div initial={{ opacity: 0, y: 40, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 40, scale: 0.95 }} className="bg-white rounded-[2rem] shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden">
+            <div className="px-5 py-5 border-b border-slate-100 bg-[#FAFCFF] shrink-0">
+              <div className="flex items-start justify-between">
+                <div>
+                  <span className="text-[9px] font-bold uppercase tracking-widest text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">Financial Details</span>
+                  <h3 className="text-xl font-bold text-slate-900 mt-2 truncate">{selectedProjectDetails.name}</h3>
                 </div>
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <button onClick={() => handleViewProjectWorkspace(selectedProjectDetails.id)} className="h-8 px-3 sm:h-10 sm:px-4 bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 rounded-lg sm:rounded-xl flex items-center justify-center text-[10px] sm:text-[11px] font-bold uppercase tracking-wider shadow-sm transition-colors print:hidden">
+                      Workspace <ExternalLink className="h-3 w-3 sm:h-3.5 sm:w-3.5 ml-1.5" />
+                  </button>
+                  <button onClick={() => setSelectedProjectDetails(null)} className="h-8 w-8 sm:h-10 sm:w-10 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm"><X className="h-4 w-4" /></button>
+                </div>
+              </div>
+            </div>
 
-                <div className="flex-1 overflow-y-auto p-5 bg-white space-y-6">
-                  {(() => {
-                    const pInvoices = globalInvoices.filter(i => i.project_id === selectedProjectDetails.id);
-                    const pPayments = globalPayments.filter(p => p.project_id === selectedProjectDetails.id);
-                    const pExpenses = globalExpenses.filter(e => e.project_id === selectedProjectDetails.id);
+            <div className="flex-1 overflow-y-auto p-5 bg-white space-y-6">
+              {(() => {
+                const pInvoices = globalInvoices.filter(i => i.project_id === selectedProjectDetails.id);
+                const pPayments = globalPayments.filter(p => p.project_id === selectedProjectDetails.id);
+                const pExpenses = globalExpenses.filter(e => e.project_id === selectedProjectDetails.id);
 
-                    const pExpected = parseFloat(selectedProjectDetails.expected_amount || 0);
-                    const pMoneyIn = pInvoices.reduce((sum, inv) => sum + parseFloat(inv.amount_paid || 0), 0);
-                    const pTotalOut = pPayments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0) + pExpenses.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
-                    const pProfit = pMoneyIn - pTotalOut;
+                const pExpected = parseFloat(selectedProjectDetails.expected_amount || 0);
+                const pMoneyIn = pInvoices.reduce((sum, inv) => sum + parseFloat(inv.amount_paid || 0), 0);
+                const pTotalOut = pPayments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0) + pExpenses.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
+                const pProfit = pMoneyIn - pTotalOut;
 
-                    return (
-                      <>
-                        <div className={`grid gap-3 sm:gap-4 ${canViewFinance ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-1 max-w-sm'}`}>
-                          {canViewFinance && (
-                            <>
-                              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
-                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Expected Revenue</p>
-                                <p className="text-[15px] font-black text-slate-700">₹{pExpected.toLocaleString()}</p>
-                              </div>
-                              <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 text-center">
-                                <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Income</p>
-                                <p className="text-[15px] font-black text-emerald-700">₹{pMoneyIn.toLocaleString()}</p>
-                              </div>
-                            </>
-                          )}
-                          <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 text-center">
-                            <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest mb-1">Total Costs</p>
-                            <p className="text-[15px] font-black text-amber-700">₹{pTotalOut.toLocaleString()}</p>
+                return (
+                  <>
+                    <div className={`grid gap-3 sm:gap-4 ${canViewFinance ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-1 max-w-sm'}`}>
+                      {canViewFinance && (
+                        <>
+                          <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Expected Revenue</p>
+                            <p className="text-[15px] font-black text-slate-700">₹{pExpected.toLocaleString()}</p>
                           </div>
-                          {canViewFinance && (
-                            <div className={`p-4 rounded-xl border text-center ${pProfit >= 0 ? 'bg-indigo-50 border-indigo-100' : 'bg-rose-50 border-rose-100'}`}>
-                              <p className={`text-[9px] font-bold uppercase tracking-widest mb-1 ${pProfit >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>Profit</p>
-                              <p className={`text-[15px] font-black ${pProfit >= 0 ? 'text-indigo-700' : 'text-rose-700'}`}>₹{pProfit.toLocaleString()}</p>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className={`grid gap-6 ${canViewFinance ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
-                          {canViewFinance && (
-                            <div className="space-y-3">
-                              <h4 className="text-[12px] font-bold text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-2"><FileText className="h-4 w-4 text-emerald-500" /> Invoices</h4>
-                              {pInvoices.length === 0 ? <p className="text-xs italic text-slate-400">No invoices generated.</p> : (
-                                <div className="space-y-2">
-                                  {pInvoices.map(inv => (
-                                    <div key={inv.id} className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm group">
-                                      <div className="flex justify-between">
-                                        <p className="font-bold text-slate-900 text-xs">{inv.invoice_number}</p>
-                                        <span className="px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest bg-emerald-100 text-emerald-700">{inv.status}</span>
-                                      </div>
-                                      <div className="flex justify-between items-end mt-2">
-                                        <div>
-                                          <div className="text-[9px] font-bold text-slate-400 mb-0.5">Total: ₹{parseFloat(inv.total_amount || 0).toLocaleString()}</div>
-                                          <div className="text-xs font-black text-emerald-600">Paid: ₹{parseFloat(inv.amount_paid || 0).toLocaleString()}</div>
-                                        </div>
-                                        {/* Deep Link to Specific Invoice */}
-                                        <button onClick={() => handleViewInvoice(inv.id)} className="text-[9px] font-bold text-blue-600 hover:text-blue-800 uppercase tracking-widest flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                          View <ExternalLink className="h-3 w-3" />
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          <div className="space-y-5">
-                            <div className="space-y-3">
-                              <h4 className="text-[12px] font-bold text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-2"><Users className="h-4 w-4 text-blue-500" /> Project Payroll</h4>
-                              {pPayments.length === 0 ? <p className="text-xs italic text-slate-400">No employee payments recorded.</p> : (
-                                <div className="space-y-2">
-                                  {pPayments.map(p => {
-                                    const emp = employees.find(e => e.id === p.employee_id);
-                                    return (
-                                      <div key={p.id} className="bg-slate-50 border border-slate-100 rounded-xl p-2.5 flex justify-between items-center">
-                                        <div>
-                                          <p className="text-xs font-bold text-slate-800">{emp?.name || 'Unknown'}</p>
-                                          <p className="text-[8px] font-bold text-slate-400 uppercase mt-0.5">{p.payment_date ? new Date(p.payment_date).toLocaleDateString() : ''}</p>
-                                        </div>
-                                        <p className="text-sm font-black text-slate-700">₹{parseFloat(p.amount || 0).toLocaleString()}</p>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="space-y-3">
-                              <h4 className="text-[12px] font-bold text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-2"><Receipt className="h-4 w-4 text-amber-500" /> Other Expenses</h4>
-                              {pExpenses.length === 0 ? <p className="text-xs italic text-slate-400">No other expenses recorded.</p> : (
-                                <div className="space-y-2">
-                                  {pExpenses.map(e => (
-                                    <div key={e.id} className="bg-slate-50 border border-slate-100 rounded-xl p-2.5 flex justify-between items-center">
-                                      <div>
-                                        <p className="text-xs font-bold text-slate-800">{e.description}</p>
-                                        <p className="text-[8px] font-bold text-slate-400 uppercase mt-0.5">{e.expense_date ? new Date(e.expense_date).toLocaleDateString() : ''} • {e.category}</p>
-                                      </div>
-                                      <p className="text-sm font-black text-slate-700">₹{parseFloat(e.amount || 0).toLocaleString()}</p>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
+                          <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 text-center">
+                            <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Income</p>
+                            <p className="text-[15px] font-black text-emerald-700">₹{pMoneyIn.toLocaleString()}</p>
                           </div>
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>,
-        document.body
-      )}
-
-      {/* --- FINANCIAL REPORT GENERATOR MODAL & PRINT VIEW --- */}
-      {canViewFinance && typeof document !== 'undefined' && createPortal(
-        <AnimatePresence>
-          {isReportModalOpen && (
-            <div className="fixed inset-0 z-[10000] flex flex-col bg-slate-900/40 backdrop-blur-sm overflow-y-auto sm:p-4 print:static print:inset-auto print:p-0 print:bg-white print:block print:h-auto print:overflow-visible">
-              <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }} className="bg-white min-h-full sm:min-h-[90vh] w-full max-w-5xl mx-auto sm:rounded-2xl shadow-2xl flex flex-col relative print:shadow-none print:m-0 print:min-h-0 print:h-auto print:w-full print:rounded-none print:block print:overflow-visible print:static">
-                
-                {/* Print Control Header - Hidden during print */}
-                <div className="bg-slate-900 text-white p-4 sm:p-5 sm:rounded-t-2xl flex flex-col gap-4 shrink-0 print:hidden relative">
-                   {/* Top Row: Title + Right Actions */}
-                   <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                         <div className="h-8 w-8 bg-indigo-500/20 rounded-lg flex items-center justify-center">
-                           <BarChart3 className="h-4 w-4 text-indigo-400" />
-                         </div>
-                         <h2 className="text-lg font-bold tracking-tight">Financial Report</h2>
+                        </>
+                      )}
+                      <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 text-center">
+                        <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest mb-1">Total Costs</p>
+                        <p className="text-[15px] font-black text-amber-700">₹{pTotalOut.toLocaleString()}</p>
                       </div>
-                      
-                      <div className="flex items-center gap-2 shrink-0">
-                         <button onClick={() => window.print()} className="bg-indigo-600 hover:bg-indigo-500 text-white h-9 px-4 rounded-lg text-xs font-bold transition-colors shadow-sm flex items-center">
-                           <Download className="h-3.5 w-3.5 sm:mr-2"/> <span className="hidden sm:inline">Save PDF</span>
-                         </button>
-                         <button onClick={() => setIsReportModalOpen(false)} className="h-9 w-9 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg flex items-center justify-center transition-colors">
-                           <X className="h-4 w-4" />
-                         </button>
-                      </div>
-                   </div>
-
-                   {/* Filter Row */}
-                   <div className="flex flex-wrap items-center gap-3">
-                      {isAdmin && !activeWorkspace ? (
-                        <select value={reportConfig.companyId} onChange={e=>setReportConfig({...reportConfig, companyId: e.target.value})} className="bg-slate-800 text-white border border-slate-700 h-9 px-3 rounded-lg text-xs font-medium outline-none cursor-pointer">
-                          <option value="all">All Companies</option>
-                          {companies.map(c=><option key={c.id} value={c.id.toString()}>{c.name}</option>)}
-                        </select>
-                      ) : (
-                        <div className="bg-slate-800 text-white border border-slate-700 h-9 px-4 rounded-lg text-xs font-medium flex items-center">
-                          {companies.find(c => c.id.toString() === reportConfig.companyId)?.name || 'Your Subsidiary'}
+                      {canViewFinance && (
+                        <div className={`p-4 rounded-xl border text-center ${pProfit >= 0 ? 'bg-indigo-50 border-indigo-100' : 'bg-rose-50 border-rose-100'}`}>
+                          <p className={`text-[9px] font-bold uppercase tracking-widest mb-1 ${pProfit >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>Profit</p>
+                          <p className={`text-[15px] font-black ${pProfit >= 0 ? 'text-indigo-700' : 'text-rose-700'}`}>₹{pProfit.toLocaleString()}</p>
                         </div>
                       )}
-                      
-                      <select value={reportConfig.datePreset} onChange={(e) => handlePresetChange(e.target.value)} className="bg-slate-800 text-white border border-slate-700 h-9 px-3 rounded-lg text-xs font-medium outline-none cursor-pointer">
-                         <option value="custom">Custom Range</option>
-                         <option value="this_month">This Month</option>
-                         <option value="last_month">Last Month</option>
-                         <option value="ytd">Year to Date</option>
-                         <option value="all_time">All Time</option>
-                      </select>
+                    </div>
 
-                      <div className="flex items-center gap-2 bg-slate-800 rounded-lg px-2 h-9 border border-slate-700">
-                        <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                        <input type="date" value={reportConfig.startDate} onChange={e=>setReportConfig({...reportConfig, startDate: e.target.value, datePreset: 'custom'})} className="bg-transparent text-white text-xs outline-none w-[110px]" />
-                        <span className="text-slate-500">-</span>
-                        <input type="date" value={reportConfig.endDate} onChange={e=>setReportConfig({...reportConfig, endDate: e.target.value, datePreset: 'custom'})} className="bg-transparent text-white text-xs outline-none w-[110px]" />
-                      </div>
-                   </div>
-                </div>
-
-                {/* --- ACTUAL REPORT CONTENT --- */}
-                <div className="p-8 sm:p-12 flex-1 bg-white print:p-8 print:block print:h-auto print:overflow-visible" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                   
-                   {/* Intelligent Headers with Logos */}
-                   <div className="flex justify-between items-start mb-10 border-b border-slate-200 pb-8">
-                      {/* Left: Parent Company Logo */}
-                      <div className="flex flex-col items-start w-1/3">
-                         {parentLogoUrl ? (
-                            <img src={parentLogoUrl} alt="Parent Logo" className="h-14 object-contain mb-2 print:h-12 mix-blend-multiply" />
-                         ) : (
-                            <div className="h-12 w-12 rounded-xl bg-slate-900 flex items-center justify-center text-white text-xl font-black mb-2 print:h-10 print:w-10" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                              {parentName.charAt(0)}
+                    <div className={`grid gap-6 ${canViewFinance ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
+                      {canViewFinance && (
+                        <div className="space-y-3">
+                          <h4 className="text-[12px] font-bold text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-2"><FileText className="h-4 w-4 text-emerald-500" /> Invoices</h4>
+                          {pInvoices.length === 0 ? <p className="text-xs italic text-slate-400">No invoices generated.</p> : (
+                            <div className="space-y-2">
+                              {pInvoices.map(inv => (
+                                <div key={inv.id} className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm group">
+                                  <div className="flex justify-between">
+                                    <p className="font-bold text-slate-900 text-xs">{inv.invoice_number}</p>
+                                    <span className="px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest bg-emerald-100 text-emerald-700">{inv.status}</span>
+                                  </div>
+                                  <div className="flex justify-between items-end mt-2">
+                                    <div>
+                                      <div className="text-[9px] font-bold text-slate-400 mb-0.5">Total: ₹{parseFloat(inv.total_amount || 0).toLocaleString()}</div>
+                                      <div className="text-xs font-black text-emerald-600">Paid: ₹{parseFloat(inv.amount_paid || 0).toLocaleString()}</div>
+                                    </div>
+                                    <button onClick={() => handleViewInvoice(inv.id)} className="text-[9px] font-bold text-blue-600 hover:text-blue-800 uppercase tracking-widest flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      View <ExternalLink className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
-                         )}
-                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{parentName}</p>
-                         <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest mt-0.5">Parent Entity</p>
-                      </div>
+                          )}
+                        </div>
+                      )}
 
-                      {/* Center: Report Details */}
-                      <div className="text-center w-1/3">
-                        <h1 className="text-2xl font-black text-slate-900 mb-1 uppercase tracking-tight print:text-xl">Financial Report</h1>
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
-                          {reportConfig.companyId === 'all' ? 'Consolidated Overview' : selectedCompany?.name}
-                        </p>
-                        <p className="text-[10px] text-slate-400 bg-slate-50 inline-block px-3 py-1 rounded-full border border-slate-100" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                          {reportConfig.startDate ? new Date(reportConfig.startDate).toLocaleDateString() : 'Beginning'} — {reportConfig.endDate ? new Date(reportConfig.endDate).toLocaleDateString() : 'Present'}
-                        </p>
-                      </div>
-
-                      {/* Right: Selected Subsidiary Logo (if different) */}
-                      <div className="flex flex-col items-end text-right w-1/3">
-                         {showSubjectEntity && selectedCompany && (
-                            <>
-                               {selectedCompany.logo_url ? (
-                                  <img src={selectedCompany.logo_url} alt="Sub Logo" className="h-14 object-contain mb-2 print:h-12 mix-blend-multiply" />
-                               ) : (
-                                  <div className="h-12 w-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 text-xl font-black mb-2 print:h-10 print:w-10" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                                    {selectedCompany.name.charAt(0)}
-                                  </div>
-                               )}
-                               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{selectedCompany.name}</p>
-                               <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest mt-0.5">Subject Entity</p>
-                            </>
-                         )}
-                      </div>
-                   </div>
-
-                   {/* KPI Grid - 2x2 layout ensures ample width for large numbers */}
-                   <div className="grid grid-cols-2 sm:grid-cols-2 gap-4 sm:gap-6 mb-12 print:grid-cols-2 print:gap-6 print:mb-10">
-                     <div className="border-l-4 border-emerald-500 bg-slate-50 p-4 sm:p-6 rounded-r-xl" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                       <p className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5 whitespace-nowrap"><ArrowDownLeft className="h-3.5 w-3.5 text-emerald-500" /> Total Income</p>
-                       <p className="text-xl sm:text-2xl font-black text-slate-900 break-words">₹{reportStats.inc.toLocaleString()}</p>
-                     </div>
-                     <div className="border-l-4 border-rose-500 bg-slate-50 p-4 sm:p-6 rounded-r-xl" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                       <p className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5 whitespace-nowrap"><ArrowUpRight className="h-3.5 w-3.5 text-rose-500" /> Total Expenses</p>
-                       <p className="text-xl sm:text-2xl font-black text-slate-900 break-words">₹{reportStats.exp.toLocaleString()}</p>
-                     </div>
-                     <div className={`border-l-4 p-4 sm:p-6 rounded-r-xl ${reportStats.prof >= 0 ? 'border-indigo-500 bg-indigo-50' : 'border-rose-500 bg-rose-50'}`} style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                       <p className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest mb-1.5 whitespace-nowrap ${reportStats.prof >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>Net Profit</p>
-                       <p className={`text-xl sm:text-2xl font-black break-words ${reportStats.prof >= 0 ? 'text-indigo-900' : 'text-rose-900'}`}>₹{reportStats.prof.toLocaleString()}</p>
-                     </div>
-                     <div className="border-l-4 border-slate-300 bg-slate-50 p-4 sm:p-6 rounded-r-xl" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                       <p className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 whitespace-nowrap">Profit Margin</p>
-                       <p className="text-xl sm:text-2xl font-black text-slate-900 break-words">{reportStats.margin}%</p>
-                     </div>
-                   </div>
-
-                   {/* Charts & Breakdown */}
-                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12 print:grid print:grid-cols-2 print:gap-6 print:mb-10">
-                     
-                      {/* Bar Chart */}
-                      <div className="border border-slate-100 rounded-2xl p-6 bg-white shadow-sm flex flex-col print:p-5 print:shadow-none print:border-slate-200">
-                         <h3 className="text-sm font-bold text-slate-800 mb-6 flex items-center print:text-xs"><BarChart3 className="h-4 w-4 mr-2 text-indigo-500 print:h-3 print:w-3"/> Monthly Cash Flow</h3>
-                         <div className="flex-1 min-h-[200px] flex items-end gap-2 sm:gap-4 relative pt-10 px-2 border-b border-slate-200 print:min-h-[160px]">
-                           {reportStats.chartData.length === 0 ? <p className="absolute inset-0 flex items-center justify-center text-xs text-slate-400 italic">No monthly data available.</p> : null}
-                           {reportStats.chartData.map((data, idx) => {
-                             const incHeight = Math.max((data.inc / (reportStats.maxChartVal || 1)) * 100, 2);
-                             const expHeight = Math.max((data.exp / (reportStats.maxChartVal || 1)) * 100, 2);
-                             return (
-                               <div key={idx} className="flex-1 flex flex-col items-center justify-end h-full group relative">
-                                 <div className="flex items-end justify-center w-full gap-1 sm:gap-1.5 h-full z-10 pb-1">
-                                   <div style={{ height: `${incHeight}%`, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }} className="w-full max-w-[20px] bg-emerald-400 rounded-t-sm relative transition-all">
-                                     <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[8px] font-bold text-emerald-700 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap print:opacity-100 print:text-[6px]">₹{(data.inc/1000).toFixed(0)}k</span>
-                                   </div>
-                                   <div style={{ height: `${expHeight}%`, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }} className="w-full max-w-[20px] bg-rose-400 rounded-t-sm relative transition-all">
-                                     <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[8px] font-bold text-rose-700 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap print:opacity-100 print:text-[6px]">₹{(data.exp/1000).toFixed(0)}k</span>
-                                   </div>
-                                 </div>
-                                 <span className="text-[9px] font-bold text-slate-400 mt-2 absolute -bottom-5 truncate w-full text-center print:text-[7px]">{data.month}</span>
-                               </div>
-                             )
-                           })}
-                         </div>
-                         <div className="flex justify-center gap-6 mt-10 text-[9px] font-bold uppercase tracking-widest print:mt-8 print:text-[7px]">
-                           <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-emerald-400 rounded-sm print:bg-emerald-400" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}></div> Income</div>
-                           <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-rose-400 rounded-sm print:bg-rose-400" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}></div> Expense</div>
-                         </div>
-                      </div>
-
-                      {/* Line Chart Component (Cash Flow Trend) */}
-                      <div className="border border-slate-100 rounded-2xl p-6 bg-white shadow-sm print:p-5 print:shadow-none print:border-slate-200 flex flex-col">
-                         <h3 className="text-sm font-bold text-slate-800 mb-6 flex items-center print:text-xs">
-                           <Activity className="h-4 w-4 mr-2 text-indigo-500 print:h-3 print:w-3"/> Cash Flow Trend
-                         </h3>
-                         <div className="flex-1 relative w-full min-h-[200px] print:min-h-[160px]">
-                            {reportStats.chartData.length === 0 ? (
-                               <p className="absolute inset-0 flex items-center justify-center text-xs text-slate-400 italic">No monthly data available.</p>
-                            ) : (
-                               <>
-                                  <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full absolute inset-0 overflow-visible">
-                                    {/* Grid lines */}
-                                    <line x1="0" y1="25" x2="100" y2="25" stroke="#f1f5f9" strokeWidth="0.5" />
-                                    <line x1="0" y1="50" x2="100" y2="50" stroke="#f1f5f9" strokeWidth="0.5" />
-                                    <line x1="0" y1="75" x2="100" y2="75" stroke="#f1f5f9" strokeWidth="0.5" />
-                                    <line x1="0" y1="100" x2="100" y2="100" stroke="#e2e8f0" strokeWidth="1" />
-                                    
-                                    {/* Lines */}
-                                    {reportStats.chartData.length > 1 && (
-                                       <>
-                                         <polyline points={lineChartIncPoints} fill="none" stroke="#34d399" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                         <polyline points={lineChartExpPoints} fill="none" stroke="#fb7185" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                       </>
-                                    )}
-                                    {/* Data points */}
-                                    {reportStats.chartData.map((d, i) => {
-                                       const x = reportStats.chartData.length > 1 ? (i / (reportStats.chartData.length - 1)) * 100 : 50;
-                                       const incY = 100 - (d.inc / (reportStats.maxChartVal || 1)) * 100;
-                                       const expY = 100 - (d.exp / (reportStats.maxChartVal || 1)) * 100;
-                                       return (
-                                         <g key={i}>
-                                           <circle cx={x} cy={incY} r="1.5" fill="#34d399" />
-                                           <circle cx={x} cy={expY} r="1.5" fill="#fb7185" />
-                                         </g>
-                                       )
-                                    })}
-                                  </svg>
-                                  {/* X Axis Labels */}
-                                  <div className="absolute -bottom-5 left-0 w-full">
-                                    {reportStats.chartData.map((d, i) => {
-                                      const leftPos = reportStats.chartData.length > 1 ? (i / (reportStats.chartData.length - 1)) * 100 : 50;
-                                      return (
-                                        <span key={i} className="text-[9px] font-bold text-slate-400 print:text-[7px] absolute whitespace-nowrap" style={{ left: `${leftPos}%`, transform: 'translateX(-50%)' }}>
-                                          {d.month}
-                                        </span>
-                                      )
-                                    })}
-                                  </div>
-                               </>
-                            )}
-                         </div>
-                         <div className="flex justify-center gap-6 mt-10 text-[9px] font-bold uppercase tracking-widest print:mt-8 print:text-[7px]">
-                           <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-emerald-400 rounded-sm print:bg-emerald-400" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}></div> Income Trend</div>
-                           <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-rose-400 rounded-sm print:bg-rose-400" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}></div> Expense Trend</div>
-                         </div>
-                      </div>
-
-                      {/* Category Breakdown (Spans both columns) */}
-                      <div className="lg:col-span-2 border border-slate-100 rounded-2xl p-6 bg-white shadow-sm print:col-span-2 print:p-5 print:shadow-none print:border-slate-200">
-                         <h3 className="text-sm font-bold text-slate-800 mb-6 flex items-center print:text-xs"><PieChart className="h-4 w-4 mr-2 text-rose-500 print:h-3 print:w-3"/> Expense Distribution</h3>
-                         <div className="space-y-4 print:space-y-3">
-                            {reportStats.sortedCategories.length === 0 ? <p className="text-xs text-slate-400 italic">No expenses logged.</p> : null}
-                            {reportStats.sortedCategories.map((item, idx) => {
-                               const percentage = ((item.amount / reportStats.exp) * 100).toFixed(1);
-                               return (
-                                 <div key={idx}>
-                                    <div className="flex justify-between items-end mb-1 text-[11px] font-bold print:text-[9px]">
-                                       <span className="text-slate-600">{item.category}</span>
-                                       <span className="text-slate-900">₹{item.amount.toLocaleString()} <span className="text-slate-400 font-medium ml-1">({percentage}%)</span></span>
+                      <div className="space-y-5">
+                        <div className="space-y-3">
+                          <h4 className="text-[12px] font-bold text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-2"><Users className="h-4 w-4 text-blue-500" /> Project Payroll</h4>
+                          {pPayments.length === 0 ? <p className="text-xs italic text-slate-400">No employee payments recorded.</p> : (
+                            <div className="space-y-2">
+                              {pPayments.map(p => {
+                                const emp = employees.find(e => e.id === p.employee_id);
+                                return (
+                                  <div key={p.id} className="bg-slate-50 border border-slate-100 rounded-xl p-2.5 flex justify-between items-center">
+                                    <div>
+                                      <p className="text-xs font-bold text-slate-800">{emp?.name || 'Unknown'}</p>
+                                      <p className="text-[8px] font-bold text-slate-400 uppercase mt-0.5">{p.payment_date ? new Date(p.payment_date).toLocaleDateString() : ''}</p>
                                     </div>
-                                    <div className="w-full bg-slate-100 rounded-full h-1.5 print:h-1" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                                       <div className="bg-rose-400 h-1.5 rounded-full print:h-1" style={{ width: `${percentage}%`, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}></div>
-                                    </div>
-                                 </div>
-                               )
-                            })}
-                         </div>
+                                    <p className="text-sm font-black text-slate-700">₹{parseFloat(p.amount || 0).toLocaleString()}</p>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-3">
+                          <h4 className="text-[12px] font-bold text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-2"><Receipt className="h-4 w-4 text-amber-500" /> Other Expenses</h4>
+                          {pExpenses.length === 0 ? <p className="text-xs italic text-slate-400">No other expenses recorded.</p> : (
+                            <div className="space-y-2">
+                              {pExpenses.map(e => (
+                                <div key={e.id} className="bg-slate-50 border border-slate-100 rounded-xl p-2.5 flex justify-between items-center">
+                                  <div>
+                                    <p className="text-xs font-bold text-slate-800">{e.description}</p>
+                                    <p className="text-[8px] font-bold text-slate-400 uppercase mt-0.5">{e.expense_date ? new Date(e.expense_date).toLocaleDateString() : ''} • {e.category}</p>
+                                  </div>
+                                  <p className="text-sm font-black text-slate-700">₹{parseFloat(e.amount || 0).toLocaleString()}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                   </div>
-
-                   {/* DETAILED LEDGERS */}
-                   <div className="print:break-inside-avoid">
-                      <h3 className="text-sm font-bold text-slate-800 border-b border-slate-200 pb-3 mb-4 print:text-xs bg-slate-50/50 print:bg-slate-50 px-2 pt-2">Income Ledger</h3>
-                      <table className="w-full text-left text-[11px] mb-10 print:text-[9px]">
-                         <thead className="text-slate-400 uppercase tracking-widest text-[9px] print:text-[8px] border-b border-slate-100">
-                            <tr>
-                               <th className="pb-2 font-bold px-2">Date</th>
-                               <th className="pb-2 font-bold px-2">Ref / Invoice No</th>
-                               <th className="pb-2 font-bold px-2">Client / Entity</th>
-                               <th className="pb-2 font-bold text-right px-2">Amount</th>
-                            </tr>
-                         </thead>
-                         <tbody className="divide-y divide-slate-50">
-                            {reportStats.incList.length === 0 ? (
-                               <tr><td colSpan={4} className="py-4 text-slate-400 italic text-center">No income recorded.</td></tr>
-                            ) : (
-                               reportStats.incList.map((inc, i) => (
-                                  <tr key={i}>
-                                     <td className="py-2 px-2 text-slate-500 font-medium">{inc.date ? new Date(inc.date).toLocaleDateString() : '-'}</td>
-                                     <td className="py-2 px-2 font-bold text-slate-800">{inc.ref}</td>
-                                     <td className="py-2 px-2 text-slate-600">{inc.client}</td>
-                                     <td className="py-2 px-2 font-black text-emerald-600 text-right">₹{inc.amount.toLocaleString()}</td>
-                                  </tr>
-                               ))
-                            )}
-                         </tbody>
-                      </table>
-                   </div>
-
-                   <div className="print:break-inside-avoid">
-                      <h3 className="text-sm font-bold text-slate-800 border-b border-slate-200 pb-3 mb-4 print:text-xs bg-slate-50/50 print:bg-slate-50 px-2 pt-2">Expense Ledger</h3>
-                      <table className="w-full text-left text-[11px] print:text-[9px]">
-                         <thead className="text-slate-400 uppercase tracking-widest text-[9px] print:text-[8px] border-b border-slate-100">
-                            <tr>
-                               <th className="pb-2 font-bold w-24 px-2">Date</th>
-                               <th className="pb-2 font-bold w-32 px-2">Category</th>
-                               <th className="pb-2 font-bold px-2">Description</th>
-                               <th className="pb-2 font-bold text-right px-2">Amount</th>
-                            </tr>
-                         </thead>
-                         <tbody className="divide-y divide-slate-50">
-                            {reportStats.expList.length === 0 ? (
-                               <tr><td colSpan={4} className="py-4 text-slate-400 italic text-center">No expenses recorded.</td></tr>
-                            ) : (
-                               reportStats.expList.map((exp, i) => (
-                                  <tr key={i} className="print:break-inside-avoid">
-                                     <td className="py-2.5 px-2 text-slate-500 font-medium align-top">{exp.date ? new Date(exp.date).toLocaleDateString() : '-'}</td>
-                                     <td className="py-2.5 px-2 align-top">
-                                        <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                                           {exp.cat}
-                                        </span>
-                                     </td>
-                                     <td className="py-2.5 px-2 text-slate-800 font-medium pr-4">{exp.desc}</td>
-                                     <td className="py-2.5 px-2 font-black text-rose-600 text-right align-top">₹{exp.amount.toLocaleString()}</td>
-                                  </tr>
-                               ))
-                            )}
-                         </tbody>
-                      </table>
-                   </div>
-
-                   <div className="text-center text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-16 pt-8 border-t border-slate-100 print:mt-8 print:pt-4 print:text-[7px]">
-                      End of Report • Generated on {new Date().toLocaleString()}
-                   </div>
-                </div>
-              </motion.div>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
-          )}
-        </AnimatePresence>,
-        document.body
+          </motion.div>
+        </div>
+      )}
+
+      {isReportModalOpen && (
+        <div className="fixed inset-0 z-[10000] flex flex-col bg-slate-900/40 backdrop-blur-sm overflow-y-auto sm:p-4 print:static print:inset-auto print:p-0 print:bg-white print:block print:h-auto print:overflow-visible">
+          <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }} className="bg-white min-h-full sm:min-h-[90vh] w-full max-w-5xl mx-auto sm:rounded-2xl shadow-2xl flex flex-col relative print:shadow-none print:m-0 print:min-h-0 print:h-auto print:w-full print:rounded-none print:block print:overflow-visible print:static">
+            <div className="bg-slate-900 text-white p-4 sm:p-5 sm:rounded-t-2xl flex flex-col gap-4 shrink-0 print:hidden relative">
+               <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                     <div className="h-8 w-8 bg-indigo-500/20 rounded-lg flex items-center justify-center">
+                       <BarChart3 className="h-4 w-4 text-indigo-400" />
+                     </div>
+                     <h2 className="text-lg font-bold tracking-tight">Financial Report</h2>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                     <button onClick={() => window.print()} className="bg-indigo-600 hover:bg-indigo-500 text-white h-9 px-4 rounded-lg text-xs font-bold transition-colors shadow-sm flex items-center">
+                       <Download className="h-3.5 w-3.5 sm:mr-2"/> <span className="hidden sm:inline">Save PDF</span>
+                     </button>
+                     <button onClick={() => setIsReportModalOpen(false)} className="h-9 w-9 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg flex items-center justify-center transition-colors">
+                       <X className="h-4 w-4" />
+                     </button>
+                  </div>
+               </div>
+               <div className="flex flex-wrap items-center gap-3">
+                  {isAdmin && !activeWorkspace ? (
+                    <select value={reportConfig.companyId} onChange={e=>setReportConfig({...reportConfig, companyId: e.target.value})} className="bg-slate-800 text-white border border-slate-700 h-9 px-3 rounded-lg text-xs font-medium outline-none cursor-pointer">
+                      <option value="all">All Companies</option>
+                      {companies.map(c=><option key={c.id} value={c.id.toString()}>{c.name}</option>)}
+                    </select>
+                  ) : (
+                    <div className="bg-slate-800 text-white border border-slate-700 h-9 px-4 rounded-lg text-xs font-medium flex items-center">
+                      {companies.find(c => c.id.toString() === reportConfig.companyId)?.name || 'Your Subsidiary'}
+                    </div>
+                  )}
+                  <select value={reportConfig.datePreset} onChange={(e) => handlePresetChange(e.target.value)} className="bg-slate-800 text-white border border-slate-700 h-9 px-3 rounded-lg text-xs font-medium outline-none cursor-pointer">
+                     <option value="custom">Custom Range</option>
+                     <option value="this_month">This Month</option>
+                     <option value="last_month">Last Month</option>
+                     <option value="ytd">Year to Date</option>
+                     <option value="all_time">All Time</option>
+                  </select>
+                  <div className="flex items-center gap-2 bg-slate-800 rounded-lg px-2 h-9 border border-slate-700">
+                    <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                    <input type="date" value={reportConfig.startDate} onChange={e=>setReportConfig({...reportConfig, startDate: e.target.value, datePreset: 'custom'})} className="bg-transparent text-white text-xs outline-none w-[110px]" />
+                    <span className="text-slate-500">-</span>
+                    <input type="date" value={reportConfig.endDate} onChange={e=>setReportConfig({...reportConfig, endDate: e.target.value, datePreset: 'custom'})} className="bg-transparent text-white text-xs outline-none w-[110px]" />
+                  </div>
+               </div>
+            </div>
+            
+            {/* The rest of the report remains unchanged... */}
+            <div className="p-8 sm:p-12 flex-1 bg-white print:p-8 print:block print:h-auto print:overflow-visible" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+               <div className="flex justify-between items-start mb-10 border-b border-slate-200 pb-8">
+                  <div className="flex flex-col items-start w-1/3">
+                     {parentLogoUrl ? (
+                        <img src={parentLogoUrl} alt="Parent Logo" className="h-14 object-contain mb-2 print:h-12 mix-blend-multiply" />
+                     ) : (
+                        <div className="h-12 w-12 rounded-xl bg-slate-900 flex items-center justify-center text-white text-xl font-black mb-2 print:h-10 print:w-10" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+                          {parentName.charAt(0)}
+                        </div>
+                     )}
+                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{parentName}</p>
+                     <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest mt-0.5">Parent Entity</p>
+                  </div>
+                  <div className="text-center w-1/3">
+                    <h1 className="text-2xl font-black text-slate-900 mb-1 uppercase tracking-tight print:text-xl">Financial Report</h1>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
+                      {reportConfig.companyId === 'all' ? 'Consolidated Overview' : selectedCompany?.name}
+                    </p>
+                    <p className="text-[10px] text-slate-400 bg-slate-50 inline-block px-3 py-1 rounded-full border border-slate-100" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+                      {reportConfig.startDate ? new Date(reportConfig.startDate).toLocaleDateString() : 'Beginning'} — {reportConfig.endDate ? new Date(reportConfig.endDate).toLocaleDateString() : 'Present'}
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-end text-right w-1/3">
+                     {showSubjectEntity && selectedCompany && (
+                        <>
+                           {selectedCompany.logo_url ? (
+                              <img src={selectedCompany.logo_url} alt="Sub Logo" className="h-14 object-contain mb-2 print:h-12 mix-blend-multiply" />
+                           ) : (
+                              <div className="h-12 w-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 text-xl font-black mb-2 print:h-10 print:w-10" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+                                {selectedCompany.name.charAt(0)}
+                              </div>
+                           )}
+                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{selectedCompany.name}</p>
+                           <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest mt-0.5">Subject Entity</p>
+                        </>
+                     )}
+                  </div>
+               </div>
+               <div className="grid grid-cols-2 sm:grid-cols-2 gap-4 sm:gap-6 mb-12 print:grid-cols-2 print:gap-6 print:mb-10">
+                 <div className="border-l-4 border-emerald-500 bg-slate-50 p-4 sm:p-6 rounded-r-xl" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+                   <p className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5 whitespace-nowrap"><ArrowDownLeft className="h-3.5 w-3.5 text-emerald-500" /> Total Income</p>
+                   <p className="text-xl sm:text-2xl font-black text-slate-900 break-words">₹{reportStats.inc.toLocaleString()}</p>
+                 </div>
+                 <div className="border-l-4 border-rose-500 bg-slate-50 p-4 sm:p-6 rounded-r-xl" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+                   <p className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5 whitespace-nowrap"><ArrowUpRight className="h-3.5 w-3.5 text-rose-500" /> Total Expenses</p>
+                   <p className="text-xl sm:text-2xl font-black text-slate-900 break-words">₹{reportStats.exp.toLocaleString()}</p>
+                 </div>
+                 <div className={`border-l-4 p-4 sm:p-6 rounded-r-xl ${reportStats.prof >= 0 ? 'border-indigo-500 bg-indigo-50' : 'border-rose-500 bg-rose-50'}`} style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+                   <p className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest mb-1.5 whitespace-nowrap ${reportStats.prof >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>Net Profit</p>
+                   <p className={`text-xl sm:text-2xl font-black break-words ${reportStats.prof >= 0 ? 'text-indigo-900' : 'text-rose-900'}`}>₹{reportStats.prof.toLocaleString()}</p>
+                 </div>
+                 <div className="border-l-4 border-slate-300 bg-slate-50 p-4 sm:p-6 rounded-r-xl" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+                   <p className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 whitespace-nowrap">Profit Margin</p>
+                   <p className="text-xl sm:text-2xl font-black text-slate-900 break-words">{reportStats.margin}%</p>
+                 </div>
+               </div>
+               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12 print:grid print:grid-cols-2 print:gap-6 print:mb-10">
+                  <div className="border border-slate-100 rounded-2xl p-6 bg-white shadow-sm flex flex-col print:p-5 print:shadow-none print:border-slate-200">
+                     <h3 className="text-sm font-bold text-slate-800 mb-6 flex items-center print:text-xs"><BarChart3 className="h-4 w-4 mr-2 text-indigo-500 print:h-3 print:w-3"/> Monthly Cash Flow</h3>
+                     <div className="flex-1 min-h-[200px] flex items-end gap-2 sm:gap-4 relative pt-10 px-2 border-b border-slate-200 print:min-h-[160px]">
+                       {reportStats.chartData.length === 0 ? <p className="absolute inset-0 flex items-center justify-center text-xs text-slate-400 italic">No monthly data available.</p> : null}
+                       {reportStats.chartData.map((data, idx) => {
+                         const incHeight = Math.max((data.inc / (reportStats.maxChartVal || 1)) * 100, 2);
+                         const expHeight = Math.max((data.exp / (reportStats.maxChartVal || 1)) * 100, 2);
+                         return (
+                           <div key={idx} className="flex-1 flex flex-col items-center justify-end h-full group relative">
+                             <div className="flex items-end justify-center w-full gap-1 sm:gap-1.5 h-full z-10 pb-1">
+                               <div style={{ height: `${incHeight}%`, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }} className="w-full max-w-[20px] bg-emerald-400 rounded-t-sm relative transition-all">
+                                 <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[8px] font-bold text-emerald-700 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap print:opacity-100 print:text-[6px]">₹{(data.inc/1000).toFixed(0)}k</span>
+                               </div>
+                               <div style={{ height: `${expHeight}%`, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }} className="w-full max-w-[20px] bg-rose-400 rounded-t-sm relative transition-all">
+                                 <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[8px] font-bold text-rose-700 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap print:opacity-100 print:text-[6px]">₹{(data.exp/1000).toFixed(0)}k</span>
+                               </div>
+                             </div>
+                             <span className="text-[9px] font-bold text-slate-400 mt-2 absolute -bottom-5 truncate w-full text-center print:text-[7px]">{data.month}</span>
+                           </div>
+                         )
+                       })}
+                     </div>
+                     <div className="flex justify-center gap-6 mt-10 text-[9px] font-bold uppercase tracking-widest print:mt-8 print:text-[7px]">
+                       <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-emerald-400 rounded-sm print:bg-emerald-400" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}></div> Income</div>
+                       <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-rose-400 rounded-sm print:bg-rose-400" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}></div> Expense</div>
+                     </div>
+                  </div>
+                  <div className="border border-slate-100 rounded-2xl p-6 bg-white shadow-sm print:p-5 print:shadow-none print:border-slate-200 flex flex-col">
+                     <h3 className="text-sm font-bold text-slate-800 mb-6 flex items-center print:text-xs"><Activity className="h-4 w-4 mr-2 text-indigo-500 print:h-3 print:w-3"/> Cash Flow Trend</h3>
+                     <div className="flex-1 relative w-full min-h-[200px] print:min-h-[160px]">
+                        {reportStats.chartData.length === 0 ? (
+                           <p className="absolute inset-0 flex items-center justify-center text-xs text-slate-400 italic">No monthly data available.</p>
+                        ) : (
+                           <>
+                              <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full absolute inset-0 overflow-visible">
+                                <line x1="0" y1="25" x2="100" y2="25" stroke="#f1f5f9" strokeWidth="0.5" />
+                                <line x1="0" y1="50" x2="100" y2="50" stroke="#f1f5f9" strokeWidth="0.5" />
+                                <line x1="0" y1="75" x2="100" y2="75" stroke="#f1f5f9" strokeWidth="0.5" />
+                                <line x1="0" y1="100" x2="100" y2="100" stroke="#e2e8f0" strokeWidth="1" />
+                                {reportStats.chartData.length > 1 && (
+                                   <>
+                                     <polyline points={lineChartIncPoints} fill="none" stroke="#34d399" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                     <polyline points={lineChartExpPoints} fill="none" stroke="#fb7185" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                   </>
+                                )}
+                                {reportStats.chartData.map((d, i) => {
+                                   const x = reportStats.chartData.length > 1 ? (i / (reportStats.chartData.length - 1)) * 100 : 50;
+                                   const incY = 100 - (d.inc / (reportStats.maxChartVal || 1)) * 100;
+                                   const expY = 100 - (d.exp / (reportStats.maxChartVal || 1)) * 100;
+                                   return (
+                                     <g key={i}>
+                                       <circle cx={x} cy={incY} r="1.5" fill="#34d399" />
+                                       <circle cx={x} cy={expY} r="1.5" fill="#fb7185" />
+                                     </g>
+                                   )
+                                })}
+                              </svg>
+                              <div className="absolute -bottom-5 left-0 w-full">
+                                {reportStats.chartData.map((d, i) => {
+                                  const leftPos = reportStats.chartData.length > 1 ? (i / (reportStats.chartData.length - 1)) * 100 : 50;
+                                  return (
+                                    <span key={i} className="text-[9px] font-bold text-slate-400 print:text-[7px] absolute whitespace-nowrap" style={{ left: `${leftPos}%`, transform: 'translateX(-50%)' }}>
+                                      {d.month}
+                                    </span>
+                                  )
+                                })}
+                              </div>
+                           </>
+                        )}
+                     </div>
+                     <div className="flex justify-center gap-6 mt-10 text-[9px] font-bold uppercase tracking-widest print:mt-8 print:text-[7px]">
+                       <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-emerald-400 rounded-sm print:bg-emerald-400" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}></div> Income Trend</div>
+                       <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-rose-400 rounded-sm print:bg-rose-400" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}></div> Expense Trend</div>
+                     </div>
+                  </div>
+                  <div className="lg:col-span-2 border border-slate-100 rounded-2xl p-6 bg-white shadow-sm print:col-span-2 print:p-5 print:shadow-none print:border-slate-200">
+                     <h3 className="text-sm font-bold text-slate-800 mb-6 flex items-center print:text-xs"><PieChart className="h-4 w-4 mr-2 text-rose-500 print:h-3 print:w-3"/> Expense Distribution</h3>
+                     <div className="space-y-4 print:space-y-3">
+                        {reportStats.sortedCategories.length === 0 ? <p className="text-xs text-slate-400 italic">No expenses logged.</p> : null}
+                        {reportStats.sortedCategories.map((item, idx) => {
+                           const percentage = ((item.amount / reportStats.exp) * 100).toFixed(1);
+                           return (
+                             <div key={idx}>
+                                <div className="flex justify-between items-end mb-1 text-[11px] font-bold print:text-[9px]">
+                                   <span className="text-slate-600">{item.category}</span>
+                                   <span className="text-slate-900">₹{item.amount.toLocaleString()} <span className="text-slate-400 font-medium ml-1">({percentage}%)</span></span>
+                                </div>
+                                <div className="w-full bg-slate-100 rounded-full h-1.5 print:h-1" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+                                   <div className="bg-rose-400 h-1.5 rounded-full print:h-1" style={{ width: `${percentage}%`, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}></div>
+                                </div>
+                             </div>
+                           )
+                        })}
+                     </div>
+                  </div>
+               </div>
+               <div className="print:break-inside-avoid">
+                  <h3 className="text-sm font-bold text-slate-800 border-b border-slate-200 pb-3 mb-4 print:text-xs bg-slate-50/50 print:bg-slate-50 px-2 pt-2">Income Ledger</h3>
+                  <table className="w-full text-left text-[11px] mb-10 print:text-[9px]">
+                     <thead className="text-slate-400 uppercase tracking-widest text-[9px] print:text-[8px] border-b border-slate-100">
+                        <tr>
+                           <th className="pb-2 font-bold px-2">Date</th>
+                           <th className="pb-2 font-bold px-2">Ref / Invoice No</th>
+                           <th className="pb-2 font-bold px-2">Client / Entity</th>
+                           <th className="pb-2 font-bold text-right px-2">Amount</th>
+                        </tr>
+                     </thead>
+                     <tbody className="divide-y divide-slate-50">
+                        {reportStats.incList.length === 0 ? (
+                           <tr><td colSpan={4} className="py-4 text-slate-400 italic text-center">No income recorded.</td></tr>
+                        ) : (
+                           reportStats.incList.map((inc, i) => (
+                              <tr key={i}>
+                                 <td className="py-2 px-2 text-slate-500 font-medium">{inc.date ? new Date(inc.date).toLocaleDateString() : '-'}</td>
+                                 <td className="py-2 px-2 font-bold text-slate-800">{inc.ref}</td>
+                                 <td className="py-2 px-2 text-slate-600">{inc.client}</td>
+                                 <td className="py-2 px-2 font-black text-emerald-600 text-right">₹{inc.amount.toLocaleString()}</td>
+                              </tr>
+                           ))
+                        )}
+                     </tbody>
+                  </table>
+               </div>
+               <div className="print:break-inside-avoid">
+                  <h3 className="text-sm font-bold text-slate-800 border-b border-slate-200 pb-3 mb-4 print:text-xs bg-slate-50/50 print:bg-slate-50 px-2 pt-2">Expense Ledger</h3>
+                  <table className="w-full text-left text-[11px] print:text-[9px]">
+                     <thead className="text-slate-400 uppercase tracking-widest text-[9px] print:text-[8px] border-b border-slate-100">
+                        <tr>
+                           <th className="pb-2 font-bold w-24 px-2">Date</th>
+                           <th className="pb-2 font-bold w-32 px-2">Category</th>
+                           <th className="pb-2 font-bold px-2">Description</th>
+                           <th className="pb-2 font-bold text-right px-2">Amount</th>
+                        </tr>
+                     </thead>
+                     <tbody className="divide-y divide-slate-50">
+                        {reportStats.expList.length === 0 ? (
+                           <tr><td colSpan={4} className="py-4 text-slate-400 italic text-center">No expenses recorded.</td></tr>
+                        ) : (
+                           reportStats.expList.map((exp, i) => (
+                              <tr key={i} className="print:break-inside-avoid">
+                                 <td className="py-2.5 px-2 text-slate-500 font-medium align-top">{exp.date ? new Date(exp.date).toLocaleDateString() : '-'}</td>
+                                 <td className="py-2.5 px-2 align-top">
+                                    <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+                                       {exp.cat}
+                                    </span>
+                                 </td>
+                                 <td className="py-2.5 px-2 text-slate-800 font-medium pr-4">{exp.desc}</td>
+                                 <td className="py-2.5 px-2 font-black text-rose-600 text-right align-top">₹{exp.amount.toLocaleString()}</td>
+                              </tr>
+                           ))
+                        )}
+                     </tbody>
+                  </table>
+               </div>
+               <div className="text-center text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-16 pt-8 border-t border-slate-100 print:mt-8 print:pt-4 print:text-[7px]">
+                  End of Report • Generated on {new Date().toLocaleString()}
+               </div>
+            </div>
+          </motion.div>
+        </div>
       )}
     </>
   );
