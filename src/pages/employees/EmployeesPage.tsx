@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Search, Mail, Phone, Building2, Edit3, Trash2, X, Camera, Wallet, LayoutGrid, List, ShieldAlert, AlertCircle, CheckCircle2, Loader2, Briefcase } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
@@ -277,9 +278,9 @@ export default function EmployeesPage() {
 
         if (emailChanged || passwordChanged) {
            const { data: rpcResult, error: rpcError } = await supabase.rpc('admin_update_user_credentials', {
-              old_email: selectedEmployee.email,
-              new_email: formData.email.trim(),
-              new_password: formData.password.trim() || null
+             old_email: selectedEmployee.email,
+             new_email: formData.email.trim(),
+             new_password: formData.password.trim() || null
            });
            if (rpcError) throw new Error(`Failed to contact Auth Vault: ${rpcError.message}`);
            if (rpcResult !== 'SUCCESS') throw new Error(`Auth Vault Error: ${rpcResult}`);
@@ -561,306 +562,313 @@ export default function EmployeesPage() {
           </div>
         )}
 
-        <AnimatePresence>
-          {isModalOpen && (
-            <motion.div 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              exit={{ opacity: 0 }} 
-              onClick={() => setIsModalOpen(false)}
-              className="fixed inset-0 z-[100] flex flex-col items-center justify-center max-sm:px-4 max-sm:pt-20 max-sm:pb-[110px] sm:p-4 bg-slate-900/40 backdrop-blur-sm"
-            >
+        {/* --- ADDED: createPortal to modals to escape DOM stacking and cover sidebar --- */}
+        {createPortal(
+          <AnimatePresence>
+            {isModalOpen && (
               <motion.div 
-                initial={{ opacity: 0, y: 40, scale: 0.95 }} 
-                animate={{ opacity: 1, y: 0, scale: 1 }} 
-                exit={{ opacity: 0, y: 40, scale: 0.95 }} 
-                onClick={(e) => e.stopPropagation()}
-                className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-4xl max-h-[95vh] flex flex-col overflow-hidden border border-slate-100"
+                initial={{ opacity: 0 }} 
+                animate={{ opacity: 1 }} 
+                exit={{ opacity: 0 }} 
+                onClick={() => setIsModalOpen(false)}
+                className="fixed inset-0 z-[10000] flex flex-col items-center justify-center max-sm:px-4 max-sm:pt-20 max-sm:pb-[110px] sm:p-4 bg-slate-900/40 backdrop-blur-sm"
               >
-                
-                <div className="px-5 sm:px-8 pt-5 sm:pt-7 border-b border-slate-100 bg-[#FAFCFF] shrink-0">
-                  <div className="flex items-center justify-between mb-4 sm:mb-5">
-                    <div>
-                      <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-blue-600 bg-blue-50 px-2 sm:px-2.5 py-1 rounded-full">HR Record</span>
-                      <h3 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight mt-1.5">{selectedEmployee ? 'Edit Data' : 'Add Employee'}</h3>
-                    </div>
-                    <button onClick={() => setIsModalOpen(false)} className="h-8 w-8 sm:h-9 sm:w-9 bg-white border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm transition-colors"><X className="h-3.5 w-3.5 sm:h-4 w-4" /></button>
-                  </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto overscroll-contain p-5 sm:p-8 flex flex-col lg:flex-row gap-6 sm:gap-10 max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none] max-sm:[scrollbar-width:none] sm:[&::-webkit-scrollbar]:w-1.5 sm:[&::-webkit-scrollbar-thumb]:bg-slate-200 sm:[&::-webkit-scrollbar-thumb]:rounded-full">
+                <motion.div 
+                  initial={{ opacity: 0, y: 40, scale: 0.95 }} 
+                  animate={{ opacity: 1, y: 0, scale: 1 }} 
+                  exit={{ opacity: 0, y: 40, scale: 0.95 }} 
+                  onClick={(e) => e.stopPropagation()}
+                  className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-4xl max-h-[95vh] flex flex-col overflow-hidden border border-slate-100"
+                >
                   
-                  <div className="flex flex-row items-center sm:items-start gap-4 sm:gap-0 sm:flex-col shrink-0 border-b sm:border-b-0 border-slate-100 pb-5 sm:pb-0 sm:w-64">
-                    <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageSelect} className="hidden" />
-                    <div className="relative group shrink-0">
-                      <div onClick={() => fileInputRef.current?.click()} className="h-16 w-16 sm:h-40 sm:w-40 rounded-[1rem] sm:rounded-full border-2 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-all overflow-hidden shadow-sm relative">
-                        {displayImage ? <img src={displayImage} alt="Profile" className="h-full w-full object-cover" /> : <div className="flex flex-col items-center"><Camera className="h-5 w-5 sm:h-6 sm:w-6 mb-1 sm:mb-2 opacity-50" /><span className="text-[8px] sm:text-[10px] font-bold uppercase tracking-widest hidden sm:block">Photo</span></div>}
-                      </div>
-                      {displayImage && <button onClick={(e) => { e.stopPropagation(); setImageFile(null); setImagePreview(null); setRemoveImage(true); }} className="absolute -bottom-1 -right-1 sm:bottom-2 sm:right-2 h-6 w-6 sm:h-10 sm:w-10 bg-white border border-slate-100 rounded-full flex items-center justify-center text-rose-500 hover:bg-rose-50 shadow-lg sm:opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="h-3 w-3 sm:h-4 sm:w-4" /></button>}
-                    </div>
-
-                    <div className="flex-1 flex flex-col gap-2 sm:hidden">
+                  <div className="px-5 sm:px-8 pt-5 sm:pt-7 border-b border-slate-100 bg-[#FAFCFF] shrink-0">
+                    <div className="flex items-center justify-between mb-4 sm:mb-5">
                       <div>
-                         <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-1 px-1">Full Name *</label>
-                         <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full h-8 rounded-lg border border-slate-200 px-3 text-[11px] font-bold outline-none focus:border-blue-500 shadow-sm" />
+                        <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-blue-600 bg-blue-50 px-2 sm:px-2.5 py-1 rounded-full">HR Record</span>
+                        <h3 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight mt-1.5">{selectedEmployee ? 'Edit Data' : 'Add Employee'}</h3>
                       </div>
-                      <div>
-                         <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-1 px-1">Email Address *</label>
-                         <input type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className="w-full h-8 rounded-lg border border-slate-200 px-3 text-[11px] font-medium outline-none focus:border-blue-500 shadow-sm" />
-                      </div>
-                    </div>
-                    <div className="hidden sm:block text-center mt-5 px-4">
-                       <p className="text-[11px] text-slate-400 font-medium leading-relaxed">Upload a clear, professional photo for the directory.</p>
+                      <button onClick={() => setIsModalOpen(false)} className="h-8 w-8 sm:h-9 sm:w-9 bg-white border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm transition-colors"><X className="h-3.5 w-3.5 sm:h-4 w-4" /></button>
                     </div>
                   </div>
 
-                  <div className="flex-1 space-y-4 sm:space-y-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
-                      <div className="hidden sm:block">
-                         <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2 px-1">Full Name *</label>
-                         <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full h-12 rounded-xl border border-slate-200 px-4 text-sm font-bold outline-none focus:border-blue-500 shadow-sm" />
+                  <div className="flex-1 overflow-y-auto overscroll-contain p-5 sm:p-8 flex flex-col lg:flex-row gap-6 sm:gap-10 max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none] max-sm:[scrollbar-width:none] sm:[&::-webkit-scrollbar]:w-1.5 sm:[&::-webkit-scrollbar-thumb]:bg-slate-200 sm:[&::-webkit-scrollbar-thumb]:rounded-full">
+                    
+                    <div className="flex flex-row items-center sm:items-start gap-4 sm:gap-0 sm:flex-col shrink-0 border-b sm:border-b-0 border-slate-100 pb-5 sm:pb-0 sm:w-64">
+                      <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageSelect} className="hidden" />
+                      <div className="relative group shrink-0">
+                        <div onClick={() => fileInputRef.current?.click()} className="h-16 w-16 sm:h-40 sm:w-40 rounded-[1rem] sm:rounded-full border-2 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-all overflow-hidden shadow-sm relative">
+                          {displayImage ? <img src={displayImage} alt="Profile" className="h-full w-full object-cover" /> : <div className="flex flex-col items-center"><Camera className="h-5 w-5 sm:h-6 sm:w-6 mb-1 sm:mb-2 opacity-50" /><span className="text-[8px] sm:text-[10px] font-bold uppercase tracking-widest hidden sm:block">Photo</span></div>}
+                        </div>
+                        {displayImage && <button onClick={(e) => { e.stopPropagation(); setImageFile(null); setImagePreview(null); setRemoveImage(true); }} className="absolute -bottom-1 -right-1 sm:bottom-2 sm:right-2 h-6 w-6 sm:h-10 sm:w-10 bg-white border border-slate-100 rounded-full flex items-center justify-center text-rose-500 hover:bg-rose-50 shadow-lg sm:opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="h-3 w-3 sm:h-4 sm:w-4" /></button>}
                       </div>
-                      <div className="hidden sm:block">
-                         <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2 px-1">Email Address *</label>
-                         <input type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className="w-full h-12 rounded-xl border border-slate-200 px-4 text-sm font-medium outline-none focus:border-blue-500 shadow-sm" />
+
+                      <div className="flex-1 flex flex-col gap-2 sm:hidden">
+                        <div>
+                           <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-1 px-1">Full Name *</label>
+                           <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full h-8 rounded-lg border border-slate-200 px-3 text-[11px] font-bold outline-none focus:border-blue-500 shadow-sm" />
+                        </div>
+                        <div>
+                           <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-1 px-1">Email Address *</label>
+                           <input type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className="w-full h-8 rounded-lg border border-slate-200 px-3 text-[11px] font-medium outline-none focus:border-blue-500 shadow-sm" />
+                        </div>
                       </div>
-                      <div>
-                        <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1">Contact Number</label>
-                        <input type="text" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 px-3 sm:px-4 text-[12px] sm:text-sm font-medium outline-none focus:border-blue-500 shadow-sm" />
-                      </div>
-                      <div>
-                        <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1 truncate" title={selectedEmployee ? 'System Access' : 'Sys Password *'}>Sys Password {selectedEmployee ? '(Opt)' : '*'}</label>
-                        <input type="text" placeholder={selectedEmployee ? "Leave blank..." : "Set initial pwd"} value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 px-3 sm:px-4 text-[12px] sm:text-sm font-medium outline-none focus:border-blue-500 shadow-sm placeholder:truncate" />
+                      <div className="hidden sm:block text-center mt-5 px-4">
+                         <p className="text-[11px] text-slate-400 font-medium leading-relaxed">Upload a clear, professional photo for the directory.</p>
                       </div>
                     </div>
 
-                    <div className="mt-6 border-t border-slate-100 pt-6">
-                      <div className="flex items-center justify-between mb-4">
-                         <h4 className="text-[11px] sm:text-[12px] font-bold text-slate-800 tracking-tight flex items-center gap-2"><Briefcase className="h-4 w-4 text-blue-600"/> Company Assignments</h4>
-                         <button onClick={addCompanyRoleForm} className="text-[10px] font-bold bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-1"><Plus className="h-3 w-3" /> Add Role</button>
+                    <div className="flex-1 space-y-4 sm:space-y-6">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+                        <div className="hidden sm:block">
+                           <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2 px-1">Full Name *</label>
+                           <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full h-12 rounded-xl border border-slate-200 px-4 text-sm font-bold outline-none focus:border-blue-500 shadow-sm" />
+                        </div>
+                        <div className="hidden sm:block">
+                           <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2 px-1">Email Address *</label>
+                           <input type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className="w-full h-12 rounded-xl border border-slate-200 px-4 text-sm font-medium outline-none focus:border-blue-500 shadow-sm" />
+                        </div>
+                        <div>
+                          <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1">Contact Number</label>
+                          <input type="text" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 px-3 sm:px-4 text-[12px] sm:text-sm font-medium outline-none focus:border-blue-500 shadow-sm" />
+                        </div>
+                        <div>
+                          <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 sm:mb-2 px-1 truncate" title={selectedEmployee ? 'System Access' : 'Sys Password *'}>Sys Password {selectedEmployee ? '(Opt)' : '*'}</label>
+                          <input type="text" placeholder={selectedEmployee ? "Leave blank..." : "Set initial pwd"} value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 px-3 sm:px-4 text-[12px] sm:text-sm font-medium outline-none focus:border-blue-500 shadow-sm placeholder:truncate" />
+                        </div>
                       </div>
-                      
-                      <div className="space-y-4">
-                        {formData.company_roles.map((cr, idx) => (
-                           <div key={idx} className="p-4 sm:p-5 rounded-xl sm:rounded-2xl bg-slate-50 border border-slate-200 relative group">
-                             {formData.company_roles.length > 1 && (
-                               <button onClick={() => removeCompanyRoleForm(idx)} className="absolute -top-2 -right-2 h-6 w-6 bg-white border border-rose-100 rounded-full flex items-center justify-center text-rose-500 hover:bg-rose-50 shadow-sm z-10"><X className="h-3 w-3" /></button>
-                             )}
-                             
-                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                               {(role === 'admin' && !activeWorkspace) && (
-                                 <div className="sm:col-span-2">
-                                   <label className="text-[9px] sm:text-[10px] font-bold text-slate-600 uppercase tracking-widest block mb-2 px-1">Company / Subsidiary</label>
-                                   <select value={cr.company_id} onChange={(e) => handleRoleChange(idx, 'company_id', e.target.value)} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 text-[12px] sm:text-sm font-bold outline-none cursor-pointer focus:border-blue-500">
-                                     <option value="">Global Administrator (No specific company)</option>
-                                     {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                   </select>
-                                 </div>
+
+                      <div className="mt-6 border-t border-slate-100 pt-6">
+                        <div className="flex items-center justify-between mb-4">
+                           <h4 className="text-[11px] sm:text-[12px] font-bold text-slate-800 tracking-tight flex items-center gap-2"><Briefcase className="h-4 w-4 text-blue-600"/> Company Assignments</h4>
+                           <button onClick={addCompanyRoleForm} className="text-[10px] font-bold bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-1"><Plus className="h-3 w-3" /> Add Role</button>
+                        </div>
+                        
+                        <div className="space-y-4">
+                          {formData.company_roles.map((cr, idx) => (
+                             <div key={idx} className="p-4 sm:p-5 rounded-xl sm:rounded-2xl bg-slate-50 border border-slate-200 relative group">
+                               {formData.company_roles.length > 1 && (
+                                 <button onClick={() => removeCompanyRoleForm(idx)} className="absolute -top-2 -right-2 h-6 w-6 bg-white border border-rose-100 rounded-full flex items-center justify-center text-rose-500 hover:bg-rose-50 shadow-sm z-10"><X className="h-3 w-3" /></button>
                                )}
                                
-                               <div>
-                                 <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 px-1">Job Title</label>
-                                 <input type="text" placeholder="e.g., Faculty, Manager" value={cr.role} onChange={(e) => handleRoleChange(idx, 'role', e.target.value)} className="w-full h-10 rounded-xl border border-slate-200 px-3 text-[12px] sm:text-sm font-medium outline-none bg-white focus:border-blue-500 shadow-sm" />
-                               </div>
-                               <div>
-                                  <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 px-1">Access Level</label>
-                                  <select value={cr.access_level} onChange={(e) => handleRoleChange(idx, 'access_level', e.target.value)} className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-[12px] sm:text-sm font-bold outline-none cursor-pointer focus:border-blue-500">
-                                      <option value="user">Operator (User)</option>
-                                      <option value="head">Director (Head)</option>
-                                      {role === 'admin' && <option value="admin">Global Admin</option>}
-                                  </select>
+                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                 {(role === 'admin' && !activeWorkspace) && (
+                                   <div className="sm:col-span-2">
+                                     <label className="text-[9px] sm:text-[10px] font-bold text-slate-600 uppercase tracking-widest block mb-2 px-1">Company / Subsidiary</label>
+                                     <select value={cr.company_id} onChange={(e) => handleRoleChange(idx, 'company_id', e.target.value)} className="w-full h-10 sm:h-12 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 text-[12px] sm:text-sm font-bold outline-none cursor-pointer focus:border-blue-500">
+                                       <option value="">Global Administrator (No specific company)</option>
+                                       {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                     </select>
+                                   </div>
+                                 )}
+                                 
+                                 <div>
+                                   <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 px-1">Job Title</label>
+                                   <input type="text" placeholder="e.g., Faculty, Manager" value={cr.role} onChange={(e) => handleRoleChange(idx, 'role', e.target.value)} className="w-full h-10 rounded-xl border border-slate-200 px-3 text-[12px] sm:text-sm font-medium outline-none bg-white focus:border-blue-500 shadow-sm" />
+                                 </div>
+                                 <div>
+                                    <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 px-1">Access Level</label>
+                                    <select value={cr.access_level} onChange={(e) => handleRoleChange(idx, 'access_level', e.target.value)} className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-[12px] sm:text-sm font-bold outline-none cursor-pointer focus:border-blue-500">
+                                        <option value="user">Operator (User)</option>
+                                        <option value="head">Director (Head)</option>
+                                        {role === 'admin' && <option value="admin">Global Admin</option>}
+                                    </select>
+                                 </div>
                                </div>
                              </div>
-                           </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="p-4 sm:p-6 border-t border-slate-100 bg-[#FAFCFF] flex justify-end items-center gap-2 sm:gap-4 shrink-0">
-                  {selectedEmployee && <button onClick={handleDeleteEmployee} disabled={saveStatus !== 'idle'} className="border border-rose-200 text-rose-600 bg-white hover:bg-rose-50 rounded-xl h-10 sm:h-12 px-3 sm:px-5 shadow-sm mr-auto"><Trash2 className="h-4 w-4" /></button>}
-                  <button onClick={() => setIsModalOpen(false)} className="rounded-xl border border-slate-200 bg-white h-10 sm:h-12 px-4 sm:px-8 font-bold text-[12px] sm:text-sm text-slate-600 hover:bg-slate-50 shadow-sm flex-1 sm:flex-none">Cancel</button>
-                  <button onClick={handleSaveEmployee} disabled={saveStatus !== 'idle'} className="bg-gradient-to-r from-blue-900 to-indigo-800 text-white rounded-xl h-10 sm:h-12 px-6 sm:px-10 font-bold text-[12px] sm:text-sm shadow-md hover:shadow-lg transition-all flex-1 sm:flex-none flex items-center justify-center">
-                     {saveStatus === 'compressing' && <><Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> Compressing...</>}
-                     {saveStatus === 'uploading' && <><Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> Uploading...</>}
-                     {saveStatus === 'saving' && <><Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> Saving...</>}
-                     {saveStatus === 'idle' && "Save Record"}
-                  </button>
-                </div>
+                  <div className="p-4 sm:p-6 border-t border-slate-100 bg-[#FAFCFF] flex justify-end items-center gap-2 sm:gap-4 shrink-0">
+                    {selectedEmployee && <button onClick={handleDeleteEmployee} disabled={saveStatus !== 'idle'} className="border border-rose-200 text-rose-600 bg-white hover:bg-rose-50 rounded-xl h-10 sm:h-12 px-3 sm:px-5 shadow-sm mr-auto"><Trash2 className="h-4 w-4" /></button>}
+                    <button onClick={() => setIsModalOpen(false)} className="rounded-xl border border-slate-200 bg-white h-10 sm:h-12 px-4 sm:px-8 font-bold text-[12px] sm:text-sm text-slate-600 hover:bg-slate-50 shadow-sm flex-1 sm:flex-none">Cancel</button>
+                    <button onClick={handleSaveEmployee} disabled={saveStatus !== 'idle'} className="bg-gradient-to-r from-blue-900 to-indigo-800 text-white rounded-xl h-10 sm:h-12 px-6 sm:px-10 font-bold text-[12px] sm:text-sm shadow-md hover:shadow-lg transition-all flex-1 sm:flex-none flex items-center justify-center">
+                       {saveStatus === 'compressing' && <><Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> Compressing...</>}
+                       {saveStatus === 'uploading' && <><Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> Uploading...</>}
+                       {saveStatus === 'saving' && <><Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> Saving...</>}
+                       {saveStatus === 'idle' && "Save Record"}
+                    </button>
+                  </div>
+                </motion.div>
               </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
 
-        <AnimatePresence>
-          {isLedgerOpen && ledgerEmployee && (
-            <motion.div 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              exit={{ opacity: 0 }} 
-              onClick={() => setIsLedgerOpen(false)}
-              className="fixed inset-0 z-[100] flex flex-col items-center justify-center max-sm:px-4 max-sm:pt-20 max-sm:pb-[110px] sm:p-4 bg-slate-900/40 backdrop-blur-sm"
-            >
+        {createPortal(
+          <AnimatePresence>
+            {isLedgerOpen && ledgerEmployee && (
               <motion.div 
-                initial={{ opacity: 0, y: 40, scale: 0.95 }} 
-                animate={{ opacity: 1, y: 0, scale: 1 }} 
-                exit={{ opacity: 0, y: 40, scale: 0.95 }} 
-                onClick={(e) => e.stopPropagation()}
-                className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-2xl max-h-full sm:max-h-[85svh] flex flex-col overflow-hidden border border-slate-100"
+                initial={{ opacity: 0 }} 
+                animate={{ opacity: 1 }} 
+                exit={{ opacity: 0 }} 
+                onClick={() => setIsLedgerOpen(false)}
+                className="fixed inset-0 z-[10000] flex flex-col items-center justify-center max-sm:px-4 max-sm:pt-20 max-sm:pb-[110px] sm:p-4 bg-slate-900/40 backdrop-blur-sm"
               >
-                
-                <div className="p-6 sm:p-8 text-center bg-gradient-to-b from-slate-50 to-white border-b border-slate-100 relative shrink-0">
-                  <div className="absolute top-4 sm:top-6 right-4 sm:right-6 flex gap-2">
-                    {(role === 'admin' || role === 'head') && (
-                      <button onClick={() => setShowEmpPaymentForm(true)} className="h-8 w-8 bg-emerald-50 border border-emerald-100 rounded-full flex items-center justify-center text-emerald-600 hover:bg-emerald-100 shadow-sm transition-colors" title="Issue Payout">
-                        <Plus className="h-4 w-4" />
-                      </button>
-                    )}
-                    <button onClick={() => setIsLedgerOpen(false)} className="h-8 w-8 bg-white border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm transition-colors"><X className="h-4 w-4" /></button>
+                <motion.div 
+                  initial={{ opacity: 0, y: 40, scale: 0.95 }} 
+                  animate={{ opacity: 1, y: 0, scale: 1 }} 
+                  exit={{ opacity: 0, y: 40, scale: 0.95 }} 
+                  onClick={(e) => e.stopPropagation()}
+                  className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-2xl max-h-full sm:max-h-[85svh] flex flex-col overflow-hidden border border-slate-100"
+                >
+                  
+                  <div className="p-6 sm:p-8 text-center bg-gradient-to-b from-slate-50 to-white border-b border-slate-100 relative shrink-0">
+                    <div className="absolute top-4 sm:top-6 right-4 sm:right-6 flex gap-2">
+                      {(role === 'admin' || role === 'head') && (
+                        <button onClick={() => setShowEmpPaymentForm(true)} className="h-8 w-8 bg-emerald-50 border border-emerald-100 rounded-full flex items-center justify-center text-emerald-600 hover:bg-emerald-100 shadow-sm transition-colors" title="Issue Payout">
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      )}
+                      <button onClick={() => setIsLedgerOpen(false)} className="h-8 w-8 bg-white border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm transition-colors"><X className="h-4 w-4" /></button>
+                    </div>
+
+                    <div className="h-14 w-14 sm:h-16 sm:w-16 mx-auto bg-white rounded-full flex items-center justify-center mb-3 sm:mb-4 border border-slate-200 shadow-sm overflow-hidden text-lg sm:text-xl font-bold text-slate-400">
+                      {ledgerEmployee.profile_image_url ? <img src={ledgerEmployee.profile_image_url} className="h-full w-full object-cover"/> : (ledgerEmployee.name ? ledgerEmployee.name.charAt(0) : 'U')}
+                    </div>
+                    <h3 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">{ledgerEmployee.name}'s Ledger</h3>
+                    <p className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">Payment Ledger</p>
                   </div>
 
-                  <div className="h-14 w-14 sm:h-16 sm:w-16 mx-auto bg-white rounded-full flex items-center justify-center mb-3 sm:mb-4 border border-slate-200 shadow-sm overflow-hidden text-lg sm:text-xl font-bold text-slate-400">
-                    {ledgerEmployee.profile_image_url ? <img src={ledgerEmployee.profile_image_url} className="h-full w-full object-cover"/> : (ledgerEmployee.name ? ledgerEmployee.name.charAt(0) : 'U')}
-                  </div>
-                  <h3 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">{ledgerEmployee.name}'s Ledger</h3>
-                  <p className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">Payment Ledger</p>
-                </div>
+                  <div className="flex-1 overflow-y-auto overscroll-contain p-5 sm:p-8 space-y-6 sm:space-y-8 bg-white max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none] max-sm:[scrollbar-width:none]">
+                    {(() => {
+                      const { totalAllocated, totalPaid, balanceDue, payments } = getFinancials(ledgerEmployee.id);
+                      
+                      const assignedProjectIds = projectAllocations
+                        .filter(a => a.employee_id === ledgerEmployee.id)
+                        .map(a => a.project_id);
+                      const assignedProjects = projects.filter(p => assignedProjectIds.includes(p.id) && (p.company_id === ledgerEmployee.company_id || role === 'admin'));
 
-                <div className="flex-1 overflow-y-auto overscroll-contain p-5 sm:p-8 space-y-6 sm:space-y-8 bg-white max-sm:[&::-webkit-scrollbar]:hidden max-sm:[-ms-overflow-style:none] max-sm:[scrollbar-width:none]">
-                  {(() => {
-                    const { totalAllocated, totalPaid, balanceDue, payments } = getFinancials(ledgerEmployee.id);
-                    
-                    const assignedProjectIds = projectAllocations
-                      .filter(a => a.employee_id === ledgerEmployee.id)
-                      .map(a => a.project_id);
-                    const assignedProjects = projects.filter(p => assignedProjectIds.includes(p.id) && (p.company_id === ledgerEmployee.company_id || role === 'admin'));
-
-                    return (
-                      <>
-                        {(role === 'admin' || role === 'head') && showEmpPaymentForm && (
-                           <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-4 sm:p-6 mb-6">
-                              <h4 className="text-[10px] sm:text-[11px] font-bold text-emerald-800 uppercase tracking-widest mb-3 sm:mb-4">Record New Transaction</h4>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-5">
-                                 <div className="flex flex-col justify-start">
-                                    <label className="text-[9px] sm:text-[10px] font-bold text-emerald-600 uppercase block mb-1">Amount (₹) *</label>
-                                    <input type="number" value={empPaymentForm.amount} onChange={e=>setEmpPaymentForm({...empPaymentForm, amount: e.target.value})} className="w-full h-10 sm:h-11 border border-emerald-200 rounded-xl px-3 outline-none focus:border-emerald-500 font-black text-emerald-700 bg-white" />
-                                    
-                                    <AnimatePresence>
-                                        {empPaymentForm.project_id && (
-                                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-                                                {(() => {
-                                                    const due = getProjectDue(ledgerEmployee.id, empPaymentForm.project_id);
-                                                    const entered = parseFloat(empPaymentForm.amount.toString()) || 0;
-                                                    const remaining = due - entered;
-                                                    
-                                                    if (remaining > 0) return <p className="text-[10px] font-bold mt-1.5 flex items-center gap-1 text-amber-600"><AlertCircle className="h-3 w-3" /> Remaining Due: ₹{remaining.toLocaleString()}</p>;
-                                                    if (remaining === 0) return <p className="text-[10px] font-bold mt-1.5 flex items-center gap-1 text-emerald-600"><CheckCircle2 className="h-3 w-3" /> Fully Settled</p>;
-                                                    return <p className="text-[10px] font-bold mt-1.5 flex items-center gap-1 text-indigo-600"><CheckCircle2 className="h-3 w-3" /> Due: ₹0 | Bonus: ₹{Math.abs(remaining).toLocaleString()}</p>;
-                                                })()}
-                                            </motion.div>
-                                        )}
-                                    </AnimatePresence>
-                                 </div>
-                                 
-                                 <div>
-                                    <label className="text-[9px] sm:text-[10px] font-bold text-emerald-600 uppercase block mb-1">Date</label>
-                                    <input type="date" value={empPaymentForm.payment_date} onChange={e=>setEmpPaymentForm({...empPaymentForm, payment_date: e.target.value})} className="w-full h-10 sm:h-11 border border-emerald-200 rounded-xl px-3 outline-none focus:border-emerald-500 font-medium text-[12px] sm:text-sm bg-white" />
-                                 </div>
-                                 
-                                 <div>
-                                    <label className="text-[9px] sm:text-[10px] font-bold text-emerald-600 uppercase block mb-1">Type</label>
-                                    <select value={empPaymentForm.payment_type} onChange={e=>setEmpPaymentForm({...empPaymentForm, payment_type: e.target.value})} className="w-full h-10 sm:h-11 border border-emerald-200 rounded-xl px-3 outline-none focus:border-emerald-500 font-bold text-[12px] sm:text-sm bg-white cursor-pointer">
-                                        <option>Advance</option>
-                                        <option>Installment</option>
-                                        <option>Final Payout</option>
-                                        <option>Incentive / Bonus</option>
-                                        <option>General Reimbursement</option>
-                                    </select>
-                                 </div>
-                                 
-                                 <div>
-                                    <label className="text-[9px] sm:text-[10px] font-bold text-emerald-600 uppercase block mb-1 truncate">Link Project (Assigned Only)</label>
-                                    <select 
-                                        value={empPaymentForm.project_id} 
-                                        onChange={e => {
-                                            const pid = e.target.value;
-                                            let newAmount = empPaymentForm.amount;
-                                            if (pid) {
-                                                const due = getProjectDue(ledgerEmployee.id, pid);
-                                                if (due > 0) newAmount = due.toString();
-                                            }
-                                            setEmpPaymentForm({...empPaymentForm, project_id: pid, amount: newAmount});
-                                        }} 
-                                        className="w-full h-10 sm:h-11 border border-emerald-200 rounded-xl px-3 outline-none focus:border-emerald-500 font-medium text-[12px] sm:text-sm bg-white cursor-pointer"
-                                    >
-                                        <option value="">-- General Payment --</option>
-                                        {assignedProjects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
-                                    </select>
-                                 </div>
-                                 
-                                 <div className="sm:col-span-2 mt-1">
-                                    <label className="text-[9px] sm:text-[10px] font-bold text-emerald-600 uppercase block mb-1">Notes / Ref (Optional)</label>
-                                    <input type="text" placeholder="Bank ref, details..." value={empPaymentForm.notes} onChange={e=>setEmpPaymentForm({...empPaymentForm, notes: e.target.value})} className="w-full h-10 sm:h-11 border border-emerald-200 rounded-xl px-3 outline-none focus:border-emerald-500 font-medium text-[12px] sm:text-sm bg-white" />
-                                 </div>
-                              </div>
-                              <div className="flex justify-end gap-2 mt-2">
-                                 <button onClick={() => setShowEmpPaymentForm(false)} className="h-10 px-4 sm:px-5 text-[11px] sm:text-xs font-bold text-slate-500 hover:bg-white rounded-xl border border-slate-200 transition-colors flex-1 sm:flex-none">Cancel</button>
-                                 <button onClick={handleRecordEmployeePayment} disabled={isSavingLedger} className="h-10 px-4 sm:px-8 text-[11px] sm:text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-emerald-600 hover:shadow-lg hover:-translate-y-0.5 rounded-xl shadow-md transition-all flex-1 sm:flex-none flex items-center justify-center">
-                                   {isSavingLedger ? <><Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> Processing...</> : 'Record Payment'}
-                                 </button>
-                              </div>
-                           </div>
-                        )}
-
-                        <div className="grid grid-cols-3 gap-2 sm:gap-4">
-                           <div className="bg-slate-50 rounded-xl sm:rounded-2xl p-3 sm:p-5 text-center border border-slate-100">
-                              <p className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1 sm:mb-1.5">Total Earned</p>
-                              <p className="text-[13px] sm:text-xl font-black text-slate-800">₹{totalAllocated.toLocaleString()}</p>
-                           </div>
-                           <div className="bg-emerald-50 rounded-xl sm:rounded-2xl p-3 sm:p-5 text-center border border-emerald-100">
-                              <p className="text-[8px] sm:text-[9px] font-bold text-emerald-600 uppercase tracking-widest mb-1 sm:mb-1.5">Total Paid</p>
-                              <p className="text-[13px] sm:text-xl font-black text-emerald-700">₹{totalPaid.toLocaleString()}</p>
-                           </div>
-                           <div className={`rounded-xl sm:rounded-2xl p-3 sm:p-5 text-center border ${balanceDue > 0 ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-100'}`}>
-                              <p className={`text-[8px] sm:text-[9px] font-bold uppercase tracking-widest mb-1 sm:mb-1.5 ${balanceDue > 0 ? 'text-amber-600' : 'text-slate-400'}`}>Balance Due</p>
-                              <p className={`text-[13px] sm:text-xl font-black ${balanceDue > 0 ? 'text-amber-600' : 'text-slate-400'}`}>₹{balanceDue.toLocaleString()}</p>
-                           </div>
-                        </div>
-
-                        <div>
-                          <h4 className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 sm:mb-4 border-b border-slate-100 pb-2">Recent Transactions</h4>
-                          <div className="space-y-2 sm:space-y-3">
-                             {payments.length === 0 ? <p className="text-[12px] sm:text-sm italic text-slate-400 text-center py-4">No payments recorded yet.</p> : 
-                              payments.sort((a,b) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime()).map(p => (
-                                <div key={p.id} className="flex justify-between items-center bg-slate-50 p-3 sm:p-4 rounded-xl border border-slate-100 group">
-                                   <div className="flex items-center gap-2 sm:gap-3 min-w-0 pr-2">
-                                      <div className="h-6 w-6 sm:h-8 sm:w-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0"><CheckCircle2 className="h-3 w-3 sm:h-4 sm:w-4" /></div>
-                                      <div className="min-w-0">
-                                        <p className="text-[12px] sm:text-[13px] font-bold text-slate-900 truncate">{p.project_id ? projects.find(proj => proj.id === p.project_id)?.name : 'General / Misc Payment'}</p>
-                                        <p className="text-[8px] sm:text-[10px] text-slate-500 uppercase tracking-widest mt-0.5 truncate">{p.payment_date ? new Date(p.payment_date).toLocaleDateString() : 'N/A'} • {p.payment_type} {p.notes && `• Ref: ${p.notes}`}</p>
-                                      </div>
+                      return (
+                        <>
+                          {(role === 'admin' || role === 'head') && showEmpPaymentForm && (
+                             <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-4 sm:p-6 mb-6">
+                                <h4 className="text-[10px] sm:text-[11px] font-bold text-emerald-800 uppercase tracking-widest mb-3 sm:mb-4">Record New Transaction</h4>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-5">
+                                   <div className="flex flex-col justify-start">
+                                      <label className="text-[9px] sm:text-[10px] font-bold text-emerald-600 uppercase block mb-1">Amount (₹) *</label>
+                                      <input type="number" value={empPaymentForm.amount} onChange={e=>setEmpPaymentForm({...empPaymentForm, amount: e.target.value})} className="w-full h-10 sm:h-11 border border-emerald-200 rounded-xl px-3 outline-none focus:border-emerald-500 font-black text-emerald-700 bg-white" />
+                                      
+                                      <AnimatePresence>
+                                          {empPaymentForm.project_id && (
+                                              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                                                  {(() => {
+                                                      const due = getProjectDue(ledgerEmployee.id, empPaymentForm.project_id);
+                                                      const entered = parseFloat(empPaymentForm.amount.toString()) || 0;
+                                                      const remaining = due - entered;
+                                                      
+                                                      if (remaining > 0) return <p className="text-[10px] font-bold mt-1.5 flex items-center gap-1 text-amber-600"><AlertCircle className="h-3 w-3" /> Remaining Due: ₹{remaining.toLocaleString()}</p>;
+                                                      if (remaining === 0) return <p className="text-[10px] font-bold mt-1.5 flex items-center gap-1 text-emerald-600"><CheckCircle2 className="h-3 w-3" /> Fully Settled</p>;
+                                                      return <p className="text-[10px] font-bold mt-1.5 flex items-center gap-1 text-indigo-600"><CheckCircle2 className="h-3 w-3" /> Due: ₹0 | Bonus: ₹{Math.abs(remaining).toLocaleString()}</p>;
+                                                  })()}
+                                              </motion.div>
+                                          )}
+                                      </AnimatePresence>
                                    </div>
-                                   <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                                      <p className="text-[13px] sm:text-[15px] font-black text-emerald-600">+ ₹{parseFloat(p.amount || 0).toLocaleString()}</p>
-                                      {(role === 'admin' || role === 'head') && (
-                                         <button onClick={() => handleDeletePaymentRecord(p.id)} className="sm:opacity-0 group-hover:opacity-100 transition-opacity text-rose-400 hover:text-rose-600 bg-rose-50 p-1.5 rounded-lg" title="Delete Payment">
-                                            <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                         </button>
-                                      )}
+                                   
+                                   <div>
+                                      <label className="text-[9px] sm:text-[10px] font-bold text-emerald-600 uppercase block mb-1">Date</label>
+                                      <input type="date" value={empPaymentForm.payment_date} onChange={e=>setEmpPaymentForm({...empPaymentForm, payment_date: e.target.value})} className="w-full h-10 sm:h-11 border border-emerald-200 rounded-xl px-3 outline-none focus:border-emerald-500 font-medium text-[12px] sm:text-sm bg-white" />
+                                   </div>
+                                   
+                                   <div>
+                                      <label className="text-[9px] sm:text-[10px] font-bold text-emerald-600 uppercase block mb-1">Type</label>
+                                      <select value={empPaymentForm.payment_type} onChange={e=>setEmpPaymentForm({...empPaymentForm, payment_type: e.target.value})} className="w-full h-10 sm:h-11 border border-emerald-200 rounded-xl px-3 outline-none focus:border-emerald-500 font-bold text-[12px] sm:text-sm bg-white cursor-pointer">
+                                          <option>Advance</option>
+                                          <option>Installment</option>
+                                          <option>Final Payout</option>
+                                          <option>Incentive / Bonus</option>
+                                          <option>General Reimbursement</option>
+                                      </select>
+                                   </div>
+                                   
+                                   <div>
+                                      <label className="text-[9px] sm:text-[10px] font-bold text-emerald-600 uppercase block mb-1 truncate">Link Project (Assigned Only)</label>
+                                      <select 
+                                          value={empPaymentForm.project_id} 
+                                          onChange={e => {
+                                              const pid = e.target.value;
+                                              let newAmount = empPaymentForm.amount;
+                                              if (pid) {
+                                                  const due = getProjectDue(ledgerEmployee.id, pid);
+                                                  if (due > 0) newAmount = due.toString();
+                                              }
+                                              setEmpPaymentForm({...empPaymentForm, project_id: pid, amount: newAmount});
+                                          }} 
+                                          className="w-full h-10 sm:h-11 border border-emerald-200 rounded-xl px-3 outline-none focus:border-emerald-500 font-medium text-[12px] sm:text-sm bg-white cursor-pointer"
+                                      >
+                                          <option value="">-- General Payment --</option>
+                                          {assignedProjects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+                                      </select>
+                                   </div>
+                                   
+                                   <div className="sm:col-span-2 mt-1">
+                                      <label className="text-[9px] sm:text-[10px] font-bold text-emerald-600 uppercase block mb-1">Notes / Ref (Optional)</label>
+                                      <input type="text" placeholder="Bank ref, details..." value={empPaymentForm.notes} onChange={e=>setEmpPaymentForm({...empPaymentForm, notes: e.target.value})} className="w-full h-10 sm:h-11 border border-emerald-200 rounded-xl px-3 outline-none focus:border-emerald-500 font-medium text-[12px] sm:text-sm bg-white" />
                                    </div>
                                 </div>
-                              ))}
+                                <div className="flex justify-end gap-2 mt-2">
+                                   <button onClick={() => setShowEmpPaymentForm(false)} className="h-10 px-4 sm:px-5 text-[11px] sm:text-xs font-bold text-slate-500 hover:bg-white rounded-xl border border-slate-200 transition-colors flex-1 sm:flex-none">Cancel</button>
+                                   <button onClick={handleRecordEmployeePayment} disabled={isSavingLedger} className="h-10 px-4 sm:px-8 text-[11px] sm:text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-emerald-600 hover:shadow-lg hover:-translate-y-0.5 rounded-xl shadow-md transition-all flex-1 sm:flex-none flex items-center justify-center">
+                                     {isSavingLedger ? <><Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> Processing...</> : 'Record Payment'}
+                                   </button>
+                                </div>
+                             </div>
+                          )}
+
+                          <div className="grid grid-cols-3 gap-2 sm:gap-4">
+                             <div className="bg-slate-50 rounded-xl sm:rounded-2xl p-3 sm:p-5 text-center border border-slate-100">
+                                <p className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1 sm:mb-1.5">Total Earned</p>
+                                <p className="text-[13px] sm:text-xl font-black text-slate-800">₹{totalAllocated.toLocaleString()}</p>
+                             </div>
+                             <div className="bg-emerald-50 rounded-xl sm:rounded-2xl p-3 sm:p-5 text-center border border-emerald-100">
+                                <p className="text-[8px] sm:text-[9px] font-bold text-emerald-600 uppercase tracking-widest mb-1 sm:mb-1.5">Total Paid</p>
+                                <p className="text-[13px] sm:text-xl font-black text-emerald-700">₹{totalPaid.toLocaleString()}</p>
+                             </div>
+                             <div className={`rounded-xl sm:rounded-2xl p-3 sm:p-5 text-center border ${balanceDue > 0 ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-100'}`}>
+                                <p className={`text-[8px] sm:text-[9px] font-bold uppercase tracking-widest mb-1 sm:mb-1.5 ${balanceDue > 0 ? 'text-amber-600' : 'text-slate-400'}`}>Balance Due</p>
+                                <p className={`text-[13px] sm:text-xl font-black ${balanceDue > 0 ? 'text-amber-600' : 'text-slate-400'}`}>₹{balanceDue.toLocaleString()}</p>
+                             </div>
                           </div>
-                        </div>
-                      </>
-                    )
-                  })()}
-                </div>
+
+                          <div>
+                            <h4 className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 sm:mb-4 border-b border-slate-100 pb-2">Recent Transactions</h4>
+                            <div className="space-y-2 sm:space-y-3">
+                               {payments.length === 0 ? <p className="text-[12px] sm:text-sm italic text-slate-400 text-center py-4">No payments recorded yet.</p> : 
+                                payments.sort((a,b) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime()).map(p => (
+                                  <div key={p.id} className="flex justify-between items-center bg-slate-50 p-3 sm:p-4 rounded-xl border border-slate-100 group">
+                                     <div className="flex items-center gap-2 sm:gap-3 min-w-0 pr-2">
+                                        <div className="h-6 w-6 sm:h-8 sm:w-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0"><CheckCircle2 className="h-3 w-3 sm:h-4 sm:w-4" /></div>
+                                        <div className="min-w-0">
+                                          <p className="text-[12px] sm:text-[13px] font-bold text-slate-900 truncate">{p.project_id ? projects.find(proj => proj.id === p.project_id)?.name : 'General / Misc Payment'}</p>
+                                          <p className="text-[8px] sm:text-[10px] text-slate-500 uppercase tracking-widest mt-0.5 truncate">{p.payment_date ? new Date(p.payment_date).toLocaleDateString() : 'N/A'} {p.payment_type} {p.notes && `• Ref: ${p.notes}`}</p>
+                                        </div>
+                                     </div>
+                                     <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                                        <p className="text-[13px] sm:text-[15px] font-black text-emerald-600">+ ₹{parseFloat(p.amount || 0).toLocaleString()}</p>
+                                        {(role === 'admin' || role === 'head') && (
+                                           <button onClick={() => handleDeletePaymentRecord(p.id)} className="sm:opacity-0 group-hover:opacity-100 transition-opacity text-rose-400 hover:text-rose-600 bg-rose-50 p-1.5 rounded-lg" title="Delete Payment">
+                                              <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                           </button>
+                                        )}
+                                     </div>
+                                  </div>
+                                ))}
+                            </div>
+                          </div>
+                        </>
+                      )
+                    })()}
+                  </div>
+                </motion.div>
               </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
 
       </div>
     </>
