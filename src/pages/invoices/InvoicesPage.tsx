@@ -1,4 +1,4 @@
-import { useState, useLayoutEffect } from "react";
+import { useState, useLayoutEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Search, Download, Printer, X, CheckCircle2, Building2, UserSquare2, Trash2, Receipt, ArrowRight, AlertCircle, ExternalLink } from "lucide-react";
@@ -24,7 +24,6 @@ export default function InvoicesPage() {
   const currentCompanyId = isAdmin ? (activeWorkspace || "") : companyId;
   const currentCompany = companies.find((c: any) => c.id?.toString() === currentCompanyId?.toString());
   
-  // --- DYNAMIC FINANCE ACCESS CHECK ---
   const canViewFinance = isAdmin || (isHead && currentCompany?.allow_head_finance !== false);
 
   const [activeTab, setActiveTab] = useState<"active" | "completed">("active");
@@ -50,6 +49,10 @@ export default function InvoicesPage() {
   const [lineItems, setLineItems] = useState([{ description: "", quantity: 1, rate: 0 }]);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [newPayment, setNewPayment] = useState({ amount: 0, payment_date: today, payment_method: "Bank Transfer", reference_note: "" });
+
+  // --- NEW: Baseline states to track if changes occurred ---
+  const [initialFormData, setInitialFormData] = useState<any>(null);
+  const [initialLineItems, setInitialLineItems] = useState<any>(null);
 
   const availableCustomers = customers.filter(c => c.company_id === parseInt(formData.company_id));
   const availableProjects = projects.filter(p => {
@@ -145,7 +148,8 @@ export default function InvoicesPage() {
     return true;
   });
 
-  const showAdminPopup = canViewFinance && projectsNeedingInvoices.length > 0 && !dismissedPopup;
+  // --- FIX 1: Hide the popup when the modal is open to prevent position shift fighting ---
+  const showAdminPopup = canViewFinance && projectsNeedingInvoices.length > 0 && !dismissedPopup && !isModalOpen;
 
   const activeRecords: any[] = [];
   const completedRecords: any[] = [];
@@ -185,17 +189,23 @@ export default function InvoicesPage() {
   const linkedProject = projects.find(p => p.id === parseInt(formData.project_id || selectedInvoice?.project_id));
   const internalBilledCompany = linkedProject?.internal_company_id ? companies.find(c => c.id === linkedProject.internal_company_id) : null;
 
-  // --- NEW: Contextual Close Handler (The "Return Ticket") ---
+  // --- NEW: Calculate if changes exist for Dynamic Save Button ---
+  const hasChanges = useMemo(() => {
+    if (!initialFormData || !initialLineItems) return true;
+    const formChanged = JSON.stringify(formData) !== JSON.stringify(initialFormData);
+    const itemsChanged = JSON.stringify(lineItems) !== JSON.stringify(initialLineItems);
+    return formChanged || itemsChanged;
+  }, [formData, lineItems, initialFormData, initialLineItems]);
+
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setIsInstantOpen(false);
     
-    // Check if we came from another page with a return ticket
     if (location.state?.returnTo) {
       navigate(location.state.returnTo, {
         state: {
           openProject: location.state.keepOpen,
-          showLoadingMask: true // This ensures the transition back is also flawlessly smooth!
+          showLoadingMask: true 
         }
       });
     }
@@ -204,18 +214,24 @@ export default function InvoicesPage() {
   const openNewInvoice = () => {
     setSelectedInvoice(null);
     setIsInstantOpen(false);
-    setFormData({
+    
+    const newForm = {
       company_id: currentCompanyId?.toString() || "", customer_id: "", project_id: "",
       invoice_number: `INV-${Math.floor(10000 + Math.random() * 90000)}`,
       issue_date: today, due_date: "", tax_rate: 0, discount_amount: 0, amount_paid: 0, status: "Pending"
-    });
-    setLineItems([{ description: "", quantity: 1, rate: 0 }]);
+    };
+    const newItems = [{ description: "", quantity: 1, rate: 0 }];
+
+    setFormData(newForm);
+    setInitialFormData(newForm); // Capture initial state
+    setLineItems(newItems);
+    setInitialLineItems(newItems); // Capture initial state
+    
     setShowPaymentForm(false);
     setIsModalOpen(true);
   };
 
   const handleReviewPending = () => {
-    // Also trigger the mask when routing to projects
     navigate('/projects', { state: { view: 'pending_billing', showLoadingMask: true } });
   };
 
@@ -224,19 +240,26 @@ export default function InvoicesPage() {
     setIsInstantOpen(instant); 
     
     if (inv.isExpenseReport) {
-       setFormData({
+       const expenseForm = {
          company_id: inv.company_id.toString(), customer_id: "", project_id: inv.project_id.toString(),
          invoice_number: inv.invoice_number, issue_date: inv.issue_date, due_date: inv.due_date,
          tax_rate: 0, discount_amount: 0, status: inv.status, amount_paid: inv.amount_paid
-       });
+       };
+       setFormData(expenseForm);
+       setInitialFormData(expenseForm);
     } else {
-       setFormData({
+       const standardForm = {
          company_id: inv.company_id.toString(), customer_id: inv.customer_id?.toString() || "", project_id: inv.project_id?.toString() || "",
          invoice_number: inv.invoice_number, issue_date: inv.issue_date, due_date: inv.due_date,
          tax_rate: inv.tax_rate, discount_amount: inv.discount_amount, status: inv.status, amount_paid: inv.amount_paid
-       });
-       const items = invoiceItems.filter(item => item.invoice_id === inv.id);
-       setLineItems(items.length > 0 ? items : [{ description: "", quantity: 1, rate: 0 }]);
+       };
+       const items = invoiceItems.filter((item: any) => item.invoice_id === inv.id);
+       const loadedItems = items.length > 0 ? items : [{ description: "", quantity: 1, rate: 0 }];
+       
+       setFormData(standardForm);
+       setInitialFormData(standardForm); // Capture initial state
+       setLineItems(loadedItems);
+       setInitialLineItems(loadedItems); // Capture initial state
     }
     
     setShowPaymentForm(false);
@@ -298,7 +321,7 @@ export default function InvoicesPage() {
       await supabase.from('invoice_items').insert(itemsToInsert);
 
       await fetchAllData();
-      handleCloseModal(); // Return ticket triggered on save
+      handleCloseModal(); 
     } catch (error: any) { alert(`Error saving invoice: ${error.message}`); } finally { setIsSaving(false); }
   };
 
@@ -324,7 +347,10 @@ export default function InvoicesPage() {
       await fetchAllData();
       setShowPaymentForm(false);
       setNewPayment({ amount: 0, payment_date: today, payment_method: "Bank Transfer", reference_note: "" });
+      
+      // Update baseline so Save Changes doesn't falsely enable
       setFormData(prev => ({...prev, status: newStatus})); 
+      setInitialFormData((prev: any) => ({...prev, status: newStatus}));
     } catch (error: any) { alert(`Error recording payment: ${error.message}`); } finally { setIsSaving(false); }
   };
 
@@ -341,7 +367,10 @@ export default function InvoicesPage() {
       
       await supabase.from('invoices').update({ amount_paid: newTotalPaid, status: newStatus }).eq('id', selectedInvoice.id);
       await fetchAllData();
+
+      // Update baseline so Save Changes doesn't falsely enable
       setFormData(prev => ({...prev, status: newStatus}));
+      setInitialFormData((prev: any) => ({...prev, status: newStatus}));
     } catch (error: any) { alert(error.message); } finally { setIsSaving(false); }
   };
 
@@ -350,7 +379,7 @@ export default function InvoicesPage() {
     if (!window.confirm(`Delete invoice ${selectedInvoice.invoice_number}?`)) return;
     await supabase.from('invoices').delete().eq('id', selectedInvoice.id);
     await fetchAllData(); 
-    handleCloseModal(); // Return ticket triggered on delete
+    handleCloseModal(); 
   };
 
   const handlePrint = () => window.print();
@@ -548,7 +577,6 @@ export default function InvoicesPage() {
           </div>
         )}
 
-        {/* --- FIXED: FLOATING ADMIN POP-UP NOW WAITS FOR LAYOUT TO SETTLE --- */}
         <AnimatePresence>
           {showAdminPopup && (
             <motion.div
@@ -605,7 +633,6 @@ export default function InvoicesPage() {
                     <div className="flex gap-2 sm:gap-3">
                       {selectedInvoice && <button onClick={handlePrint} className="h-8 w-8 sm:h-10 sm:w-10 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-500 hover:text-blue-600 shadow-sm transition-colors"><Printer className="h-3.5 w-3.5 sm:h-4 sm:w-4" /></button>}
                       
-                      {/* --- UPDATED: Contextual Close Button (X) --- */}
                       <button onClick={handleCloseModal} className="h-8 w-8 sm:h-10 sm:w-10 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-rose-600 shadow-sm transition-colors"><X className="h-4 w-4 sm:h-5 sm:w-5" /></button>
                     </div>
                   </div>
@@ -738,7 +765,6 @@ export default function InvoicesPage() {
                                   <p className="text-xs text-slate-400 italic px-2 py-4">No allocations or expenses logged for this project.</p>
                                )}
 
-                               {/* Labor / Allocations */}
                                {selectedInvoice.allocations.map((a: any, i: number) => {
                                  const emp = employees.find(e => e.id === a.employee_id);
                                  const baseAlloc = parseFloat(a.allocated_amount || 0);
@@ -757,7 +783,6 @@ export default function InvoicesPage() {
                                  );
                                })}
 
-                               {/* Additional Project Expenses */}
                                {selectedInvoice.project_expenses.map((e: any, i: number) => (
                                  <div key={`exp-${i}`} className="grid grid-cols-12 gap-2 sm:gap-4 items-center print:break-inside-avoid py-1.5 px-2 border-b border-slate-50 last:border-0">
                                     <div className="col-span-6 text-[12px] sm:text-sm font-bold text-slate-700 truncate pr-2">
@@ -910,10 +935,19 @@ export default function InvoicesPage() {
                   ) : <div></div>}
                   
                   <div className="flex gap-2 sm:gap-3">
-                    {/* --- UPDATED: Contextual Close Button --- */}
                     <button onClick={handleCloseModal} className="rounded-xl border border-slate-200 bg-white h-10 sm:h-12 px-4 sm:px-8 font-bold text-[12px] sm:text-sm text-slate-600 hover:bg-slate-50 shadow-sm transition-colors">Close</button>
+                    
+                    {/* --- FIX 2: Dynamic Save Changes Button applying opacity based on hasChanges --- */}
                     {!selectedInvoice?.isExpenseReport && (
-                      <button onClick={handleSaveInvoice} disabled={isSaving} className="bg-gradient-to-r from-blue-900 to-indigo-800 text-white rounded-xl h-10 sm:h-12 px-6 sm:px-10 font-bold text-[12px] sm:text-sm shadow-md shadow-blue-900/20 hover:shadow-lg hover:-translate-y-0.5 transition-all">
+                      <button 
+                        onClick={handleSaveInvoice} 
+                        disabled={isSaving || !hasChanges} 
+                        className={`text-white rounded-xl h-10 sm:h-12 px-6 sm:px-10 font-bold text-[12px] sm:text-sm transition-all ${
+                          isSaving || !hasChanges 
+                            ? "bg-slate-300 opacity-50 cursor-not-allowed shadow-none" 
+                            : "bg-gradient-to-r from-blue-900 to-indigo-800 shadow-md shadow-blue-900/20 hover:shadow-lg hover:-translate-y-0.5"
+                        }`}
+                      >
                         {isSaving ? "Saving..." : "Save Invoice"}
                       </button>
                     )}
