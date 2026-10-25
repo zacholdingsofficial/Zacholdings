@@ -1,5 +1,5 @@
 import { useState, useLayoutEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Search, Download, Printer, X, CheckCircle2, Building2, UserSquare2, Trash2, Receipt, ArrowRight, AlertCircle, ExternalLink } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
@@ -10,12 +10,13 @@ const STATUS_OPTIONS = ['Pending', 'Partially Paid', 'Paid', 'Overdue', 'Cancell
 
 export default function InvoicesPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { role, activeWorkspace, companyId } = useAuthStore();
   
   const { 
     invoices, invoiceItems, invoicePayments, projects, 
     customers, companies, employees, projectAllocations, salaryPayments, expenses = [], 
-    targetInvoiceId, setTargetInvoiceId, setTargetProjectId, fetchAllData 
+    targetInvoiceId, setTargetInvoiceId, fetchAllData 
   } = useDataStore();
 
   const isAdmin = role === 'admin';
@@ -32,7 +33,7 @@ export default function InvoicesPage() {
   const [filterStatus, setFilterStatus] = useState<string>("All");
   
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isInstantOpen, setIsInstantOpen] = useState(false); // NEW: Controls transition speed
+  const [isInstantOpen, setIsInstantOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
   
@@ -64,7 +65,6 @@ export default function InvoicesPage() {
     return inv.status;
   };
 
-  // --- FULL ACCESS: Standard Client Invoices (Income) ---
   const visibleInvoices = invoices.filter(inv => {
     const proj = projects.find(p => p.id === inv.project_id);
     const customer = customers.find(c => c.id === inv.customer_id);
@@ -91,7 +91,6 @@ export default function InvoicesPage() {
     return matchesSearch && matchesStatus && inv.company_id === currentCompanyId;
   }).sort((a, b) => new Date(b.issue_date).getTime() - new Date(a.issue_date).getTime());
 
-  // --- RESTRICTED ACCESS: Dynamic Project Expense Reports (Costs + Labor) ---
   const headProjectExpenses = projects.filter(p => {
     const searchStr = searchQuery.trim().toLowerCase();
     const costId = `COST-${p.id.toString().padStart(4, '0')}`.toLowerCase();
@@ -124,18 +123,16 @@ export default function InvoicesPage() {
 
   const displayList = !canViewFinance ? headProjectExpenses : visibleInvoices;
 
-  // --- TAB INTERCONNECTIVITY EFFECT ---
   useLayoutEffect(() => {
     if (targetInvoiceId && displayList.length > 0) {
       const invToOpen = displayList.find(inv => inv.id === targetInvoiceId);
       if (invToOpen) {
-        openViewInvoice(invToOpen, true); // NEW: Pass true to skip the fade animation
+        openViewInvoice(invToOpen, true);
       }
       setTargetInvoiceId(null);
     }
   }, [targetInvoiceId, displayList, setTargetInvoiceId]);
 
-  // --- ADMIN: PROJECTS AWAITING INVOICE ---
   const projectsNeedingInvoices = projects.filter(p => {
     if ((p.expected_amount || 0) <= 0) return false;
     if (invoices.some(inv => inv.project_id === p.id)) return false;
@@ -150,7 +147,6 @@ export default function InvoicesPage() {
 
   const showAdminPopup = canViewFinance && projectsNeedingInvoices.length > 0 && !dismissedPopup;
 
-  // --- SPLIT ACTIVE & COMPLETED LISTS ---
   const activeRecords: any[] = [];
   const completedRecords: any[] = [];
 
@@ -189,9 +185,25 @@ export default function InvoicesPage() {
   const linkedProject = projects.find(p => p.id === parseInt(formData.project_id || selectedInvoice?.project_id));
   const internalBilledCompany = linkedProject?.internal_company_id ? companies.find(c => c.id === linkedProject.internal_company_id) : null;
 
+  // --- NEW: Contextual Close Handler (The "Return Ticket") ---
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setIsInstantOpen(false);
+    
+    // Check if we came from another page with a return ticket
+    if (location.state?.returnTo) {
+      navigate(location.state.returnTo, {
+        state: {
+          openProject: location.state.keepOpen,
+          showLoadingMask: true // This ensures the transition back is also flawlessly smooth!
+        }
+      });
+    }
+  };
+
   const openNewInvoice = () => {
     setSelectedInvoice(null);
-    setIsInstantOpen(false); // Reset to standard animation
+    setIsInstantOpen(false);
     setFormData({
       company_id: currentCompanyId?.toString() || "", customer_id: "", project_id: "",
       invoice_number: `INV-${Math.floor(10000 + Math.random() * 90000)}`,
@@ -203,12 +215,13 @@ export default function InvoicesPage() {
   };
 
   const handleReviewPending = () => {
-    navigate('/projects', { state: { view: 'pending_billing' } });
+    // Also trigger the mask when routing to projects
+    navigate('/projects', { state: { view: 'pending_billing', showLoadingMask: true } });
   };
 
   const openViewInvoice = (inv: any, instant = false) => {
     setSelectedInvoice(inv);
-    setIsInstantOpen(instant); // Tells Framer Motion to skip the initial zero opacity state
+    setIsInstantOpen(instant); 
     
     if (inv.isExpenseReport) {
        setFormData({
@@ -285,7 +298,7 @@ export default function InvoicesPage() {
       await supabase.from('invoice_items').insert(itemsToInsert);
 
       await fetchAllData();
-      setIsModalOpen(false);
+      handleCloseModal(); // Return ticket triggered on save
     } catch (error: any) { alert(`Error saving invoice: ${error.message}`); } finally { setIsSaving(false); }
   };
 
@@ -336,7 +349,8 @@ export default function InvoicesPage() {
     if (!selectedInvoice || selectedInvoice.isExpenseReport) return;
     if (!window.confirm(`Delete invoice ${selectedInvoice.invoice_number}?`)) return;
     await supabase.from('invoices').delete().eq('id', selectedInvoice.id);
-    await fetchAllData(); setIsModalOpen(false);
+    await fetchAllData(); 
+    handleCloseModal(); // Return ticket triggered on delete
   };
 
   const handlePrint = () => window.print();
@@ -534,12 +548,14 @@ export default function InvoicesPage() {
           </div>
         )}
 
+        {/* --- FIXED: FLOATING ADMIN POP-UP NOW WAITS FOR LAYOUT TO SETTLE --- */}
         <AnimatePresence>
           {showAdminPopup && (
             <motion.div
               initial={{ opacity: 0, y: 50, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 50, scale: 0.95 }}
+              transition={{ delay: 0.4, type: "spring", damping: 20, stiffness: 200 }} 
               className="fixed bottom-6 right-6 z-[90] bg-white border border-amber-200 shadow-2xl shadow-amber-900/10 rounded-2xl p-5 w-[340px] max-w-[calc(100vw-3rem)] print:hidden"
             >
               <button onClick={() => setDismissedPopup(true)} className="absolute top-3 right-3 text-slate-400 hover:text-slate-700"><X className="h-4 w-4" /></button>
@@ -566,7 +582,6 @@ export default function InvoicesPage() {
         <AnimatePresence>
           {isModalOpen && (
             <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center max-sm:px-4 max-sm:pt-20 max-sm:pb-[110px] sm:p-4 bg-slate-900/40 backdrop-blur-sm print:relative print:inset-auto print:p-0 print:bg-transparent">
-              {/* NEW: Conditional initial and transition properties for instant open */}
               <motion.div 
                 initial={isInstantOpen ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 40, scale: 0.95 }} 
                 animate={{ opacity: 1, y: 0, scale: 1 }} 
@@ -589,7 +604,9 @@ export default function InvoicesPage() {
                     </div>
                     <div className="flex gap-2 sm:gap-3">
                       {selectedInvoice && <button onClick={handlePrint} className="h-8 w-8 sm:h-10 sm:w-10 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-500 hover:text-blue-600 shadow-sm transition-colors"><Printer className="h-3.5 w-3.5 sm:h-4 sm:w-4" /></button>}
-                      <button onClick={() => setIsModalOpen(false)} className="h-8 w-8 sm:h-10 sm:w-10 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-rose-600 shadow-sm transition-colors"><X className="h-4 w-4 sm:h-5 sm:w-5" /></button>
+                      
+                      {/* --- UPDATED: Contextual Close Button (X) --- */}
+                      <button onClick={handleCloseModal} className="h-8 w-8 sm:h-10 sm:w-10 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-rose-600 shadow-sm transition-colors"><X className="h-4 w-4 sm:h-5 sm:w-5" /></button>
                     </div>
                   </div>
                 </div>
@@ -893,7 +910,8 @@ export default function InvoicesPage() {
                   ) : <div></div>}
                   
                   <div className="flex gap-2 sm:gap-3">
-                    <button onClick={() => setIsModalOpen(false)} className="rounded-xl border border-slate-200 bg-white h-10 sm:h-12 px-4 sm:px-8 font-bold text-[12px] sm:text-sm text-slate-600 hover:bg-slate-50 shadow-sm transition-colors">Close</button>
+                    {/* --- UPDATED: Contextual Close Button --- */}
+                    <button onClick={handleCloseModal} className="rounded-xl border border-slate-200 bg-white h-10 sm:h-12 px-4 sm:px-8 font-bold text-[12px] sm:text-sm text-slate-600 hover:bg-slate-50 shadow-sm transition-colors">Close</button>
                     {!selectedInvoice?.isExpenseReport && (
                       <button onClick={handleSaveInvoice} disabled={isSaving} className="bg-gradient-to-r from-blue-900 to-indigo-800 text-white rounded-xl h-10 sm:h-12 px-6 sm:px-10 font-bold text-[12px] sm:text-sm shadow-md shadow-blue-900/20 hover:shadow-lg hover:-translate-y-0.5 transition-all">
                         {isSaving ? "Saving..." : "Save Invoice"}
