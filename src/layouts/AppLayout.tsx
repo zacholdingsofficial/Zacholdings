@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { createPortal } from "react-dom"; // Added for teleporting the mask
+import { createPortal } from "react-dom";
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { LayoutDashboard, Users, Briefcase, FileText, Settings, LogOut, ArrowLeft, Banknote, UserSquare2, Menu, X, MessageSquare, Send, ChevronLeft, Loader2, Building2, Megaphone, Activity } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -17,7 +17,6 @@ export default function AppLayout() {
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   
-  // --- Global Page Transition State ---
   const [isPageTransitioning, setIsPageTransitioning] = useState(false);
   
   const [activeContact, setActiveContact] = useState<any>(null);
@@ -27,20 +26,14 @@ export default function AppLayout() {
   
   const prevMessageCount = useRef(messages.length);
 
-  // Background Sync: Triggers automatically when workspace changes
   useEffect(() => {
     fetchAllData();
   }, [activeWorkspace, role, companyId, fetchAllData]);
 
-  // --- UPDATED: Conditional Route Transition Mask ---
   useEffect(() => {
     if (location.state && (location.state as any).showLoadingMask) {
       setIsPageTransitioning(true);
-      
-      const timer = setTimeout(() => {
-        setIsPageTransitioning(false);
-      }, 400);
-
+      const timer = setTimeout(() => setIsPageTransitioning(false), 400);
       setIsMobileDrawerOpen(false);
       return () => clearTimeout(timer);
     } else {
@@ -49,7 +42,6 @@ export default function AppLayout() {
   }, [location.pathname, location.state]);
 
   const currentUser = employees.find(e => e.id == employeeId) || employees.find(e => e.email === user?.email);
-  
   const masterAdmin = employees.find(e => e.access_level === 'admin' && e.email === user?.email) || employees.find(e => e.access_level === 'admin');
 
   const targetWorkspaceId = role === 'admin' ? activeWorkspace : (activeWorkspace || companyId);
@@ -240,7 +232,6 @@ export default function AppLayout() {
   return (
     <div className="flex h-[100dvh] w-full bg-[#F8F9FC] text-slate-800 overflow-hidden font-sans sm:p-4 lg:p-6 selection:bg-blue-900 selection:text-white relative print:p-0 print:bg-white print:block print:h-auto">
       
-      {/* --- SEAMLESS DARK PAGE TRANSITION MASK VIA PORTAL --- */}
       {createPortal(
         <AnimatePresence>
           {isPageTransitioning && (
@@ -263,18 +254,32 @@ export default function AppLayout() {
           <motion.aside initial={{ width: 0, opacity: 0 }} animate={{ width: 280, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }} 
             className="hidden sm:flex bg-white flex-col shrink-0 z-20 border-r border-slate-100/50 sm:rounded-l-[2.5rem] print:hidden shadow-[0_8px_40px_rgb(0,0,0,0.04)]"
           >
-            <div className="h-28 flex items-center justify-between px-8 shrink-0 gap-4">
-              <div className="flex items-center min-w-0 flex-1">
-                {brandLogo ? (
-                  <img src={brandLogo} alt="Logo" className="h-10 w-auto max-w-[120px] object-contain mr-3 shrink-0" />
-                ) : (
-                  <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-slate-900 via-blue-900 to-blue-800 flex items-center justify-center text-white text-[16px] font-black tracking-tighter mr-3 shadow-md z-10 shrink-0">
-                    {brandName.charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <div className="text-[13px] font-bold text-slate-800 tracking-wide mt-0.5 truncate">{brandName}</div>
+            <div className="flex flex-col px-6 pt-8 pb-4 shrink-0 gap-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center min-w-0 flex-1">
+                  {brandLogo ? (
+                    <img src={brandLogo} alt="Logo" className="h-10 w-auto max-w-[120px] object-contain mr-3 shrink-0" />
+                  ) : (
+                    <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-slate-900 via-blue-900 to-blue-800 flex items-center justify-center text-white text-[16px] font-black tracking-tighter mr-3 shadow-md z-10 shrink-0">
+                      {brandName.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="text-[13px] font-bold text-slate-800 tracking-wide mt-0.5 truncate">{brandName}</div>
+                </div>
+                <button onClick={() => setIsSidebarOpen(false)} className="h-9 w-9 shrink-0 ml-auto bg-white border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm transition-all"><X className="h-4 w-4" /></button>
               </div>
-              <button onClick={() => setIsSidebarOpen(false)} className="h-9 w-9 shrink-0 ml-auto bg-white border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-sm transition-all"><X className="h-4 w-4" /></button>
+
+              {activeWorkspace && role === 'admin' && (
+                <div className="flex items-center justify-between bg-blue-50/50 p-2.5 rounded-xl border border-blue-100/50 mt-1">
+                  <div className="min-w-0 pr-2">
+                    <span className="text-[9px] font-bold uppercase tracking-widest text-blue-400 block mb-0.5">Viewing Workspace</span>
+                    <span className="text-[11px] font-bold text-blue-900 truncate block">{activeCompany?.name}</span>
+                  </div>
+                  <button onClick={handleExitWorkspace} className="h-7 px-2.5 bg-white border border-rose-100 rounded-lg text-[9px] font-bold text-rose-500 hover:bg-rose-50 hover:text-rose-600 transition-colors uppercase tracking-widest flex items-center gap-1 shadow-sm shrink-0">
+                    Exit
+                  </button>
+                </div>
+              )}
             </div>
 
             <nav className="flex-1 overflow-y-auto px-6 space-y-2 [&::-webkit-scrollbar]:hidden pt-2">
@@ -349,24 +354,11 @@ export default function AppLayout() {
                  {totalUnread > 0 && <span className="absolute top-0 right-0 h-3.5 w-3.5 border-2 border-white bg-rose-500 rounded-full"></span>}
                </button>
              )}
-
-            {activeWorkspace && role === 'admin' && (
-              <div className="flex items-center gap-3 bg-white/90 backdrop-blur-md px-5 py-3 rounded-2xl border border-slate-200/50 shadow-sm ml-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Viewing:</span>
-                <span className="text-[12px] font-bold text-blue-900">{activeCompany?.name}</span>
-                <span className="h-5 w-[1px] bg-slate-200 mx-2"></span>
-                <button onClick={handleExitWorkspace} className="text-[10px] font-bold text-rose-500 hover:text-rose-600 uppercase tracking-wider flex items-center gap-1.5"><ArrowLeft className="h-3.5 w-3.5"/> Exit</button>
-              </div>
-            )}
           </div>
         </header>
 
         <div className="sm:hidden fixed top-0 left-0 right-0 h-[72px] bg-[#FAFCFF] z-40 print:hidden flex items-center justify-between px-4 border-b border-slate-100/50 shadow-sm">
-           
            <div className="flex gap-2 items-center">
-             {activeWorkspace && role === 'admin' && (
-               <button onClick={handleExitWorkspace} className="h-10 w-10 text-rose-500 flex items-center justify-center transition-all active:scale-95"><ArrowLeft className="h-5 w-5" /></button>
-             )}
              <button onClick={() => setIsMobileDrawerOpen(true)} className="h-10 w-10 text-slate-500 hover:text-blue-900 flex items-center justify-center transition-all active:scale-95">
                 <Menu className="h-6 w-6" />
              </button>
@@ -434,6 +426,16 @@ export default function AppLayout() {
                      </div>
                      <p className="text-lg font-black text-slate-900 leading-tight">{displayName}</p>
                      <p className="text-[11px] font-bold text-blue-600 uppercase tracking-widest mt-1">{role || 'Operator'}</p>
+
+                     {activeWorkspace && role === 'admin' && (
+                       <div className="mt-4 flex items-center justify-between bg-blue-50/50 p-3 rounded-xl border border-blue-100/50">
+                         <div className="min-w-0 pr-2">
+                           <span className="text-[9px] font-bold uppercase tracking-widest text-blue-400 block mb-0.5">Viewing Workspace</span>
+                           <span className="text-[12px] font-bold text-blue-900 truncate block">{activeCompany?.name}</span>
+                         </div>
+                         <button onClick={handleExitWorkspace} className="h-8 px-3 bg-white border border-rose-100 rounded-lg text-[10px] font-bold text-rose-500 shadow-sm shrink-0 uppercase tracking-widest">Exit</button>
+                       </div>
+                     )}
                   </div>
 
                   <div className="flex-1 overflow-y-auto px-4 py-6 space-y-1">
@@ -472,9 +474,7 @@ export default function AppLayout() {
 
         <main className={`flex-1 overflow-y-auto transition-all duration-300 relative z-10 print:p-0 print:pt-0 print:overflow-visible
            max-sm:px-4 max-sm:pt-[88px] max-sm:pb-8
-           sm:pt-10 sm:pb-10
-           ${!isSidebarOpen ? 'sm:pl-20 lg:pl-28' : 'sm:pl-6 lg:pl-10'} 
-           ${activeWorkspace && role === 'admin' ? 'sm:pr-6 lg:pr-64' : 'sm:pr-6 lg:pr-10'}
+           sm:pt-10 sm:pb-10 sm:px-6 lg:px-10
            [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full`}>
           
           {isDataLoading && companies.length === 0 ? (
